@@ -416,8 +416,9 @@ docs: cambios en documentación
 ```
 main        → rama principal, siempre estable
 dev         → rama de integración
-feat/nombre → nuevas funcionalidades
-fix/nombre  → correcciones
+feat/HU-XX-descripcion-corta → nuevas funcionalidades
+fix/HU-XX-descripcion-corta  → correcciones
+chore/descripcion-corta → configuración, dependencias
 ```
 
 ---
