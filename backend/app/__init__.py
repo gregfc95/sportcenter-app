@@ -18,7 +18,9 @@ def create_app():
     migrate.init_app(app, db)
 
     from .routes import main
+    from .routes.turno_routes import turno_bp
 
     app.register_blueprint(main)
+    app.register_blueprint(turno_bp)
 
     return app
