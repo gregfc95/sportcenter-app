@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { Dumbbell } from "lucide-react";
 
 export default function RegisterPage() {
   const navigate = useNavigate();
@@ -68,8 +69,8 @@ export default function RegisterPage() {
           style={{ backgroundImage: "url('https://images.unsplash.com/photo-1554068865-24cecd4e34b8?w=800')" }}
         />
         <div className="relative z-10 max-w-lg text-center">
-          <div className="mb-8 inline-flex h-20 w-20 items-center justify-center rounded-full bg-yellow-400 text-[#9A2A46] shadow-xl text-4xl">
-            💪
+          <div className="mb-8 inline-flex h-20 w-20 items-center justify-center rounded-full bg-yellow-400 text-[#9A2A46] shadow-xl">
+            <Dumbbell className="w-10 h-10" />
           </div>
           <h1 className="text-4xl font-black leading-tight text-gray-900">
             ¡Únete a nuestra comunidad deportiva!
@@ -114,11 +115,11 @@ export default function RegisterPage() {
             </div>
 
             <label className="flex flex-col gap-2">
-              <span className="text-sm font-semibold text-gray-800">DNI / NIE</span>
+              <span className="text-sm font-semibold text-gray-800">DNI</span>
               <input
                 name="dni"
                 type="text"
-                placeholder="12345678X"
+                placeholder="12345678"
                 value={form.dni}
                 onChange={handleChange}
                 className="w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-base focus:border-[#9A2A46] focus:ring-2 focus:ring-[#9A2A46]/20 outline-none transition-all"
