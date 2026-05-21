@@ -9,12 +9,12 @@ class UserRegisterSchema(Schema):
     password = fields.Str(required=True, load_only=True)
 
     @validates("dni")
-    def validate_dni(self, value):
+    def validate_dni(self, value: str) -> None:
         if not value.isdigit():
             raise ValidationError("El DNI debe contener solo números.")
 
     @validates("password")
-    def validate_password(self, value):
+    def validate_password(self, value: str) -> None:
         if len(value) < 8:
             raise ValidationError("La contraseña debe tener al menos 8 caracteres.")
         if not re.search(r"[A-Z]", value):

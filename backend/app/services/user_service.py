@@ -11,6 +11,9 @@ class UserService:
         if self.user_repository.find_by_email(data["email"]):
             raise ValueError("El email ya está registrado")
 
+        if self.user_repository.find_by_dni(data["dni"]):
+            raise ValueError("El DNI ya está registrado")
+
         user = User(
             first_name=data["first_name"],
             last_name=data["last_name"],

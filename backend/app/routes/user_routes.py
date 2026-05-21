@@ -1,6 +1,6 @@
-from flask import Blueprint, request, jsonify
-from ..services import UserService
-from ..schemas import UserRegisterSchema, UserResponseSchema
+from flask import Blueprint, request, jsonify, Response
+from app.services import UserService
+from app.schemas import UserRegisterSchema, UserResponseSchema
 
 user_bp = Blueprint("users", __name__, url_prefix="/api/users")
 
@@ -9,7 +9,7 @@ register_schema = UserRegisterSchema()
 response_schema = UserResponseSchema()
 
 @user_bp.route("/register", methods=["POST"])
-def register():
+def register() -> Response:
     data = request.get_json()
     errors = register_schema.validate(data)
     if errors:
