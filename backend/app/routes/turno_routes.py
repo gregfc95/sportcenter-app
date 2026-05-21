@@ -2,18 +2,22 @@ from flask import Blueprint, request, jsonify
 from ..services import TurnoService
 from ..schemas import TurnoCreateSchema 
 
-turno_bp = Blueprint("turnos", __name__, url_prefix="/api/turnos")
+turno_bp = Blueprint("turnos", __name__, url_prefix="/turnos")
 
 turno_service = TurnoService()
 turno_schema = TurnoCreateSchema()
 
 @turno_bp.route("/create", methods=["POST"])
 def create_turno():
+
     data = request.get_json()
+
+    print(f"debug: {data}")  # Agrega esta línea para imprimir los datos recibidos
     
     # Validar datos
     errors = turno_schema.validate(data)
     if errors:
+        print(f"validation errors: {errors}")  # Agrega esta línea para imprimir los errores de validación
         return jsonify(errors), 400
 
     try:
