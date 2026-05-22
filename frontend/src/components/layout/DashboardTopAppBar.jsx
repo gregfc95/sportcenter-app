@@ -37,7 +37,7 @@ export default function DashboardTopAppBar({ user }) {
             onClick={toggle}
             aria-label={isDark ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
             aria-pressed={isDark}
-            className="p-xs rounded-full hover:bg-surface-container-high transition-colors text-on-surface-variant flex items-center justify-center"
+            className="p-xs rounded-full text-on-surface-variant hover:text-primary active:text-primary transition-colors flex items-center justify-center"
           >
             {isDark ? <Sun className="size-5" /> : <Moon className="size-5" />}
           </button>
@@ -45,7 +45,7 @@ export default function DashboardTopAppBar({ user }) {
           <button
             type="button"
             aria-label="Buscar"
-            className="p-xs rounded-full hover:bg-surface-container-high transition-colors text-on-surface flex items-center justify-center"
+            className="p-xs rounded-full text-on-surface-variant hover:text-primary active:text-primary transition-colors flex items-center justify-center"
           >
             <Search className="size-5" />
           </button>
