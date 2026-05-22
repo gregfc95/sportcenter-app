@@ -72,7 +72,7 @@ const BENEFITS = [
   {
     Icon: Users,
     title: "Comunidad Activa",
-    body: "Torneos, clínicas y una comunidad vibrante de atletas.",
+    body: "Torneos, eventos y una comunidad vibrante de atletas.",
   },
 ];
 
@@ -402,7 +402,6 @@ function FinalCTA() {
         </h2>
         <p className="text-body-md lg:text-body-lg opacity-90 max-w-2xl mt-sm mx-auto text-pretty">
           Únete hoy y obtén un 20% de descuento en tu primer mes de membresía
-          o tu primera reserva de cancha.
         </p>
         <div className="mt-md flex justify-center">
           <button
@@ -413,7 +412,7 @@ function FinalCTA() {
           </button>
         </div>
         <p className="text-label-sm opacity-70 italic mt-sm">
-          Sin contratos a largo plazo. Cancela cuando quieras.
+          Sin contratos a largo plazo. Con horarios flexibles.
         </p>
       </div>
     </section>
