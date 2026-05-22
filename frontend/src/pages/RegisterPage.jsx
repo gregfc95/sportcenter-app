@@ -6,8 +6,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import AuthLayout from "@/components/layout/AuthLayout";
+import { usePageTitle } from "@/lib/usePageTitle";
 
 export default function RegisterPage() {
+  usePageTitle("Crear cuenta");
   const navigate = useNavigate();
   const [form, setForm] = useState({
     first_name: "",
@@ -65,13 +67,13 @@ export default function RegisterPage() {
 
   const marketing = (
     <div className="flex flex-col h-full justify-center text-center">
-      <div className="mb-8 inline-flex h-20 w-20 items-center justify-center rounded-full bg-yellow-400 text-primary-container shadow-xl mx-auto">
+      <div className="mb-8 inline-flex h-20 w-20 items-center justify-center rounded-full bg-accent text-primary shadow-xl mx-auto">
         <Dumbbell className="w-10 h-10" />
       </div>
       <h1 className="text-3xl font-black leading-tight">
         ¡Únete a nuestra comunidad deportiva!
       </h1>
-      <p className="mt-6 text-base text-on-primary-container/80">
+      <p className="mt-6 text-base text-primary-foreground/80">
         Regístrate para acceder a todas nuestras instalaciones, clases exclusivas y seguimiento personalizado de tus entrenamientos.
       </p>
     </div>
@@ -169,7 +171,7 @@ export default function RegisterPage() {
         <Button
           type="submit"
           size="lg"
-          className="w-full bg-primary-container text-on-primary-container hover:bg-primary-container/90 shadow-lg"
+          className="w-full bg-primary text-primary-foreground hover:bg-primary/90 shadow-lg"
         >
           Registrarse
         </Button>
@@ -178,7 +180,7 @@ export default function RegisterPage() {
       <div className="mt-4 flex flex-col items-center gap-4">
         <p className="text-sm text-on-surface-variant">
           ¿Ya tienes una cuenta?{" "}
-          <Link to="/login" className="font-bold text-primary-container hover:underline">
+          <Link to="/login" className="font-bold text-primary hover:underline">
             Inicia sesión aquí →
           </Link>
         </p>

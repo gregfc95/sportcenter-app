@@ -25,7 +25,7 @@ export default function TopAppBar({ onMenuClick }) {
           </div>
         </div>
 
-        <div className="md:hidden font-display text-[20px] leading-tight font-extrabold tracking-tight uppercase text-primary-container">
+        <div className="md:hidden font-display text-[20px] leading-tight font-extrabold tracking-tight uppercase text-primary">
           Centro Deportivo Provincia BA
         </div>
 
@@ -34,7 +34,7 @@ export default function TopAppBar({ onMenuClick }) {
             <a
               key={label}
               href={href}
-              className="text-label-md text-on-surface hover:text-primary-container transition-colors"
+              className="text-label-md text-on-surface hover:text-primary transition-colors"
             >
               {label}
             </a>
@@ -53,14 +53,14 @@ export default function TopAppBar({ onMenuClick }) {
           </button>
           <Link
             to="/login"
-            className="hidden md:inline-flex bg-primary-container text-on-primary-container text-label-md font-bold px-md py-sm rounded-lg shadow-md shadow-primary-container/20 hover:bg-primary hover:text-primary-foreground transition-colors"
+            className="hidden md:inline-flex bg-primary text-primary-foreground text-label-md font-bold px-md py-sm rounded-lg shadow-md shadow-primary/20 hover:bg-primary/90 transition-colors"
           >
             Ingresar
           </Link>
           <Link
             to="/login"
             aria-label="Ingresar"
-            className="md:hidden p-xs hover:text-primary transition-colors rounded-full text-primary-container flex items-center justify-center"
+            className="md:hidden p-xs hover:text-primary transition-colors rounded-full text-primary flex items-center justify-center"
           >
             <LogIn className="size-6" />
           </Link>

@@ -14,12 +14,12 @@ export default function NavigationDrawer({ open, onClose, activeLabel = "Inicio"
       />
       <nav
         aria-label="Menú principal"
-        className={`bg-surface-container text-primary-container h-full w-72 rounded-r-xl border-r border-outline-variant shadow-xl shadow-secondary-container/20 fixed inset-y-0 left-0 z-[60] flex flex-col p-md transition-transform duration-300 ${
+        className={`bg-surface-container text-primary h-full w-72 rounded-r-xl border-r border-outline-variant shadow-xl shadow-secondary-container/20 fixed inset-y-0 left-0 z-[60] flex flex-col p-md transition-transform duration-300 ${
           open ? "translate-x-0" : "-translate-x-full"
         }`}
       >
         <div className="flex items-center justify-between mb-lg">
-          <h2 className="text-headline-md font-bold text-primary-container">
+          <h2 className="text-headline-md font-bold text-primary">
             CD Provincia BA
           </h2>
           <button
@@ -56,7 +56,7 @@ export default function NavigationDrawer({ open, onClose, activeLabel = "Inicio"
         <Link
           to="/login"
           onClick={onClose}
-          className="mt-auto flex items-center justify-center gap-sm bg-primary-container text-on-primary-container text-label-md font-bold px-md py-sm rounded-lg shadow-md shadow-primary-container/20 hover:bg-primary hover:text-primary-foreground transition-colors"
+          className="mt-auto flex items-center justify-center gap-sm bg-primary text-primary-foreground text-label-md font-bold px-md py-sm rounded-lg shadow-md shadow-primary/20 hover:bg-primary/90 transition-colors"
         >
           <LogIn className="size-5" />
           Ingresar

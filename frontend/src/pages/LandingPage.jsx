@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 
 import { useTheme } from "@/lib/ThemeContext";
+import { usePageTitle } from "@/lib/usePageTitle";
 
 import principalLight from "@/assets/image-principal-light.png";
 import principalDark from "@/assets/image-principal-dark.png";
@@ -69,6 +70,7 @@ const BENEFITS = [
 ];
 
 export default function LandingPage() {
+  usePageTitle("Inicio", "Centro Deportivo Provincia BA");
   const { isDark } = useTheme();
 
   return (
@@ -87,12 +89,12 @@ function Hero({ isDark }) {
       <div className="mx-auto max-w-7xl w-full px-margin-mobile lg:px-margin-desktop">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-md lg:gap-xl items-center">
           <div className="flex flex-col gap-md order-2 lg:order-1 min-w-0">
-            <span className="inline-flex w-fit items-center rounded-full bg-primary-container/10 px-sm py-xs text-label-sm font-bold uppercase tracking-wider text-primary-container">
+            <span className="inline-flex w-fit items-center rounded-full bg-primary/10 px-sm py-xs text-label-sm font-bold uppercase tracking-wider text-primary">
               Tu mejor versión empieza aquí
             </span>
             <h1 className="text-display-lg-mobile lg:text-display-lg text-on-surface tracking-tight text-balance">
               Tu pasión, nuestro{" "}
-              <span className="text-primary-container">terreno</span>
+              <span className="text-primary">terreno</span>
             </h1>
             <p className="text-body-md lg:text-body-lg text-on-surface-variant text-pretty">
               El mejor centro deportivo para Voley, Básquet, Fútbol y Pádel.
@@ -101,7 +103,7 @@ function Hero({ isDark }) {
             </p>
             <Link
               to="/register"
-              className="bg-primary-container text-on-primary-container text-label-md py-md px-lg rounded-full w-full max-w-[240px] mt-sm hover:bg-primary hover:text-primary-foreground transition-colors font-bold shadow-lg shadow-primary-container/20 text-center"
+              className="bg-primary text-primary-foreground text-label-md py-md px-lg rounded-full w-full max-w-[240px] mt-sm hover:bg-primary/90 transition-colors font-bold shadow-lg shadow-primary/20 text-center"
             >
               ¡Empieza ahora!
             </Link>
@@ -140,7 +142,7 @@ function Hero({ isDark }) {
               className="aspect-video lg:aspect-square w-full max-w-[28rem] lg:max-w-none mx-auto rounded-2xl object-cover shadow-lg shadow-secondary-container/10"
             />
             <div className="hidden lg:flex absolute -bottom-4 -left-4 items-center gap-sm bg-surface border border-outline-variant rounded-xl shadow-xl shadow-secondary-container/20 p-sm">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-primary-foreground">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-accent text-accent-foreground">
                 <Check className="size-5" strokeWidth={3} />
               </div>
               <div className="text-left">
@@ -167,7 +169,7 @@ function SportsSection() {
           <h2 className="text-headline-md lg:text-headline-lg text-on-surface">
             Nuestros Deportes
           </h2>
-          <div className="h-1 w-16 rounded-full bg-primary mt-xs mx-auto" />
+          <div className="h-1 w-16 rounded-full bg-accent mt-xs mx-auto" />
           <p className="text-body-md text-on-surface-variant max-w-[36rem] mt-sm mx-auto text-pretty">
             Disciplinas diseñadas para todos los niveles, desde principiantes
             hasta alto rendimiento.
@@ -178,9 +180,9 @@ function SportsSection() {
           {PRIMARY_SPORTS.map(({ name, detail, Icon }) => (
             <div
               key={name}
-              className="group flex flex-col gap-sm bg-surface-container-low border border-outline-variant rounded-xl p-md hover:border-primary-container/50 hover:shadow-lg transition-all"
+              className="group flex flex-col gap-sm bg-surface-container-low border border-outline-variant rounded-xl p-md hover:border-primary/50 hover:shadow-lg transition-all"
             >
-              <div className="w-12 h-12 rounded-xl bg-primary-container/10 flex items-center justify-center text-primary-container group-hover:bg-primary-container group-hover:text-on-primary-container transition-colors">
+              <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
                 <Icon className="size-6" />
               </div>
               <h3 className="text-headline-md text-on-surface font-bold mt-xs">
@@ -189,7 +191,7 @@ function SportsSection() {
               <p className="text-body-md text-on-surface-variant">{detail}</p>
               <a
                 href="#"
-                className="text-label-md text-primary-container flex items-center hover:text-on-surface transition-colors mt-auto pt-sm"
+                className="text-label-md text-primary flex items-center hover:text-on-surface transition-colors mt-auto pt-sm"
               >
                 Saber más <ArrowRight className="size-4 ml-xs" />
               </a>
@@ -218,7 +220,7 @@ function BenefitsSection({ isDark }) {
             <div className="flex flex-col gap-md mt-sm">
               {BENEFITS.map(({ Icon, title, body }) => (
                 <div key={title} className="flex items-start gap-md">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#FFB70033] text-primary">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent/20 text-accent">
                     <Icon className="size-5" />
                   </div>
                   <div>
@@ -253,7 +255,7 @@ function BenefitsSection({ isDark }) {
 function FinalCTA() {
   return (
     <section className="px-margin-mobile lg:px-margin-desktop">
-      <div className="mx-auto max-w-7xl bg-primary-container text-on-primary-container rounded-2xl lg:rounded-[2rem] p-lg lg:p-xl text-center shadow-lg shadow-primary-container/20">
+      <div className="mx-auto max-w-7xl bg-primary text-primary-foreground rounded-2xl lg:rounded-[2rem] p-lg lg:p-xl text-center shadow-lg shadow-primary/20">
         <h2 className="text-headline-md lg:text-headline-lg text-balance">
           ¿Listo para saltar a la cancha?
         </h2>
@@ -263,7 +265,7 @@ function FinalCTA() {
         <div className="mt-md flex justify-center">
           <Link
             to="/register"
-            className="w-full sm:w-auto bg-primary text-primary-foreground text-label-md font-bold py-md px-xl rounded-full shadow-md hover:bg-primary-variant transition-colors text-center"
+            className="w-full sm:w-auto bg-accent text-accent-foreground text-label-md font-bold py-md px-xl rounded-full shadow-md hover:bg-accent/90 transition-colors text-center"
           >
             Registrarse Ahora
           </Link>

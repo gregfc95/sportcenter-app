@@ -1,5 +1,5 @@
 import { MapPin, Phone, Mail } from "lucide-react";
-import { FOOTER_SPORTS } from "./constants";
+import { SPORTS } from "./constants";
 
 export default function Footer() {
   return (
@@ -20,11 +20,11 @@ export default function Footer() {
 
           <div className="flex flex-col gap-xs items-center md:items-start">
             <h4 className="text-label-md font-bold text-on-surface mb-xs">Deportes</h4>
-            {FOOTER_SPORTS.map((name) => (
+            {SPORTS.map(({ name }) => (
               <a
                 key={name}
                 href="#deportes"
-                className="text-label-md text-on-surface-variant hover:text-primary-container transition-colors"
+                className="text-label-md text-on-surface-variant hover:text-primary transition-colors"
               >
                 {name}
               </a>
@@ -34,18 +34,18 @@ export default function Footer() {
           <div className="flex flex-col gap-sm items-center md:items-start">
             <h4 className="text-label-md font-bold text-on-surface mb-xs">Contacto</h4>
             <div className="flex items-center gap-sm text-body-md text-on-surface-variant">
-              <MapPin className="size-4 text-primary shrink-0" />
+              <MapPin className="size-4 text-accent shrink-0" />
               <span>Calle 9 375 e 39 y 40, La Plata</span>
             </div>
             <a
               href="mailto:contactoBA@sportify.com"
-              className="flex items-center gap-sm text-body-md text-on-surface-variant hover:text-primary-container transition-colors"
+              className="flex items-center gap-sm text-body-md text-on-surface-variant hover:text-primary transition-colors"
             >
-              <Mail className="size-4 text-primary shrink-0" />
+              <Mail className="size-4 text-accent shrink-0" />
               <span>contactoBA@sportify.com</span>
             </a>
             <div className="flex items-center gap-sm text-body-md text-on-surface-variant">
-              <Phone className="size-4 text-primary shrink-0" />
+              <Phone className="size-4 text-accent shrink-0" />
               <span>+54 11 4444-5555</span>
             </div>
           </div>

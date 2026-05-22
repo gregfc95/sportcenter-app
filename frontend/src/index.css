@@ -65,9 +65,6 @@
 
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
-  --color-primary-variant: var(--primary-variant);
-  --color-primary-container: var(--primary-container);
-  --color-on-primary-container: var(--on-primary-container);
 
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
@@ -107,11 +104,8 @@
 /* Brand palette. Dark mode adjusts luminance rather than inverting,
    so gold/maroon stay recognizable on both backgrounds. */
 :root {
-  --primary: #FFB700;
-  --primary-foreground: #1A1A1A;
-  --primary-variant: #FF9500;
-  --primary-container: #9A2A46;
-  --on-primary-container: #FFFFFF;
+  --primary: #9A2A46;
+  --primary-foreground: #FFFFFF;
 
   --secondary: #9A2A46;
   --secondary-foreground: #FFFFFF;
@@ -140,22 +134,19 @@
   --popover-foreground: #1A1A1A;
   --muted: #FDFDF2;
   --muted-foreground: #7F8C8D;
-  --accent: #FDFDF2;
+  --accent: #FFB700;
   --accent-foreground: #1A1A1A;
   --destructive: oklch(0.577 0.245 27.325);
   --border: #EAEAEA;
   --input: #EAEAEA;
-  --ring: #FFB700;
+  --ring: #9A2A46;
 
   --radius: 0.5rem;
 }
 
 .dark {
-  --primary: #FFC94D;
-  --primary-foreground: #1A1A1A;
-  --primary-variant: #FFB020;
-  --primary-container: #C4455F;
-  --on-primary-container: #F5F5F5;
+  --primary: #C4455F;
+  --primary-foreground: #F5F5F5;
 
   --secondary: #C4455F;
   --secondary-foreground: #F5F5F5;
@@ -184,12 +175,12 @@
   --popover-foreground: #F5F5F5;
   --muted: #1A1A1A;
   --muted-foreground: #B0B8BA;
-  --accent: #2A2A2A;
-  --accent-foreground: #F5F5F5;
+  --accent: #FFC94D;
+  --accent-foreground: #1A1A1A;
   --destructive: oklch(0.704 0.191 22.216);
   --border: #353535;
   --input: #353535;
-  --ring: #FFC94D;
+  --ring: #C4455F;
 }
 
 @layer base {

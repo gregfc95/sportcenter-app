@@ -19,7 +19,7 @@ export default function AuthLayout({
         <Link to="/" className="flex items-center gap-sm">
           <img src="/logo.png" alt="" aria-hidden="true" className="h-8 w-8 object-contain" />
           <span className="font-bold text-on-surface text-base md:text-lg">
-            Centro Deportivo Provincia BA
+            Sportify
           </span>
         </Link>
         <button
@@ -35,7 +35,7 @@ export default function AuthLayout({
 
       <div className="flex flex-1 items-center justify-center px-md py-lg">
         <div className="flex w-full max-w-4xl rounded-2xl shadow-xl shadow-secondary-container/20 overflow-hidden bg-surface">
-          <div className="hidden md:flex flex-1 flex-col p-lg bg-primary-container text-on-primary-container relative overflow-hidden">
+          <div className="hidden md:flex flex-1 flex-col p-lg bg-primary text-primary-foreground relative overflow-hidden">
             {marketingImage && (
               <div
                 className="absolute inset-0 bg-cover bg-center opacity-10"
