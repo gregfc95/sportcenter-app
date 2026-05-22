@@ -356,3 +356,7 @@ $RECYCLE.BIN/
 *.lnk
 
 # End of https://www.toptal.com/developers/gitignore/api/python,node,vite,dotenv,windows,linux
+
+# Claude Code
+.agents/
+skills-lock.json
