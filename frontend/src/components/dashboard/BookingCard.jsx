@@ -1,4 +1,4 @@
-import { Goal } from "lucide-react";
+import { Goal, QrCode } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { SPORT_BY_NAME } from "@/components/layout/constants";
@@ -37,7 +37,7 @@ export default function BookingCard({
   const meta = STATUS_META[status] ?? STATUS_META.pendiente;
   const sportKey = SPORT_ALIASES[sport] ?? sport;
   const Icon = SPORT_BY_NAME[sportKey]?.Icon ?? Goal;
-  const showFooter = status === "pendiente";
+  const showFooter = status === "pendiente" || status === "pagado";
 
   return (
     <article
@@ -82,18 +82,29 @@ export default function BookingCard({
 
       {showFooter && (
         <div className="flex items-center justify-between pt-sm border-t border-outline-variant pl-xs">
-          {capacity && (
+          {status === "pendiente" && capacity && (
             <span className="text-label-sm text-on-surface-variant">
               Cupo: {capacity.taken} / {capacity.total}
             </span>
           )}
-          <Button
-            variant="outline"
-            size="sm"
-            className="text-primary border-primary/40 hover:bg-primary/10 hover:text-primary ml-auto"
-          >
-            Pagar
-          </Button>
+          {status === "pendiente" ? (
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-primary border-primary/40 hover:bg-primary/10 hover:text-primary ml-auto"
+            >
+              Pagar
+            </Button>
+          ) : (
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-on-surface border-outline-variant hover:bg-surface-container-high ml-auto"
+            >
+              <QrCode className="size-4" strokeWidth={2} />
+              Ver QR
+            </Button>
+          )}
         </div>
       )}
     </article>
