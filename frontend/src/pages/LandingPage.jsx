@@ -18,9 +18,22 @@ import {
   Mail,
   Sun,
   Moon,
-  ImageIcon,
   Check,
 } from "lucide-react";
+
+import principalLight from "@/assets/image-principal-light.png";
+import principalDark from "@/assets/image-principal-dark.png";
+import comunidadLight from "@/assets/imagen-comunidad-light.jpg";
+import comunidadDark from "@/assets/imagen-comunidad-dark.jpg";
+import instalacionesLight from "@/assets/image-instalaciones-light.jpg";
+import instalacionesDark from "@/assets/image-instalaciones-dark.png";
+
+const ATLETAS = Object.values(
+  import.meta.glob("@/assets/atletas/*.{jpg,jpeg,png,webp}", {
+    eager: true,
+    import: "default",
+  })
+);
 
 const PRIMARY_SPORTS = [
   {
@@ -82,9 +95,9 @@ export default function LandingPage({ isDark = false, onToggleTheme }) {
       <NavigationDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} />
 
       <main className="flex-grow pt-16 md:pt-20 flex flex-col gap-lg md:gap-xl pb-xl">
-        <Hero />
+        <Hero isDark={isDark} />
         <SportsSection />
-        <BenefitsSection />
+        <BenefitsSection isDark={isDark} />
         <FinalCTA />
       </main>
 
@@ -211,20 +224,7 @@ function NavigationDrawer({ open, onClose }) {
   );
 }
 
-function ImagePlaceholder({ label, className = "" }) {
-  return (
-    <div
-      role="img"
-      aria-label={label}
-      className={`bg-surface-container-high border border-outline-variant rounded-2xl flex flex-col items-center justify-center gap-xs text-on-surface-variant ${className}`}
-    >
-      <ImageIcon className="size-8" aria-hidden="true" />
-      <span className="text-label-sm">{label}</span>
-    </div>
-  );
-}
-
-function Hero() {
+function Hero({ isDark }) {
   return (
     <section className="lg:py-xl">
       <div className="mx-auto max-w-7xl w-full px-margin-mobile lg:px-margin-desktop">
@@ -251,13 +251,23 @@ function Hero() {
 
             <div className="flex items-center gap-md mt-sm">
               <div className="flex -space-x-2">
-                {[1, 2, 3].map((i) => (
-                  <div
-                    key={i}
-                    aria-hidden="true"
-                    className="h-10 w-10 rounded-full border-2 border-background bg-surface-container-high"
-                  />
-                ))}
+                {ATLETAS.length > 0
+                  ? ATLETAS.map((src, i) => (
+                      <img
+                        key={i}
+                        src={src}
+                        alt=""
+                        aria-hidden="true"
+                        className="h-10 w-10 rounded-full border-2 border-background object-cover"
+                      />
+                    ))
+                  : [1, 2, 3].map((i) => (
+                      <div
+                        key={i}
+                        aria-hidden="true"
+                        className="h-10 w-10 rounded-full border-2 border-background bg-surface-container-high"
+                      />
+                    ))}
               </div>
               <p className="text-label-md text-on-surface-variant">
                 <span className="font-bold text-on-surface">+500 atletas</span>{" "}
@@ -267,9 +277,10 @@ function Hero() {
           </div>
 
           <div className="relative order-1 lg:order-2">
-            <ImagePlaceholder
-              label="Imagen principal del centro deportivo"
-              className="aspect-video lg:aspect-square w-full max-w-[28rem] lg:max-w-none mx-auto shadow-lg shadow-secondary-container/10"
+            <img
+              src={isDark ? principalDark : principalLight}
+              alt="Centro Deportivo Provincia BA"
+              className="aspect-video lg:aspect-square w-full max-w-[28rem] lg:max-w-none mx-auto rounded-2xl object-cover shadow-lg shadow-secondary-container/10"
             />
             <div className="hidden lg:flex absolute -bottom-4 -left-4 items-center gap-sm bg-surface border border-outline-variant rounded-xl shadow-xl shadow-secondary-container/20 p-sm">
               <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-primary-foreground">
@@ -334,7 +345,7 @@ function SportsSection() {
   );
 }
 
-function BenefitsSection() {
+function BenefitsSection({ isDark }) {
   return (
     <section id="beneficios" className="scroll-mt-16 lg:scroll-mt-20 px-margin-mobile lg:px-margin-desktop">
       <div className="mx-auto max-w-7xl bg-[#1A1A1A] text-[#F5F5F5] rounded-2xl lg:rounded-[2rem] p-lg lg:p-xl">
@@ -363,13 +374,17 @@ function BenefitsSection() {
           </div>
 
           <div className="grid grid-cols-2 gap-gutter">
-            <ImagePlaceholder
-              label="Imagen comunidad"
-              className="aspect-[3/4] w-full"
+            <img
+              src={isDark ? comunidadDark : comunidadLight}
+              alt="Comunidad de atletas"
+              loading="lazy"
+              className="aspect-[3/4] w-full rounded-2xl object-cover"
             />
-            <ImagePlaceholder
-              label="Imagen instalaciones"
-              className="aspect-[3/4] w-full mt-lg"
+            <img
+              src={isDark ? instalacionesDark : instalacionesLight}
+              alt="Instalaciones del centro deportivo"
+              loading="lazy"
+              className="aspect-[3/4] w-full mt-lg rounded-2xl object-cover"
             />
           </div>
         </div>
