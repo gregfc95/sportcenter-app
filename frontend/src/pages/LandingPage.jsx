@@ -1,11 +1,6 @@
-import { useState } from "react";
+import { Link } from "react-router-dom";
 import {
-  Menu,
-  X,
-  LogIn,
-  Home,
   Trophy,
-  MessageCircle,
   Volleyball,
   Goal,
   ArrowRight,
@@ -13,13 +8,10 @@ import {
   Star,
   Clock,
   Users,
-  MapPin,
-  Phone,
-  Mail,
-  Sun,
-  Moon,
   Check,
 } from "lucide-react";
+
+import { useTheme } from "@/lib/ThemeContext";
 
 import principalLight from "@/assets/image-principal-light.png";
 import principalDark from "@/assets/image-principal-dark.png";
@@ -76,151 +68,16 @@ const BENEFITS = [
   },
 ];
 
-const NAV_LINKS = [
-  { label: "Inicio", Icon: Home, active: true },
-  { label: "Deportes", Icon: Trophy, active: false },
-  { label: "Contacto", Icon: MessageCircle, active: false },
-];
-
-export default function LandingPage({ isDark = false, onToggleTheme }) {
-  const [drawerOpen, setDrawerOpen] = useState(false);
+export default function LandingPage() {
+  const { isDark } = useTheme();
 
   return (
-    <div className="bg-background text-on-background min-h-screen flex flex-col overflow-x-hidden">
-      <TopAppBar
-        onMenuClick={() => setDrawerOpen(true)}
-        isDark={isDark}
-        onToggleTheme={onToggleTheme}
-      />
-      <NavigationDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} />
-
-      <main className="flex-grow pt-16 md:pt-20 flex flex-col gap-lg md:gap-xl pb-xl">
-        <Hero isDark={isDark} />
-        <SportsSection />
-        <BenefitsSection isDark={isDark} />
-        <FinalCTA />
-      </main>
-
-      <Footer />
+    <div className="flex flex-col gap-lg md:gap-xl pb-xl">
+      <Hero isDark={isDark} />
+      <SportsSection />
+      <BenefitsSection isDark={isDark} />
+      <FinalCTA />
     </div>
-  );
-}
-
-function TopAppBar({ onMenuClick, isDark, onToggleTheme }) {
-  return (
-    <header className="bg-surface fixed top-0 w-full z-50 border-b border-outline-variant shadow-md shadow-secondary-container/10 h-16 md:h-20">
-      <div className="mx-auto max-w-7xl h-full flex items-center justify-between px-margin-mobile md:px-md lg:px-margin-desktop">
-        <div className="flex items-center gap-sm">
-          <button
-            type="button"
-            onClick={onMenuClick}
-            aria-label="Abrir menú"
-            className="md:hidden p-xs hover:text-primary transition-colors rounded-full text-on-surface-variant flex items-center justify-center"
-          >
-            <Menu className="size-6" />
-          </button>
-          <div className="hidden md:flex items-center gap-sm">
-            <img src="/logo.png" alt="" aria-hidden="true" className="h-10 w-10 object-contain" />
-            <span className="text-headline-md font-bold tracking-tight text-on-surface">
-              Centro Deportivo Provincia BA
-            </span>
-          </div>
-        </div>
-
-        <div className="md:hidden font-display text-[20px] leading-tight font-extrabold tracking-tight uppercase text-primary-container">
-          Centro Deportivo Provincia BA
-        </div>
-
-        <nav className="hidden md:flex items-center gap-lg" aria-label="Navegación principal">
-          {NAV_LINKS.map(({ label }) => (
-            <a
-              key={label}
-              href={label === "Inicio" ? "#" : `#${label.toLowerCase()}`}
-              className="text-label-md text-on-surface hover:text-primary-container transition-colors"
-            >
-              {label}
-            </a>
-          ))}
-        </nav>
-
-        <div className="flex items-center gap-xs md:gap-sm">
-          <button
-            type="button"
-            onClick={onToggleTheme}
-            aria-label={isDark ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
-            aria-pressed={isDark}
-            className="p-xs hover:text-primary transition-colors rounded-full text-on-surface-variant flex items-center justify-center"
-          >
-            {isDark ? <Sun className="size-6" /> : <Moon className="size-6" />}
-          </button>
-          <button
-            type="button"
-            className="hidden md:inline-flex bg-primary-container text-on-primary-container text-label-md font-bold px-md py-sm rounded-lg shadow-md shadow-primary-container/20 hover:bg-primary hover:text-primary-foreground transition-colors"
-          >
-            Ingresar
-          </button>
-          <button
-            type="button"
-            aria-label="Ingresar"
-            className="md:hidden p-xs hover:text-primary transition-colors rounded-full text-primary-container flex items-center justify-center"
-          >
-            <LogIn className="size-6" />
-          </button>
-        </div>
-      </div>
-    </header>
-  );
-}
-
-function NavigationDrawer({ open, onClose }) {
-  return (
-    <>
-      <div
-        onClick={onClose}
-        aria-hidden="true"
-        className={`fixed inset-0 bg-black/50 z-[55] transition-opacity duration-300 ${
-          open ? "opacity-100" : "opacity-0 pointer-events-none"
-        }`}
-      />
-      <nav
-        aria-label="Menú principal"
-        className={`bg-surface-container text-primary-container h-full w-72 rounded-r-xl border-r border-outline-variant shadow-xl shadow-secondary-container/20 fixed inset-y-0 left-0 z-[60] flex flex-col p-md transition-transform duration-300 ${
-          open ? "translate-x-0" : "-translate-x-full"
-        }`}
-      >
-        <div className="flex items-center justify-between mb-lg">
-          <h2 className="text-headline-md font-bold text-primary-container">
-            CD Provincia BA
-          </h2>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Cerrar menú"
-            className="text-on-surface-variant p-xs hover:text-primary rounded-full"
-          >
-            <X className="size-6" />
-          </button>
-        </div>
-        <ul className="flex flex-col gap-sm text-body-lg">
-          {NAV_LINKS.map(({ label, Icon, active }) => (
-            <li key={label}>
-              <a
-                href={label === "Inicio" ? "#" : `#${label.toLowerCase()}`}
-                onClick={onClose}
-                className={`flex items-center gap-md p-sm rounded-lg transition-colors ${
-                  active
-                    ? "bg-secondary-container text-on-secondary-container font-bold"
-                    : "text-on-surface-variant hover:text-primary"
-                }`}
-              >
-                <Icon className="size-5" />
-                {label}
-              </a>
-            </li>
-          ))}
-        </ul>
-      </nav>
-    </>
   );
 }
 
@@ -242,12 +99,12 @@ function Hero({ isDark }) {
               Instalaciones de primer nivel, entrenadores profesionales y una
               comunidad apasionada esperándote.
             </p>
-            <button
-              type="button"
-              className="bg-primary-container text-on-primary-container text-label-md py-md px-lg rounded-full w-full max-w-[240px] mt-sm hover:bg-primary hover:text-primary-foreground transition-colors font-bold shadow-lg shadow-primary-container/20"
+            <Link
+              to="/register"
+              className="bg-primary-container text-on-primary-container text-label-md py-md px-lg rounded-full w-full max-w-[240px] mt-sm hover:bg-primary hover:text-primary-foreground transition-colors font-bold shadow-lg shadow-primary-container/20 text-center"
             >
               ¡Empieza ahora!
-            </button>
+            </Link>
 
             <div className="flex items-center gap-md mt-sm">
               <div className="flex -space-x-2">
@@ -404,12 +261,12 @@ function FinalCTA() {
           Únete hoy y obtén un 20% de descuento en tu primer mes de membresía
         </p>
         <div className="mt-md flex justify-center">
-          <button
-            type="button"
-            className="w-full sm:w-auto bg-primary text-primary-foreground text-label-md font-bold py-md px-xl rounded-full shadow-md hover:bg-primary-variant transition-colors"
+          <Link
+            to="/register"
+            className="w-full sm:w-auto bg-primary text-primary-foreground text-label-md font-bold py-md px-xl rounded-full shadow-md hover:bg-primary-variant transition-colors text-center"
           >
             Registrarse Ahora
-          </button>
+          </Link>
         </div>
         <p className="text-label-sm opacity-70 italic mt-sm">
           Sin contratos a largo plazo. Con horarios flexibles.
@@ -419,60 +276,3 @@ function FinalCTA() {
   );
 }
 
-function Footer() {
-  return (
-    <footer id="contacto" className="scroll-mt-16 lg:scroll-mt-20 bg-surface-container-lowest w-full border-t border-outline-variant py-lg">
-      <div className="mx-auto max-w-7xl px-margin-mobile lg:px-margin-desktop flex flex-col gap-md">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-md md:gap-lg items-start text-center md:text-left">
-          <div className="flex flex-col gap-sm items-center md:items-start">
-            <div className="flex items-center gap-sm">
-              <img src="/logo.png" alt="" aria-hidden="true" className="h-10 w-10 object-contain" />
-              <span className="text-headline-md font-bold text-on-surface">
-                CD Provincia BA
-              </span>
-            </div>
-            <p className="text-body-md text-on-surface-variant max-w-[20rem]">
-              Transformando vidas a través del deporte y la comunidad desde 2010.
-            </p>
-          </div>
-
-          <div className="flex flex-col gap-xs items-center md:items-start">
-            <h4 className="text-label-md font-bold text-on-surface mb-xs">Deportes</h4>
-            {PRIMARY_SPORTS.map(({ name }) => (
-              <a
-                key={name}
-                href="#deportes"
-                className="text-label-md text-on-surface-variant hover:text-primary-container transition-colors"
-              >
-                {name}
-              </a>
-            ))}
-          </div>
-
-          <div className="flex flex-col gap-sm items-center md:items-start">
-            <h4 className="text-label-md font-bold text-on-surface mb-xs">Contacto</h4>
-            <div className="flex items-center gap-sm text-body-md text-on-surface-variant">
-              <MapPin className="size-4 text-primary shrink-0" />
-              <span>Calle 9 375 e 39 y 40, La Plata</span>
-            </div>
-            <a
-              href="mailto:contactoBA@sportify.com"
-              className="flex items-center gap-sm text-body-md text-on-surface-variant hover:text-primary-container transition-colors"
-            >
-              <Mail className="size-4 text-primary shrink-0" />
-              <span>contactoBA@sportify.com</span>
-            </a>
-            <div className="flex items-center gap-sm text-body-md text-on-surface-variant">
-              <Phone className="size-4 text-primary shrink-0" />
-              <span>+54 11 4444-5555</span>
-            </div>
-          </div>
-        </div>
-
-        <div className="border-t border-outline-variant pt-md text-center text-label-sm text-on-surface-variant">
-          © {new Date().getFullYear()} Sportify. Todos los derechos reservados.
-        </div>
-      </div>
-    </footer>
-  );
-}
