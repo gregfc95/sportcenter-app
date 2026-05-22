@@ -6,8 +6,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import AuthLayout from "@/components/layout/AuthLayout";
+import { usePageTitle } from "@/lib/usePageTitle";
 
 export default function LoginPage() {
+  usePageTitle("Iniciar sesión");
   const navigate = useNavigate();
   const [form, setForm] = useState({ email: "", password: "" });
   const [showPassword, setShowPassword] = useState(false);
@@ -44,11 +46,11 @@ export default function LoginPage() {
         <h1 className="text-3xl font-black leading-tight mb-4">
           Entrena con los mejores.
         </h1>
-        <p className="text-on-primary-container/80 text-base">
+        <p className="text-primary-foreground/80 text-base">
           Accede a tu panel personal para gestionar tus clases, entrenamientos y membresía.
         </p>
       </div>
-      <div className="flex items-center gap-2 text-on-primary-container/80 text-sm">
+      <div className="flex items-center gap-2 text-primary-foreground/80 text-sm">
         <ShieldCheck className="w-4 h-4" />
         <span>Entorno de acceso seguro</span>
       </div>
@@ -80,7 +82,7 @@ export default function LoginPage() {
         <div className="flex flex-col gap-2">
           <div className="flex justify-between items-center">
             <Label htmlFor="password">Contraseña</Label>
-            <a href="#" className="text-xs text-primary-container font-semibold hover:underline">
+            <a href="#" className="text-xs text-primary font-semibold hover:underline">
               ¿Olvidaste tu contraseña?
             </a>
           </div>
@@ -112,7 +114,7 @@ export default function LoginPage() {
         <Button
           type="submit"
           size="lg"
-          className="w-full bg-primary-container text-on-primary-container hover:bg-primary-container/90 shadow-lg"
+          className="w-full bg-primary text-primary-foreground hover:bg-primary/90 shadow-lg"
         >
           Acceder a mi cuenta
         </Button>
@@ -121,7 +123,7 @@ export default function LoginPage() {
       <div className="mt-8 flex flex-col items-center gap-4">
         <p className="text-sm text-on-surface-variant">
           ¿Aún no eres miembro?{" "}
-          <Link to="/register" className="font-bold text-primary-container hover:underline">
+          <Link to="/register" className="font-bold text-primary hover:underline">
             Regístrate ahora
           </Link>
         </p>
