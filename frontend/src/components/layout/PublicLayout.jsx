@@ -13,7 +13,7 @@ export default function PublicLayout() {
       <TopAppBar onMenuClick={() => setDrawerOpen(true)} />
       <NavigationDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} />
 
-      <main className="flex-grow pt-16 md:pt-20">
+      <main className="grow pt-16 md:pt-20">
         <Outlet />
       </main>
 

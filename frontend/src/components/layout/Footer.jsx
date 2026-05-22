@@ -13,7 +13,7 @@ export default function Footer() {
                 CD Provincia BA
               </span>
             </div>
-            <p className="text-body-md text-on-surface-variant max-w-[20rem]">
+            <p className="text-body-md text-on-surface-variant max-w-80">
               Transformando vidas a través del deporte y la comunidad desde 2010.
             </p>
           </div>

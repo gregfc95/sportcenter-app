@@ -8,13 +8,13 @@ export default function NavigationDrawer({ open, onClose, activeLabel = "Inicio"
       <div
         onClick={onClose}
         aria-hidden="true"
-        className={`fixed inset-0 bg-black/50 z-[55] transition-opacity duration-300 ${
+        className={`fixed inset-0 bg-black/50 z-55 transition-opacity duration-300 ${
           open ? "opacity-100" : "opacity-0 pointer-events-none"
         }`}
       />
       <nav
         aria-label="Menú principal"
-        className={`bg-surface-container text-primary h-full w-72 rounded-r-xl border-r border-outline-variant shadow-xl shadow-secondary-container/20 fixed inset-y-0 left-0 z-[60] flex flex-col p-md transition-transform duration-300 ${
+        className={`bg-surface-container text-primary h-full w-72 rounded-r-xl border-r border-outline-variant shadow-xl shadow-secondary-container/20 fixed inset-y-0 left-0 z-60 flex flex-col p-md transition-transform duration-300 ${
           open ? "translate-x-0" : "-translate-x-full"
         }`}
       >

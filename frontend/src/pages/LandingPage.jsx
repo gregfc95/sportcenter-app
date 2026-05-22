@@ -103,7 +103,7 @@ function Hero({ isDark }) {
             </p>
             <Link
               to="/register"
-              className="bg-primary text-primary-foreground text-label-md py-md px-lg rounded-full w-full max-w-[240px] mt-sm hover:bg-primary/90 transition-colors font-bold shadow-lg shadow-primary/20 text-center"
+              className="bg-primary text-primary-foreground text-label-md py-md px-lg rounded-full w-full max-w-60 mt-sm hover:bg-primary/90 transition-colors font-bold shadow-lg shadow-primary/20 text-center"
             >
               ¡Empieza ahora!
             </Link>
@@ -139,7 +139,7 @@ function Hero({ isDark }) {
             <img
               src={isDark ? principalDark : principalLight}
               alt="Centro Deportivo Provincia BA"
-              className="aspect-video lg:aspect-square w-full max-w-[28rem] lg:max-w-none mx-auto rounded-2xl object-cover shadow-lg shadow-secondary-container/10"
+              className="aspect-video lg:aspect-square w-full max-w-112 lg:max-w-none mx-auto rounded-2xl object-cover shadow-lg shadow-secondary-container/10"
             />
             <div className="hidden lg:flex absolute -bottom-4 -left-4 items-center gap-sm bg-surface border border-outline-variant rounded-xl shadow-xl shadow-secondary-container/20 p-sm">
               <div className="flex h-10 w-10 items-center justify-center rounded-full bg-accent text-accent-foreground">
@@ -170,7 +170,7 @@ function SportsSection() {
             Nuestros Deportes
           </h2>
           <div className="h-1 w-16 rounded-full bg-accent mt-xs mx-auto" />
-          <p className="text-body-md text-on-surface-variant max-w-[36rem] mt-sm mx-auto text-pretty">
+          <p className="text-body-md text-on-surface-variant max-w-144 mt-sm mx-auto text-pretty">
             Disciplinas diseñadas para todos los niveles, desde principiantes
             hasta alto rendimiento.
           </p>
@@ -207,7 +207,7 @@ function SportsSection() {
 function BenefitsSection({ isDark }) {
   return (
     <section id="beneficios" className="scroll-mt-16 lg:scroll-mt-20 px-margin-mobile lg:px-margin-desktop">
-      <div className="mx-auto max-w-7xl bg-[#1A1A1A] text-[#F5F5F5] rounded-2xl lg:rounded-[2rem] p-lg lg:p-xl">
+      <div className="mx-auto max-w-7xl bg-[#1A1A1A] text-[#F5F5F5] rounded-2xl lg:rounded-4x1 p-lg lg:p-xl">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-md lg:gap-xl items-center">
           <div className="flex flex-col gap-md">
             <h2 className="text-headline-md lg:text-headline-lg text-balance">
@@ -237,13 +237,13 @@ function BenefitsSection({ isDark }) {
               src={isDark ? comunidadDark : comunidadLight}
               alt="Comunidad de atletas"
               loading="lazy"
-              className="aspect-[3/4] w-full rounded-2xl object-cover"
+              className="aspect-3/4 w-full rounded-2xl object-cover"
             />
             <img
               src={isDark ? instalacionesDark : instalacionesLight}
               alt="Instalaciones del centro deportivo"
               loading="lazy"
-              className="aspect-[3/4] w-full mt-lg rounded-2xl object-cover"
+              className="aspect-3/4 w-full mt-lg rounded-2xl object-cover"
             />
           </div>
         </div>
@@ -255,7 +255,7 @@ function BenefitsSection({ isDark }) {
 function FinalCTA() {
   return (
     <section className="px-margin-mobile lg:px-margin-desktop">
-      <div className="mx-auto max-w-7xl bg-primary text-primary-foreground rounded-2xl lg:rounded-[2rem] p-lg lg:p-xl text-center shadow-lg shadow-primary/20">
+      <div className="mx-auto max-w-7xl bg-primary text-primary-foreground rounded-2xl lg:rounded-4x1 p-lg lg:p-xl text-center shadow-lg shadow-primary/20">
         <h2 className="text-headline-md lg:text-headline-lg text-balance">
           ¿Listo para saltar a la cancha?
         </h2>
@@ -277,4 +277,3 @@ function FinalCTA() {
     </section>
   );
 }
-

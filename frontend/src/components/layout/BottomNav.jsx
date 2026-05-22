@@ -46,7 +46,7 @@ export default function BottomNav() {
         <NavItem Icon={Home} label="Inicio" active />
         <NavItem Icon={CalendarDays} label="Mis Turnos" />
 
-        <div className="relative -top-6 flex justify-center w-[72px]">
+        <div className="relative -top-6 flex justify-center w-18">
           <button
             type="button"
             aria-label="Reservar"
