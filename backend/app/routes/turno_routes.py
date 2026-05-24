@@ -11,13 +11,10 @@ turno_schema = TurnoCreateSchema()
 def create_turno():
 
     data = request.get_json()
-
-    print(f"debug: {data}")  # Agrega esta línea para imprimir los datos recibidos
     
     # Validar datos
     errors = turno_schema.validate(data)
     if errors:
-        print(f"validation errors: {errors}")  # Agrega esta línea para imprimir los errores de validación
         return jsonify(errors), 400
 
     try:

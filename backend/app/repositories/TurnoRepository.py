@@ -4,14 +4,14 @@ from datetime import timedelta
 
 class TurnoRepository:
 
-    def encontrar_actividad_en_horario(self, actividad, horario):
+    def encontrar_actividad_en_horario(self, actividad_id, horario):
         # Calculamos 1 hora antes y 1 hora después del turno que queremos crear
         limite_inferior = horario - timedelta(hours=1)
         limite_superior = horario + timedelta(hours=1)
         
         # Buscamos si hay algún turno en el medio de ese rango peligroso
         return Turno.query.filter(
-            Turno.actividad == actividad,
+            Turno.actividad_id == actividad_id,
             Turno.horario > limite_inferior,
             Turno.horario < limite_superior
         ).first()

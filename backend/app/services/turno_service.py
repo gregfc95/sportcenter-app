@@ -9,7 +9,7 @@ class TurnoService:
 
     def crear_turno(self, data):
         # 1. Extraemos los datos (el Schema ya los va a mandar validados y limpios)
-        actividad = data.get('actividad')
+        actividad_id = data.get('actividad_id')
         horario_raw = data.get('horario')
         if isinstance(horario_raw, str):
             horario = datetime.strptime(horario_raw, "%Y-%m-%d %H:%M:%S")  # Convertimos el string a datetime
@@ -19,15 +19,15 @@ class TurnoService:
         descripcion = data.get('descripcion', '')  # Descripción opcional
 
         # 2. Regla de Negocio: verificamos que no choque con otro turno
-        turno_existente = self.turno_repository.encontrar_actividad_en_horario(actividad, horario)
+        turno_existente = self.turno_repository.encontrar_actividad_en_horario(actividad_id, horario)
         
         if turno_existente:
             # Si encuentra uno, frena todo y tira un error que después la Ruta le va a mostrar al usuario
-            raise ValueError(f"Ya existe un turno de {actividad} que se superpone con este horario.")
+            raise ValueError(f"Ya existe un turno de {actividad_id} que se superpone con este horario.")
 
         # 3. Si está todo libre, creamos el objeto Turno
         nuevo_turno = Turno(
-            actividad=actividad,
+            actividad_id=actividad_id,
             horario=horario,
             cupo=cupo,
             descripcion=descripcion

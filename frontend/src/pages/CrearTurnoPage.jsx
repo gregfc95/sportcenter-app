@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 export default function CrearTurnoPage() {
@@ -7,11 +7,10 @@ export default function CrearTurnoPage() {
   // 1. Obtenemos la fecha de hoy en formato YYYY-MM-DD
   const fechaHoy = new Date().toISOString().split('T')[0];
 
-  // Lista oficial de actividades del Centro Deportivo
-  const actividadesDisponibles = ["Fútbol", "Pádel", "Básquet", "Vóley"];
+  const[actividadesDisponibles, setActividadesDisponibles] = useState([]);
 
   // Estados del formulario
-  const [actividadSeleccionada, setActividadSeleccionada] = useState("");
+  const [actividadSeleccionada, setActividadSeleccionada] = useState(null);
   const [fecha, setFecha] = useState("");
   const [hora, setHora] = useState("");
   const [descripcion, setDescripcion] = useState("");
@@ -27,7 +26,7 @@ export default function CrearTurnoPage() {
     setSuccess(false);
 
     // 1. Validaciones manuales antes de disparar el Fetch
-    if (!actividadSeleccionada) {
+    if (actividadSeleccionada == null) {
       setError("Por favor, seleccioná una actividad de la lista.");
       return;
     }
@@ -57,7 +56,7 @@ export default function CrearTurnoPage() {
 
     // 3. Armamos el objeto JSON para enviar
     const turnoData = {
-      actividad: actividadSeleccionada,
+      actividad_id: actividadSeleccionada,
       horario: fechaHoraCombinada, // Enviamos la fecha y hora combinada
       descripcion: descripcion.trim(), // Si está vacío, manda un string vacío ""
       cupo: parseInt(cupo) // Agregamos el campo cupo
@@ -90,7 +89,36 @@ export default function CrearTurnoPage() {
     } catch (err) {
       setError("Error de conexión con el servidor. Verificá que el backend en Docker esté corriendo.");
     }
+
   };
+
+  const obtenerEmoji = (nombre) => {
+    const mapa = {
+      "Fútbol": "⚽",
+      "Pádel": "🎾",
+      "Básquet": "🏀",
+      "Vóley": "🏐"
+    };
+  return mapa[nombre] || "💪";
+  };
+
+  useEffect(() => {
+    const cargarActividades = async () => {
+      try {
+        const res = await fetch("/api/actividades");
+        if (res.ok) {
+          const data = await res.json();
+          setActividadesDisponibles(data);
+        } else {
+          console.error("Error al cargar actividades:", res.status);
+        }
+      } catch (err) {
+        console.error("Error de conexión al cargar actividades:", err);
+      }
+    };
+
+    cargarActividades();
+  }, []);
 
 
   return (
@@ -125,12 +153,13 @@ export default function CrearTurnoPage() {
               </span>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                 {actividadesDisponibles.map((actividad) => {
-                  const estaSeleccionada = actividadSeleccionada === actividad;
+                  const idActividad = Number(actividad.id)
+                  const estaSeleccionada = actividadSeleccionada === idActividad;
                   return (
                     <button
-                      key={actividad}
+                      key={actividad.id}
                       type="button"
-                      onClick={() => setActividadSeleccionada(actividad)}
+                      onClick={() => setActividadSeleccionada(idActividad)}
                       className={`p-4 rounded-xl border text-center font-bold transition-all flex flex-col items-center justify-center gap-2 cursor-pointer
                         ${estaSeleccionada 
                           ? "border-[#9A2A46] bg-[#9A2A46]/5 text-[#9A2A46] ring-2 ring-[#9A2A46]/20 shadow-md" 
@@ -138,12 +167,9 @@ export default function CrearTurnoPage() {
                         }`}
                     >
                       <span className="text-2xl">
-                        {actividad === "Fútbol" && "⚽"}
-                        {actividad === "Pádel" && "🎾"}
-                        {actividad === "Básquet" && "🏀"}
-                        {actividad === "Vóley" && "🏐"}
+                        {obtenerEmoji(actividad.nombre)}
                       </span>
-                      <span className="text-sm">{actividad}</span>
+                      <span className="text-sm">{actividad.nombre}</span>
                     </button>
                   );
                 })}
