@@ -28,6 +28,8 @@ def create_app():
     # --- INICIO DE CARGA AUTOMÁTICA ---
     with app.app_context():
         from .models import Actividad
+
+        db.create_all()  # Asegura que las tablas estén creadas antes de insertar datos
         
         deportes = [
             {"nombre": "Fútbol", "costo_individual": 1500.0, "costo_mensual": 12000.0},

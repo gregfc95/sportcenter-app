@@ -1,16 +1,18 @@
 from marshmallow import Schema, fields, validate, ValidationError, validates
-from datetime import datetime
 
+DIAS_VALIDOS = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
 
 class TurnoCreateSchema(Schema):
-    # Validamos que el string sea EXACTAMENTE una de las opciones de la lista
     actividad_id = fields.Int(required=True)
-    horario = fields.DateTime(required=True)
+    dia_semana = fields.Str(required=True, validate=validate.OneOf(
+        DIAS_VALIDOS,
+        error="El día debe ser uno de: Lunes, Martes, Miércoles, Jueves, Viernes, Sábado, Domingo."
+    ))
+    hora = fields.Time(required=True)   # Marshmallow espera formato "HH:MM:SS" o "HH:MM"
     cupo = fields.Int(required=True, validate=validate.Range(min=1, error="El cupo debe ser al menos 1."))
-    # A la descripción sí le dejamos el Length porque es texto libre donde pueden escribir cualquier cosa
     descripcion = fields.Str(required=False, validate=validate.Length(max=255))
 
-    @validates("horario")
-    def validate_horario(self, value):
-        if value < datetime.now():
-            raise ValidationError("El horario no puede ser en el pasado.")
+    # dump fields (respuesta al cliente)
+    id = fields.Int(dump_only=True)
+    actividad = fields.Str(dump_only=True)
+    disponibles = fields.Int(dump_only=True)

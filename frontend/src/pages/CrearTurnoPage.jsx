@@ -1,22 +1,17 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+
+const DIAS = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"];
 
 export default function CrearTurnoPage() {
-  const navigate = useNavigate();
 
-  // 1. Obtenemos la fecha de hoy en formato YYYY-MM-DD
-  const fechaHoy = new Date().toISOString().split('T')[0];
+  const [actividadesDisponibles, setActividadesDisponibles] = useState([]);
 
-  const[actividadesDisponibles, setActividadesDisponibles] = useState([]);
-
-  // Estados del formulario
   const [actividadSeleccionada, setActividadSeleccionada] = useState(null);
-  const [fecha, setFecha] = useState("");
+  const [dia, setDia] = useState(null);
   const [hora, setHora] = useState("");
   const [descripcion, setDescripcion] = useState("");
-  const [cupo, setCupo] = useState(1); 
+  const [cupo, setCupo] = useState(1);
 
-  // Estados para alertas y feedback de la API
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
 
@@ -25,13 +20,12 @@ export default function CrearTurnoPage() {
     setError(null);
     setSuccess(false);
 
-    // 1. Validaciones manuales antes de disparar el Fetch
-    if (actividadSeleccionada == null) {
+    if (actividadSeleccionada === null) {
       setError("Por favor, seleccioná una actividad de la lista.");
       return;
     }
-    if (!fecha) {
-      setError("Falta ingresar la fecha del turno.");
+    if (dia === null) {
+      setError("Por favor, seleccioná un día de la semana.");
       return;
     }
     if (!hora) {
@@ -43,27 +37,15 @@ export default function CrearTurnoPage() {
       return;
     }
 
-    const fechaTurno= new Date(`${fecha}T${hora}:00`);
-    const fechaActual = new Date();
-    if (fechaTurno < fechaActual) {
-      setError("No se pueden crear turnos en el pasado. Por favor, seleccioná una fecha y hora futuras.");
-      return;
-    }
-
-    // 2. Combinamos Fecha y Hora en formato ISO 8601 que espera Python (DateTime)
-    // Ejemplo: "2026-05-25 19:30:00"
-    const fechaHoraCombinada = `${fecha} ${hora}:00`;
-
-    // 3. Armamos el objeto JSON para enviar
     const turnoData = {
       actividad_id: actividadSeleccionada,
-      horario: fechaHoraCombinada, // Enviamos la fecha y hora combinada
-      descripcion: descripcion.trim(), // Si está vacío, manda un string vacío ""
-      cupo: parseInt(cupo) // Agregamos el campo cupo
+      dia_semana: dia,
+      hora: `${hora}:00`,   // Mandamos "HH:MM:SS" para que Marshmallow lo parsee bien
+      descripcion: descripcion.trim(),
+      cupo: parseInt(cupo)
     };
 
     try {
-      // Reemplazá el puerto 5000 si tu Docker de Python corre en otro
       const res = await fetch("/api/turnos/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -73,23 +55,20 @@ export default function CrearTurnoPage() {
       const data = await res.json();
 
       if (!res.ok) {
-        // Captura los errores del backend (ej: "turno superpuesto")
         setError(data.error || "Hubo un problema al agendar el turno.");
         return;
       }
 
-      // Si el servidor responde OK, limpiamos los campos y tiramos éxito
       setSuccess(true);
-      setActividadSeleccionada("");
-      setFecha("");
+      setActividadSeleccionada(null);
+      setDia(null);
       setHora("");
       setDescripcion("");
       setCupo(1);
 
     } catch (err) {
-      setError("Error de conexión con el servidor. Verificá que el backend en Docker esté corriendo.");
+      setError("Error de conexión con el servidor. Verificá que el backend esté corriendo.");
     }
-
   };
 
   const obtenerEmoji = (nombre) => {
@@ -99,7 +78,7 @@ export default function CrearTurnoPage() {
       "Básquet": "🏀",
       "Vóley": "🏐"
     };
-  return mapa[nombre] || "💪";
+    return mapa[nombre] || "💪";
   };
 
   useEffect(() => {
@@ -109,22 +88,17 @@ export default function CrearTurnoPage() {
         if (res.ok) {
           const data = await res.json();
           setActividadesDisponibles(data);
-        } else {
-          console.error("Error al cargar actividades:", res.status);
         }
       } catch (err) {
         console.error("Error de conexión al cargar actividades:", err);
       }
     };
-
     cargarActividades();
   }, []);
 
-
   return (
     <div className="min-h-screen bg-gray-100 flex flex-col font-sans text-gray-900">
-      
-      {/* Header oficial con la marca y colores del proyecto */}
+
       <header className="bg-white px-8 py-4 flex items-center justify-between shadow-sm">
         <div className="flex items-center gap-2">
           <span className="text-2xl">💪</span>
@@ -135,25 +109,26 @@ export default function CrearTurnoPage() {
         </div>
       </header>
 
-      {/* Bloque del Formulario principal */}
       <div className="flex flex-1 items-center justify-center px-4 py-12">
         <div className="w-full max-w-3xl rounded-2xl shadow-xl bg-white p-8 md:p-10">
-          
+
           <div className="mb-8 border-b border-slate-100 pb-4">
             <h2 className="text-3xl font-black text-gray-900">Nuevo Turno</h2>
-            <p className="text-slate-500 mt-1 text-sm">Completá los campos para reservar una nueva sesión en el sistema.</p>
+            <p className="text-slate-500 mt-1 text-sm">
+              Los turnos son semanales y recurrentes. Ej: todos los miércoles a las 18:00.
+            </p>
           </div>
 
           <form onSubmit={handleSubmit} className="flex flex-col gap-8">
-            
-            {/* PASO 1: Selección de Actividades (Tarjetas sin entrada de teclado) */}
+
+            {/* PASO 1: Actividad */}
             <div className="flex flex-col gap-3">
               <span className="text-sm font-bold text-gray-800 uppercase tracking-wider">
                 1. Seleccioná la Actividad
               </span>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                 {actividadesDisponibles.map((actividad) => {
-                  const idActividad = Number(actividad.id)
+                  const idActividad = Number(actividad.id);
                   const estaSeleccionada = actividadSeleccionada === idActividad;
                   return (
                     <button
@@ -161,14 +136,12 @@ export default function CrearTurnoPage() {
                       type="button"
                       onClick={() => setActividadSeleccionada(idActividad)}
                       className={`p-4 rounded-xl border text-center font-bold transition-all flex flex-col items-center justify-center gap-2 cursor-pointer
-                        ${estaSeleccionada 
-                          ? "border-[#9A2A46] bg-[#9A2A46]/5 text-[#9A2A46] ring-2 ring-[#9A2A46]/20 shadow-md" 
+                        ${estaSeleccionada
+                          ? "border-[#9A2A46] bg-[#9A2A46]/5 text-[#9A2A46] ring-2 ring-[#9A2A46]/20 shadow-md"
                           : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:border-slate-300"
                         }`}
                     >
-                      <span className="text-2xl">
-                        {obtenerEmoji(actividad.nombre)}
-                      </span>
+                      <span className="text-2xl">{obtenerEmoji(actividad.nombre)}</span>
                       <span className="text-sm">{actividad.nombre}</span>
                     </button>
                   );
@@ -176,37 +149,49 @@ export default function CrearTurnoPage() {
               </div>
             </div>
 
-            {/* PASO 2: Calendario y Horario nativos */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <label className="flex flex-col gap-2">
-                <span className="text-sm font-bold text-gray-800 uppercase tracking-wider">2. Fecha</span>
-                <div className="flex items-center border border-slate-300 rounded-lg bg-white px-4 py-3 gap-2 focus-within:border-[#9A2A46] focus-within:ring-2 focus-within:ring-[#9A2A46]/20 transition-all">
-                  <span className="text-slate-400">📅</span>
-                  <input
-                    type="date"
-                    min={fechaHoy} // No permitir fechas pasadas
-                    value={fecha}
-                    onChange={(e) => setFecha(e.target.value)}
-                    className="flex-1 outline-none text-base bg-transparent text-gray-900"
-                  />
-                </div>
-              </label>
-
-              <label className="flex flex-col gap-2">
-                <span className="text-sm font-bold text-gray-800 uppercase tracking-wider">3. Horario</span>
-                <div className="flex items-center border border-slate-300 rounded-lg bg-white px-4 py-3 gap-2 focus-within:border-[#9A2A46] focus-within:ring-2 focus-within:ring-[#9A2A46]/20 transition-all">
-                  <span className="text-slate-400">⏰</span>
-                  <input
-                    type="time"
-                    value={hora}
-                    onChange={(e) => setHora(e.target.value)}
-                    className="flex-1 outline-none text-base bg-transparent text-gray-900"
-                  />
-                </div>
-              </label>
+            {/* PASO 2: Día de la semana */}
+            <div className="flex flex-col gap-3">
+              <span className="text-sm font-bold text-gray-800 uppercase tracking-wider">
+                2. Día de la Semana
+              </span>
+              <div className="grid grid-cols-4 sm:grid-cols-7 gap-2">
+                {DIAS.map((d) => {
+                  const estaSeleccionado = dia === d;
+                  return (
+                    <button
+                      key={d}
+                      type="button"
+                      onClick={() => setDia(d)}
+                      className={`py-3 px-1 rounded-xl border text-center text-sm font-bold transition-all cursor-pointer
+                        ${estaSeleccionado
+                          ? "border-[#9A2A46] bg-[#9A2A46]/5 text-[#9A2A46] ring-2 ring-[#9A2A46]/20 shadow-md"
+                          : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:border-slate-300"
+                        }`}
+                    >
+                      {/* Mostramos abreviatura en mobile, nombre completo en desktop */}
+                      <span className="sm:hidden">{d.slice(0, 3)}</span>
+                      <span className="hidden sm:inline">{d.slice(0, 3)}</span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
-            {/* PASO 3: Notas Adicionales (Opcional) */}
+            {/* PASO 3: Horario */}
+            <label className="flex flex-col gap-2">
+              <span className="text-sm font-bold text-gray-800 uppercase tracking-wider">3. Horario</span>
+              <div className="flex items-center border border-slate-300 rounded-lg bg-white px-4 py-3 gap-2 focus-within:border-[#9A2A46] focus-within:ring-2 focus-within:ring-[#9A2A46]/20 transition-all">
+                <span className="text-slate-400">⏰</span>
+                <input
+                  type="time"
+                  value={hora}
+                  onChange={(e) => setHora(e.target.value)}
+                  className="flex-1 outline-none text-base bg-transparent text-gray-900"
+                />
+              </div>
+            </label>
+
+            {/* PASO 4: Descripción */}
             <label className="flex flex-col gap-2">
               <div className="flex justify-between items-center">
                 <span className="text-sm font-bold text-gray-800 uppercase tracking-wider">4. Descripción</span>
@@ -224,6 +209,7 @@ export default function CrearTurnoPage() {
               </div>
             </label>
 
+            {/* PASO 5: Cupo */}
             <label className="flex flex-col gap-2">
               <span className="text-sm font-bold text-gray-800 uppercase tracking-wider">5. Cupo</span>
               <div className="flex items-center border border-slate-300 rounded-lg bg-white px-4 py-3 gap-2 focus-within:border-[#9A2A46] focus-within:ring-2 focus-within:ring-[#9A2A46]/20 transition-all">
@@ -238,7 +224,6 @@ export default function CrearTurnoPage() {
               </div>
             </label>
 
-            {/* Bloques dinámicos para mostrar errores o confirmaciones */}
             {error && (
               <div className="rounded-lg bg-red-50 p-4 text-sm text-red-600 border border-red-200 font-medium flex items-center gap-2">
                 ⚠️ {error}
@@ -250,7 +235,6 @@ export default function CrearTurnoPage() {
               </div>
             )}
 
-            {/* Botón de envío que hereda el estilo hover del Login */}
             <button
               type="submit"
               className="w-full rounded-lg bg-[#9A2A46] px-6 py-4 text-base font-bold text-white shadow-lg hover:bg-[#7d2239] hover:shadow-xl transition-all cursor-pointer text-center"
@@ -262,7 +246,6 @@ export default function CrearTurnoPage() {
         </div>
       </div>
 
-      {/* Footer */}
       <footer className="text-center py-4 text-xs text-slate-400 bg-white md:bg-transparent border-t md:border-none border-slate-200">
         © 2026 Centro Deportivo. Módulo de Administración.
       </footer>
