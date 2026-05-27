@@ -28,6 +28,10 @@ class UserResponseSchema(Schema):
     last_name = fields.Str()
     dni = fields.Str()
     email = fields.Str()
+    role = fields.Method("get_role")
+
+    def get_role(self, obj) -> str:
+        return obj.role.value
 
 class UserLoginSchema(Schema):
     email = fields.Email(required=True)

@@ -31,10 +31,16 @@ export default function LoginPage() {
       });
       const data = await res.json();
       if (!res.ok) {
-        setError(data.error || "Credenciales incorrectas.");
+        setError(data.error || "Email y/o contraseña inválidos");
         return;
       }
-      navigate("/dashboard");
+      localStorage.setItem("user", JSON.stringify(data));
+      const routes = {
+        client: "/dashboard/client",
+        employee: "/dashboard/employee",
+        owner: "/dashboard/owner",
+      };
+      navigate(routes[data.role] || "/dashboard");
     } catch {
       setError("Error de conexión con el servidor.");
     }
