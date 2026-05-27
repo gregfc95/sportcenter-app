@@ -1,6 +1,12 @@
-from datetime import datetime, timezone
+from datetime import datetime, timezone, date
+from enum import Enum
 from .. import db
 from enum import Enum
+
+class UserRole(str, Enum):
+    CLIENT = "client"
+    EMPLOYEE = "employee"
+    OWNER = "owner"
 
 class UserRole(str, Enum):
     CLIENT = "client"
@@ -16,6 +22,8 @@ class User(db.Model):
     dni = db.Column(db.String(20), unique=True, nullable=False)
     email = db.Column(db.String(255), unique=True, nullable=False)
     password_hash = db.Column(db.String(255), nullable=False)
+    phone = db.Column(db.String(20), nullable=True)
+    birth_date = db.Column(db.Date, nullable=True)
     role = db.Column(db.Enum(UserRole, values_callable=lambda x: [e.value for e in x]), nullable=False, default=UserRole.CLIENT)
     is_active = db.Column(db.Boolean, default=True, nullable=False)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
