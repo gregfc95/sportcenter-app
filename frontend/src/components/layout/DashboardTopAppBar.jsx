@@ -1,6 +1,5 @@
 import { Link } from "react-router-dom";
-import { Search, Sun, Moon } from "lucide-react";
-
+import { Search, Bell, HelpCircle } from "lucide-react";
 import { useTheme } from "@/lib/ThemeContext";
 
 function getInitials(name = "") {
@@ -12,61 +11,65 @@ function getInitials(name = "") {
     .join("");
 }
 
+const ROLE_LABELS = {
+  client: "Dashboard",
+  employee: "Panel de Empleados",
+  owner: "Panel Administrativo",
+};
+
 export default function DashboardTopAppBar({ user }) {
   const { isDark, toggle } = useTheme();
   const initials = getInitials(user?.name) || "?";
+  const title = ROLE_LABELS[user?.role] || "Dashboard";
 
   return (
-    <header className="bg-surface fixed top-0 w-full z-50 border-b border-outline-variant shadow-sm shadow-secondary-container/5 h-16">
-      <div className="h-full flex items-center justify-between px-margin-mobile">
-        <Link to="/dashboard" className="flex items-center gap-sm">
-          <img
-            src="/logo.png"
-            alt=""
-            aria-hidden="true"
-            className="h-8 w-8 object-contain"
-          />
-          <span className="font-bold text-on-surface text-base md:text-lg">
-            Sportify
-          </span>
+    <header className="bg-white fixed top-0 w-full z-50 border-b border-gray-100 shadow-sm h-16">
+      <div className="h-full flex items-center justify-between px-6">
+
+        {/* Logo — solo visible en mobile */}
+        <Link to="/" className="flex items-center gap-2 md:hidden">
+          <img src="/logo.png" alt="" aria-hidden="true" className="h-8 w-8 object-contain" />
+          <span className="font-bold text-gray-900 text-base">Sportify</span>
         </Link>
 
-        <div className="flex items-center gap-xs">
-          <button
-            type="button"
-            onClick={toggle}
-            aria-label={isDark ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
-            aria-pressed={isDark}
-            className="p-xs rounded-full text-on-surface-variant hover:text-primary active:text-primary transition-colors flex items-center justify-center"
-          >
-            {isDark ? <Sun className="size-5" /> : <Moon className="size-5" />}
+        {/* Título de sección — visible en desktop */}
+        <span className="hidden md:block text-[#9A2A46] font-bold text-lg">
+          {title}
+        </span>
+
+        {/* Buscador central */}
+        <div className="hidden md:flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-full px-4 py-2 w-72">
+          <Search className="size-4 text-gray-400" />
+          <input
+            type="text"
+            placeholder="Buscar turnos, actividades..."
+            className="bg-transparent text-sm text-gray-600 outline-none w-full"
+          />
+        </div>
+
+        {/* Acciones y usuario */}
+        <div className="flex items-center gap-3">
+          <button type="button" aria-label="Notificaciones" className="p-2 rounded-full text-gray-500 hover:text-[#9A2A46] transition-colors relative">
+            <Bell className="size-5" />
+            <span className="absolute top-1 right-1 w-2 h-2 bg-[#9A2A46] rounded-full" />
+          </button>
+          <button type="button" aria-label="Ayuda" className="p-2 rounded-full text-gray-500 hover:text-[#9A2A46] transition-colors">
+            <HelpCircle className="size-5" />
           </button>
 
-          <button
-            type="button"
-            aria-label="Buscar"
-            className="p-xs rounded-full text-on-surface-variant hover:text-primary active:text-primary transition-colors flex items-center justify-center"
-          >
-            <Search className="size-5" />
-          </button>
-
-          <button
-            type="button"
-            className="flex items-center gap-xs bg-surface-container px-sm py-xs rounded-full border border-outline-variant hover:bg-surface-container-high transition-colors active:scale-95 duration-100"
-          >
-            <span className="text-label-md text-on-surface">{user?.name}</span>
+          <div className="flex items-center gap-2 border-l border-gray-100 pl-3">
+            <div className="text-right hidden md:block">
+              <p className="text-sm font-semibold text-gray-900">{user?.name} {user?.last_name}</p>
+              <p className="text-xs text-gray-400">SOCIO #4492</p>
+            </div>
             {user?.avatarUrl ? (
-              <img
-                src={user.avatarUrl}
-                alt=""
-                className="w-6 h-6 rounded-full border border-accent object-cover"
-              />
+              <img src={user.avatarUrl} alt="" className="w-9 h-9 rounded-full border-2 border-[#FFB700] object-cover" />
             ) : (
-              <span className="w-6 h-6 rounded-full bg-accent text-accent-foreground text-[11px] font-bold flex items-center justify-center border border-accent">
+              <span className="w-9 h-9 rounded-full bg-[#FFB700] text-white text-sm font-bold flex items-center justify-center">
                 {initials}
               </span>
             )}
-          </button>
+          </div>
         </div>
       </div>
     </header>

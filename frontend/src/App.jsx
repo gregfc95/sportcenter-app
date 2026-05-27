@@ -18,7 +18,9 @@ function App() {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
           <Route element={<DashboardLayout />}>
-            <Route path="/dashboard" element={<DashboardPage />} />
+            <Route path="/dashboard/client" element={<DashboardPage />} />
+            <Route path="/dashboard/employee" element={<DashboardPage />} />
+            <Route path="/dashboard/owner" element={<DashboardPage />} />
           </Route>
         </Routes>
       </BrowserRouter>

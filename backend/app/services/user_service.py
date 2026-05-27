@@ -1,4 +1,4 @@
-from werkzeug.security import generate_password_hash
+from werkzeug.security import generate_password_hash, check_password_hash
 from app.models.user import User
 from app.repositories.user_repository import UserRepository
 
@@ -23,3 +23,9 @@ class UserService:
         )
 
         return self.user_repository.save(user)
+
+    def login_user(self, email: str, password: str) -> User:
+        user = self.user_repository.find_by_email(email)
+        if not user or not check_password_hash(user.password_hash, password):
+            raise ValueError("Email y/o contraseña inválidos")
+        return user
