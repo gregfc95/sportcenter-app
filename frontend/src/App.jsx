@@ -4,6 +4,7 @@ import RegisterPage from "./pages/RegisterPage";
 import LoginPage from "./pages/LoginPage";
 import LandingPage from "./pages/LandingPage";
 import DashboardPage from "./pages/DashboardPage";
+import ProfilePage from "./pages/ProfilePage";
 import PublicLayout from "./components/layout/PublicLayout";
 import DashboardLayout from "./components/layout/DashboardLayout";
 import ProtectedRoute from "./components/layout/ProtectedRoute";
@@ -30,6 +31,10 @@ function App() {
           >
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/crear-turno" element={<CrearTurnoPage />} />
+            <Route path="/dashboard/client" element={<DashboardPage />} />
+            <Route path="/dashboard/client/perfil" element={<ProfilePage />} />
+            <Route path="/dashboard/employee" element={<DashboardPage />} />
+            <Route path="/dashboard/admin" element={<DashboardPage />} />
           </Route>
         </Routes>
       </BrowserRouter>

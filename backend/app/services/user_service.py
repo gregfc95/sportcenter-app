@@ -31,3 +31,17 @@ class UserService:
         if not user or not check_password_hash(user.password_hash, password):
             raise ValueError("Email y/o contraseña inválidos")
         return user
+    def update_profile(self, user_id: int, data: dict) -> User:
+        user = self.user_repository.find_by_id(user_id)
+        if not user:
+            raise ValueError("Usuario no encontrado")
+
+        if data["email"] != user.email:
+            if self.user_repository.find_by_email(data["email"]):
+                raise ValueError("El email ya se encuentra registrado")
+
+        user.first_name = data["first_name"]
+        user.last_name = data["last_name"]
+        user.email = data["email"]
+
+        return self.user_repository.save(user)
