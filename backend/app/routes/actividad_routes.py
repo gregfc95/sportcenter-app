@@ -3,7 +3,7 @@ from ..services import ActividadService
 from ..schemas import ActividadSchema  # El esquema para transformar los modelos a JSON
 
 # Definimos el blueprint con el prefijo /actividades
-actividad_bp = Blueprint("actividades", __name__, url_prefix="/actividades")
+actividad_bp = Blueprint("actividades", __name__, url_prefix="/api/actividades")
 
 actividad_service = ActividadService()
 # many=True le dice a Marshmallow que va a serializar una LISTA de actividades

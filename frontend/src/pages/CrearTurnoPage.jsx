@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Clock, FileText, Users, AlertCircle, CheckCircle } from "lucide-react";
 
 const DIAS = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"];
 
@@ -40,7 +41,7 @@ export default function CrearTurnoPage() {
     const turnoData = {
       actividad_id: actividadSeleccionada,
       dia_semana: dia,
-      hora: `${hora}:00`,   // Mandamos "HH:MM:SS" para que Marshmallow lo parsee bien
+      hora: `${hora}:00`,
       descripcion: descripcion.trim(),
       cupo: parseInt(cupo)
     };
@@ -168,7 +169,6 @@ export default function CrearTurnoPage() {
                           : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:border-slate-300"
                         }`}
                     >
-                      {/* Mostramos abreviatura en mobile, nombre completo en desktop */}
                       <span className="sm:hidden">{d.slice(0, 3)}</span>
                       <span className="hidden sm:inline">{d.slice(0, 3)}</span>
                     </button>
@@ -181,7 +181,7 @@ export default function CrearTurnoPage() {
             <label className="flex flex-col gap-2">
               <span className="text-sm font-bold text-gray-800 uppercase tracking-wider">3. Horario</span>
               <div className="flex items-center border border-slate-300 rounded-lg bg-white px-4 py-3 gap-2 focus-within:border-[#9A2A46] focus-within:ring-2 focus-within:ring-[#9A2A46]/20 transition-all">
-                <span className="text-slate-400">⏰</span>
+                <Clock size={18} className="text-slate-400 shrink-0" />
                 <input
                   type="time"
                   value={hora}
@@ -198,7 +198,7 @@ export default function CrearTurnoPage() {
                 <span className="text-xs text-slate-400 font-medium">(Opcional)</span>
               </div>
               <div className="flex items-start border border-slate-300 rounded-lg bg-white px-4 py-3 gap-2 focus-within:border-[#9A2A46] focus-within:ring-2 focus-within:ring-[#9A2A46]/20 transition-all">
-                <span className="text-slate-400 mt-0.5">📝</span>
+                <FileText size={18} className="text-slate-400 shrink-0 mt-0.5" />
                 <textarea
                   placeholder="Ej: Cancha 3, partido de profes, traer pelota..."
                   value={descripcion}
@@ -213,7 +213,7 @@ export default function CrearTurnoPage() {
             <label className="flex flex-col gap-2">
               <span className="text-sm font-bold text-gray-800 uppercase tracking-wider">5. Cupo</span>
               <div className="flex items-center border border-slate-300 rounded-lg bg-white px-4 py-3 gap-2 focus-within:border-[#9A2A46] focus-within:ring-2 focus-within:ring-[#9A2A46]/20 transition-all">
-                <span className="text-slate-400">👥</span>
+                <Users size={18} className="text-slate-400 shrink-0" />
                 <input
                   type="number"
                   min="1"
@@ -226,12 +226,14 @@ export default function CrearTurnoPage() {
 
             {error && (
               <div className="rounded-lg bg-red-50 p-4 text-sm text-red-600 border border-red-200 font-medium flex items-center gap-2">
-                ⚠️ {error}
+                <AlertCircle size={18} className="shrink-0" />
+                {error}
               </div>
             )}
             {success && (
               <div className="rounded-lg bg-green-50 p-4 text-sm text-green-700 border border-green-200 font-medium flex items-center gap-2">
-                ✅ ¡Turno creado con éxito!
+                <CheckCircle size={18} className="shrink-0" />
+                ¡Turno creado con éxito!
               </div>
             )}
 

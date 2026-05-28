@@ -1,8 +1,9 @@
 from flask import Blueprint, request, jsonify
 from ..services import TurnoService
 from ..schemas import TurnoCreateSchema 
+from marshmallow import ValidationError
 
-turno_bp = Blueprint("turnos", __name__, url_prefix="/turnos")
+turno_bp = Blueprint("turnos", __name__, url_prefix="/api/turnos")
 
 turno_service = TurnoService()
 turno_schema = TurnoCreateSchema()
@@ -11,15 +12,16 @@ turno_schema = TurnoCreateSchema()
 def create_turno():
 
     data = request.get_json()
-    
+  
     # Validar datos
-    errors = turno_schema.validate(data)
-    if errors:
-        return jsonify(errors), 400
+    try:
+        datos_validos = turno_schema.load(data)
+    except ValidationError as err:
+        return jsonify({"errors": err.messages}), 400
 
     try:
         # Llamar al servicio que ya tenés armado
-        turno = turno_service.crear_turno(data)
-        return jsonify(turno_schema.dump(turno)), 201
+        turno = turno_service.crear_turno(datos_validos)
+        return jsonify(turno), 201
     except Exception as e:
         return jsonify({"error": str(e)}), 400
