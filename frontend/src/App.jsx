@@ -7,10 +7,12 @@ import PublicLayout from "./components/layout/PublicLayout";
 import DashboardLayout from "./components/layout/DashboardLayout";
 import ProtectedRoute from "./components/layout/ProtectedRoute";
 import { ThemeProvider } from "./lib/ThemeContext";
+import { Toaster } from "./components/ui/sonner";
 
 function App() {
   return (
     <ThemeProvider>
+      <Toaster />
       <BrowserRouter>
         <Routes>
           <Route element={<PublicLayout />}>
@@ -25,9 +27,7 @@ function App() {
               </ProtectedRoute>
             }
           >
-            <Route path="/dashboard/client" element={<DashboardPage />} />
-            <Route path="/dashboard/employee" element={<DashboardPage />} />
-            <Route path="/dashboard/admin" element={<DashboardPage />} />
+            <Route path="/dashboard" element={<DashboardPage />} />
           </Route>
         </Routes>
       </BrowserRouter>
