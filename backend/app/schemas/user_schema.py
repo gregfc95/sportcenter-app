@@ -13,6 +13,12 @@ MSGS = {
 EMAIL_MSGS = {**MSGS, "invalid": "El email ingresado no es valido"}
 
 
+class UserUpdateProfileSchema(Schema):
+    first_name = fields.Str(required=True, error_messages=MSGS)
+    last_name = fields.Str(required=True, error_messages=MSGS)
+    email = fields.Email(required=True, error_messages=EMAIL_MSGS)
+
+
 class UserRegisterSchema(Schema):
     first_name = fields.Str(required=True, error_messages=MSGS)
     last_name = fields.Str(required=True, error_messages=MSGS)
