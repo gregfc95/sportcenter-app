@@ -8,6 +8,8 @@ services:
     env_file: .env
     environment:
       FLASK_APP: run.py
+    ports:
+      - "5000:5000"
     restart: unless-stopped
     depends_on:
       db:
