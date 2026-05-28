@@ -27,7 +27,7 @@ function App() {
           >
             <Route path="/dashboard/client" element={<DashboardPage />} />
             <Route path="/dashboard/employee" element={<DashboardPage />} />
-            <Route path="/dashboard/owner" element={<DashboardPage />} />
+            <Route path="/dashboard/admin" element={<DashboardPage />} />
           </Route>
         </Routes>
       </BrowserRouter>

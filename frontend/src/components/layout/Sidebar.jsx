@@ -1,33 +1,31 @@
 import { Link, useLocation } from "react-router-dom";
-import { LayoutDashboard, CalendarDays, Dumbbell, User, Plus, Users, GraduationCap, Grid2x2, CreditCard, Clock } from "lucide-react";
+import { LayoutDashboard, CalendarDays, Dumbbell, User, Plus, Users, GraduationCap, Grid2x2, CreditCard, Clock, UserPlus } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const CLIENT_NAV = [
   { label: "Dashboard", href: "/dashboard/client", Icon: LayoutDashboard },
-  { label: "Reservas", href: "/dashboard/client/reservas", Icon: CalendarDays },
-  { label: "Actividades", href: "/dashboard/client/actividades", Icon: Dumbbell },
+  { label: "Mis Reservas", href: "/dashboard/client/reservas", Icon: CalendarDays },
+  { label: "Mis Pagos", href: "/dashboard/client/pagos", Icon: CreditCard },
   { label: "Mi Perfil", href: "/dashboard/client/perfil", Icon: User },
 ];
 
-const OWNER_NAV = [
-  { label: "Dashboard", href: "/dashboard/owner", Icon: LayoutDashboard },
-  { label: "Empleados", href: "/dashboard/owner/empleados", Icon: Users },
-  { label: "Profesores", href: "/dashboard/owner/profesores", Icon: GraduationCap },
-  { label: "Canchas", href: "/dashboard/owner/canchas", Icon: Grid2x2 },
-  { label: "Reservas", href: "/dashboard/owner/reservas", Icon: CalendarDays },
-  { label: "Pagos", href: "/dashboard/owner/pagos", Icon: CreditCard },
-  { label: "Turnos", href: "/dashboard/owner/turnos", Icon: Clock },
+const ADMIN_NAV = [
+  { label: "Dashboard", href: "/dashboard/admin", Icon: LayoutDashboard },
+  { label: "Usuarios", href: "/dashboard/admin/usuarios", Icon: Users },
+  { label: "Actividades", href: "/dashboard/admin/actividades", Icon: Dumbbell },
+  { label: "Turnos", href: "/dashboard/admin/turnos", Icon: Clock },
 ];
 
 const EMPLOYEE_NAV = [
   { label: "Dashboard", href: "/dashboard/employee", Icon: LayoutDashboard },
-  { label: "Reservas", href: "/dashboard/employee/reservas", Icon: CalendarDays },
+  { label: "Registrar Cliente", href: "/dashboard/employee/registro", Icon: UserPlus },
+  { label: "Actividades", href: "/dashboard/employee/actividades", Icon: Dumbbell },
   { label: "Turnos", href: "/dashboard/employee/turnos", Icon: Clock },
 ];
 
 const NAV_BY_ROLE = {
   client: CLIENT_NAV,
-  owner: OWNER_NAV,
+  admin: ADMIN_NAV,
   employee: EMPLOYEE_NAV,
 };
 
@@ -59,14 +57,14 @@ export default function Sidebar({ user }) {
       </div>
 
       <div className="px-3 flex flex-col gap-2">
-        {user?.role === "owner" && (
+        {user?.role === "admin" && (
           <div className="flex items-center gap-2 px-3 py-2 border-t border-gray-100 pt-3">
             <div className="w-8 h-8 rounded-full bg-[#FFB700]/20 text-[#9A2A46] text-xs font-bold flex items-center justify-center">
               {user?.name?.[0]?.toUpperCase()}
             </div>
             <div className="flex flex-col">
               <span className="text-xs font-semibold text-gray-900">{user?.name}</span>
-              <span className="text-xs text-gray-400">Propietario</span>
+              <span className="text-xs text-gray-400">Administrador</span>
             </div>
           </div>
         )}

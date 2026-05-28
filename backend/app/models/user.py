@@ -1,17 +1,11 @@
 from datetime import datetime, timezone, date
 from enum import Enum
 from .. import db
-from enum import Enum
 
 class UserRole(str, Enum):
     CLIENT = "client"
     EMPLOYEE = "employee"
-    OWNER = "owner"
-
-class UserRole(str, Enum):
-    CLIENT = "client"
-    EMPLOYEE = "employee"
-    OWNER = "owner"
+    ADMIN = "admin"
 
 class User(db.Model):
     __tablename__ = "users"
