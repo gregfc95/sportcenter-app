@@ -1,1 +1,1 @@
-from .user_schema import UserRegisterSchema, UserResponseSchema, UserLoginSchema
+from .user_schema import UserRegisterSchema, UserResponseSchema, UserLoginSchema, UserUpdateProfileSchema
