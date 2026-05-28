@@ -1,12 +1,16 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Dumbbell } from "lucide-react";
+import { toast } from "sonner";
 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import AuthLayout from "@/components/layout/AuthLayout";
 import { usePageTitle } from "@/lib/usePageTitle";
+import { isValidEmail } from "@/lib/validators";
+
+const REQUIRED = ["first_name", "last_name", "dni", "email", "phone", "birth_date", "password", "confirm_password"];
 
 export default function RegisterPage() {
   usePageTitle("Crear cuenta");
@@ -21,25 +25,32 @@ export default function RegisterPage() {
     password: "",
     confirm_password: "",
   });
-  const [error, setError] = useState(null);
-  const [success, setSuccess] = useState(false);
+  const [errors, setErrors] = useState({});
+  const [formError, setFormError] = useState(null);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
     setForm((prev) => ({ ...prev, [name]: value }));
+    setErrors((prev) => ({ ...prev, [name]: undefined }));
+    setFormError(null);
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError(null);
+    setFormError(null);
 
-    if (!form.first_name || !form.last_name || !form.dni || !form.email || !form.birth_date || !form.password) {
-      setError("Campos requeridos faltantes");
-      return;
+    const newErrors = {};
+    REQUIRED.forEach((f) => {
+      if (!form[f]) newErrors[f] = "Campo requerido faltante";
+    });
+    if (form.email && !isValidEmail(form.email)) {
+      newErrors.email = "El email ingresado no es valido";
     }
-
-    if (form.password !== form.confirm_password) {
-      setError("Las contraseñas no coinciden.");
+    if (form.password && form.confirm_password && form.password !== form.confirm_password) {
+      newErrors.confirm_password = "Las contraseñas no coinciden";
+    }
+    if (Object.keys(newErrors).length) {
+      setErrors(newErrors);
       return;
     }
 
@@ -60,17 +71,22 @@ export default function RegisterPage() {
       const data = await res.json();
       if (!res.ok) {
         if (data.error) {
-          setError(data.error);
+          setFormError(data.error);
+        } else if (typeof data === "object" && data !== null) {
+          const fieldErrors = {};
+          Object.entries(data).forEach(([field, msgs]) => {
+            fieldErrors[field] = Array.isArray(msgs) ? msgs[0] : String(msgs);
+          });
+          setErrors(fieldErrors);
         } else {
-          const messages = Object.values(data).flat().join(" | ");
-          setError(messages);
+          setFormError("Error al registrarse.");
         }
         return;
       }
-      setSuccess(true);
+      toast.success("Usuario creado con éxito");
       setTimeout(() => navigate("/login"), 2000);
     } catch {
-      setError("Error de conexión con el servidor.");
+      toast.error("Error de conexión con el servidor.");
     }
   };
 
@@ -97,57 +113,66 @@ export default function RegisterPage() {
         </p>
       </div>
 
-      <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
+      <form className="flex flex-col gap-4" onSubmit={handleSubmit} noValidate>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="flex flex-col gap-2">
             <Label htmlFor="first_name">Nombre</Label>
-            <Input id="first_name" name="first_name" type="text" placeholder="Ej. Juan" value={form.first_name} onChange={handleChange} />
+            <Input id="first_name" name="first_name" type="text" placeholder="Ej. Juan" value={form.first_name} onChange={handleChange} aria-invalid={!!errors.first_name} />
+            {errors.first_name && <p className="text-xs text-destructive">{errors.first_name}</p>}
           </div>
           <div className="flex flex-col gap-2">
             <Label htmlFor="last_name">Apellido</Label>
-            <Input id="last_name" name="last_name" type="text" placeholder="Ej. Pérez" value={form.last_name} onChange={handleChange} />
+            <Input id="last_name" name="last_name" type="text" placeholder="Ej. Pérez" value={form.last_name} onChange={handleChange} aria-invalid={!!errors.last_name} />
+            {errors.last_name && <p className="text-xs text-destructive">{errors.last_name}</p>}
           </div>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="flex flex-col gap-2">
             <Label htmlFor="dni">DNI</Label>
-            <Input id="dni" name="dni" type="text" placeholder="12345678" value={form.dni} onChange={handleChange} />
+            <Input id="dni" name="dni" type="text"  placeholder="12345678" value={form.dni} onChange={handleChange} aria-invalid={!!errors.dni} />
+            {errors.dni && <p className="text-xs text-destructive">{errors.dni}</p>}
           </div>
           <div className="flex flex-col gap-2">
             <Label htmlFor="phone">Teléfono</Label>
-            <Input id="phone" name="phone" type="text" placeholder="1113467371" value={form.phone} onChange={handleChange} />
+            <Input id="phone" name="phone" type="tel" placeholder="1113467371" value={form.phone} onChange={handleChange} aria-invalid={!!errors.phone} />
+            {errors.phone && <p className="text-xs text-destructive">{errors.phone}</p>}
           </div>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="flex flex-col gap-2">
             <Label htmlFor="email">Email</Label>
-            <Input id="email" name="email" type="email" placeholder="correo@ejemplo.com" value={form.email} onChange={handleChange} />
+            <Input id="email" name="email" type="email" placeholder="correo@ejemplo.com" value={form.email} onChange={handleChange} aria-invalid={!!errors.email} />
+            {errors.email && <p className="text-xs text-destructive">{errors.email}</p>}
           </div>
           <div className="flex flex-col gap-2">
             <Label htmlFor="birth_date">Fecha de nacimiento</Label>
-            <Input id="birth_date" name="birth_date" type="date" value={form.birth_date} onChange={handleChange} />
+            <Input id="birth_date" name="birth_date" type="date" value={form.birth_date} onChange={handleChange} onKeyDown={(e) => e.preventDefault()} aria-invalid={!!errors.birth_date} />
+            {errors.birth_date && <p className="text-xs text-destructive">{errors.birth_date}</p>}
           </div>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="flex flex-col gap-2">
             <Label htmlFor="password">Contraseña</Label>
-            <Input id="password" name="password" type="password" placeholder="••••••••" value={form.password} onChange={handleChange} />
+            <Input id="password" name="password" type="password" placeholder="••••••••" value={form.password} onChange={handleChange} aria-invalid={!!errors.password} />
+            {errors.password && <p className="text-xs text-destructive">{errors.password}</p>}
           </div>
           <div className="flex flex-col gap-2">
             <Label htmlFor="confirm_password">Confirmar contraseña</Label>
-            <Input id="confirm_password" name="confirm_password" type="password" placeholder="••••••••" value={form.confirm_password} onChange={handleChange} />
+            <Input id="confirm_password" name="confirm_password" type="password" placeholder="••••••••" value={form.confirm_password} onChange={handleChange} aria-invalid={!!errors.confirm_password} />
+            {errors.confirm_password && <p className="text-xs text-destructive">{errors.confirm_password}</p>}
           </div>
         </div>
 
-        {error && (
-          <div className="rounded-lg bg-red-50 p-3 text-sm text-red-600">{error}</div>
-        )}
-
-        {success && (
-          <div className="rounded-lg bg-green-50 p-3 text-sm text-green-600">Usuario creado con éxito</div>
+        {formError && (
+          <div
+            role="alert"
+            className="rounded-lg border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive"
+          >
+            {formError}
+          </div>
         )}
 
         <Button type="submit" size="lg" className="w-full bg-primary text-primary-foreground hover:bg-primary/90 shadow-lg">
