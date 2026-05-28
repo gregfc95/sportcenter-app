@@ -1,4 +1,4 @@
-from . import db
+from app import db
 
 
 def register_commands(app):
@@ -7,7 +7,7 @@ def register_commands(app):
     @app.cli.command("seed-db")
     def seed_db():
         """Carga los datos iniciales necesarios para que la app funcione."""
-        from .models import Actividad
+        from .app.models import Actividad
 
         deportes = [
             {"nombre": "Fútbol",   "costo_individual": 1500.0, "costo_mensual": 12000.0},

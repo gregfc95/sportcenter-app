@@ -25,7 +25,7 @@ def create_app():
     app.register_blueprint(turno_bp)
     app.register_blueprint(actividad_bp)
 
-    from .seed import register_commands
+    from seed import register_commands
     register_commands(app)
 
     return app
