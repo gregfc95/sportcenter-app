@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Un-ignore frontend source lib/ (root .gitignore's Python "lib/" rule otherwise hides it)
+!src/lib
