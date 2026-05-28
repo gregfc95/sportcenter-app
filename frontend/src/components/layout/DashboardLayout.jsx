@@ -15,14 +15,14 @@ export default function DashboardLayout() {
 
   return (
     <div className="bg-background text-on-background min-h-screen flex flex-col overflow-x-hidden">
-      <DashboardSidebar />
+      <DashboardSidebar user={user} />
       <DashboardTopAppBar user={user} />
 
       <main className="grow pt-16 pb-22 md:pb-lg md:pl-72">
         <Outlet context={{ user }} />
       </main>
 
-      <BottomNav />
+      <BottomNav user={user} />
     </div>
   );
 }

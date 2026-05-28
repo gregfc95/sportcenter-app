@@ -1,11 +1,20 @@
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Plus, LogOut } from "lucide-react";
 
-import { DASHBOARD_NAV_LINKS } from "./constants";
+import { DASHBOARD_NAV_LINKS_BY_ROLE } from "./constants";
 import { cn } from "@/lib/utils";
 
-export default function DashboardSidebar() {
+export default function DashboardSidebar({ user }) {
   const { pathname } = useLocation();
+  const navigate = useNavigate();
+  const navLinks =
+    DASHBOARD_NAV_LINKS_BY_ROLE[user?.role] ??
+    DASHBOARD_NAV_LINKS_BY_ROLE.client;
+
+  const handleLogout = () => {
+    localStorage.removeItem("user");
+    navigate("/login");
+  };
 
   return (
     <nav
@@ -28,7 +37,7 @@ export default function DashboardSidebar() {
       </Link>
 
       <ul className="flex flex-col gap-sm flex-1">
-        {DASHBOARD_NAV_LINKS.map(({ label, href, Icon }) => {
+        {navLinks.map(({ label, href, Icon }) => {
           const active = pathname === href;
           return (
             <li key={label}>
@@ -51,23 +60,26 @@ export default function DashboardSidebar() {
           );
         })}
         <li>
-          <Link
-            to="/"
-            className="flex items-center gap-md px-md py-sm rounded-lg text-on-surface-variant hover:text-primary transition-colors"
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="w-full flex items-center gap-md px-md py-sm rounded-lg text-on-surface-variant hover:text-primary transition-colors"
           >
             <LogOut className="size-5" />
             <span>Cerrar sesión</span>
-          </Link>
+          </button>
         </li>
       </ul>
 
-      <button
-        type="button"
-        className="mt-md flex items-center justify-center gap-sm bg-primary text-primary-foreground text-label-md font-bold px-md py-sm rounded-lg shadow-md shadow-primary/20 hover:bg-primary/90 active:scale-[0.98] transition-all"
-      >
-        <Plus className="size-5" />
-        Nueva Reserva
-      </button>
+      {user?.role === "client" && (
+        <button
+          type="button"
+          className="mt-md flex items-center justify-center gap-sm bg-primary text-primary-foreground text-label-md font-bold px-md py-sm rounded-lg shadow-md shadow-primary/20 hover:bg-primary/90 active:scale-[0.98] transition-all"
+        >
+          <Plus className="size-5" />
+          Nueva Reserva
+        </button>
+      )}
     </nav>
   );
 }

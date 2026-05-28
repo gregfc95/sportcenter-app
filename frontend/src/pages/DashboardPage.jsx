@@ -1,18 +1,11 @@
 import { useOutletContext, Link } from "react-router-dom";
-import {
-  CalendarDays,
-  CreditCard,
-  UserPlus,
-  Dumbbell,
-  Clock,
-  Users,
-} from "lucide-react";
 
 import { usePageTitle } from "@/lib/usePageTitle";
 import WelcomeSection from "@/components/dashboard/WelcomeSection";
 import AccountStatusCard from "@/components/dashboard/AccountStatusCard";
 import QuickAccessGrid from "@/components/dashboard/QuickAccessGrid";
 import UpcomingBookings from "@/components/dashboard/UpcomingBookings";
+import { DASHBOARD_NAV_LINKS_BY_ROLE } from "@/components/layout/constants";
 
 const ACCOUNT = { status: "Al día", paid: true };
 
@@ -34,24 +27,25 @@ const BOOKINGS = [
   },
 ];
 
-const EMPLOYEE_CARDS = [
-  { label: "Registrar Cliente", desc: "Creá un nuevo cliente en el sistema", href: "/registro", Icon: UserPlus },
-  { label: "Actividades", desc: "Consultá las actividades disponibles", href: "/actividades", Icon: Dumbbell },
-  { label: "Turnos", desc: "Gestioná los turnos del centro", href: "/turnos", Icon: Clock },
-];
+const CARD_DESC_BY_HREF = {
+  "/clientes": "Gestioná los clientes del centro",
+  "/empleados": "Gestioná el equipo del centro",
+  "/actividades": "Administrá las actividades disponibles",
+  "/pagos": "Consultá los pagos del centro",
+  "/turnos": "Administrá los turnos reservados",
+};
 
-const ADMIN_CARDS = [
-  { label: "Usuarios", desc: "Gestioná los usuarios del sistema", href: "/usuarios", Icon: Users },
-  { label: "Actividades", desc: "Administrá las actividades", href: "/actividades", Icon: Dumbbell },
-  { label: "Turnos", desc: "Administrá los turnos", href: "/turnos", Icon: Clock },
-  { label: "Pagos", desc: "Consultá los pagos del centro", href: "/pagos", Icon: CreditCard },
-  { label: "Reservas", desc: "Administrá las reservas", href: "/reservas", Icon: CalendarDays },
-];
+function getStaffCards(role) {
+  const links = DASHBOARD_NAV_LINKS_BY_ROLE[role] ?? [];
+  return links
+    .filter(({ href }) => href !== "/dashboard")
+    .map((link) => ({ ...link, desc: CARD_DESC_BY_HREF[link.href] ?? "" }));
+}
 
 function ClientDashboard({ user }) {
   return (
     <div className="flex flex-col gap-lg px-margin-mobile md:px-lg mt-md md:mt-lg max-w-4xl mx-auto w-full">
-      <WelcomeSection name={user.name} />
+      <WelcomeSection user={user} />
       <AccountStatusCard status={ACCOUNT.status} paid={ACCOUNT.paid} />
       <QuickAccessGrid />
       <UpcomingBookings bookings={BOOKINGS} />
@@ -60,11 +54,11 @@ function ClientDashboard({ user }) {
 }
 
 function AdminDashboard({ user }) {
-  const cards = user.role === "employee" ? EMPLOYEE_CARDS : ADMIN_CARDS;
+  const cards = getStaffCards(user.role);
 
   return (
     <div className="flex flex-col gap-lg px-margin-mobile md:px-lg mt-md md:mt-lg max-w-4xl mx-auto w-full">
-      <WelcomeSection name={user.name} />
+      <WelcomeSection user={user} />
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-md">
         {cards.map(({ label, desc, href, Icon }) => (
           <Link
@@ -72,7 +66,7 @@ function AdminDashboard({ user }) {
             to={href}
             className="bg-surface-container border border-outline-variant rounded-xl p-md flex flex-col gap-sm hover:border-primary hover:shadow-md transition-all group"
           >
-            <div className="w-10 h-10 rounded-full bg-secondary-container flex items-center justify-center group-hover:bg-primary/10 transition-colors">
+            <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center group-hover:bg-primary/20 transition-colors">
               <Icon className="size-5 text-primary" />
             </div>
             <div>
