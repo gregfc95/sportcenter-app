@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, Navigate } from "react-router-dom";
 import { ShieldCheck, Eye, EyeOff } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
@@ -8,12 +8,24 @@ import { Button } from "@/components/ui/button";
 import AuthLayout from "@/components/layout/AuthLayout";
 import { usePageTitle } from "@/lib/usePageTitle";
 
+const ROLE_ROUTES = {
+  client: "/dashboard/client",
+  employee: "/dashboard/employee",
+  admin: "/dashboard/admin",
+};
+
 export default function LoginPage() {
   usePageTitle("Iniciar sesión");
   const navigate = useNavigate();
   const [form, setForm] = useState({ email: "", password: "" });
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState(null);
+
+  const stored = localStorage.getItem("user");
+  if (stored) {
+    const savedUser = JSON.parse(stored);
+    return <Navigate to={ROLE_ROUTES[savedUser.role] || "/dashboard/client"} replace />;
+  }
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -35,12 +47,7 @@ export default function LoginPage() {
         return;
       }
       localStorage.setItem("user", JSON.stringify(data));
-      const routes = {
-        client: "/dashboard/client",
-        employee: "/dashboard/employee",
-        owner: "/dashboard/owner",
-      };
-      navigate(routes[data.role] || "/dashboard");
+      navigate(ROLE_ROUTES[data.role] || "/dashboard/client");
     } catch {
       setError("Error de conexión con el servidor.");
     }

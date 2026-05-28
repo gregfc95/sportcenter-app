@@ -9,16 +9,18 @@ class UserService:
 
     def register_user(self, data: dict) -> User:
         if self.user_repository.find_by_email(data["email"]):
-            raise ValueError("El email ya está registrado")
+            raise ValueError("El email ya se encuentra registrado")
 
         if self.user_repository.find_by_dni(data["dni"]):
-            raise ValueError("El DNI ya está registrado")
+            raise ValueError("El DNI ya se encuentra registrado")
 
         user = User(
             first_name=data["first_name"],
             last_name=data["last_name"],
             dni=data["dni"],
             email=data["email"],
+            phone=data.get("phone"),
+            birth_date=data.get("birth_date"),
             password_hash=generate_password_hash(data["password"])
         )
 

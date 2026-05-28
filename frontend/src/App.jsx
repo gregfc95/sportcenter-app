@@ -5,6 +5,7 @@ import LandingPage from "./pages/LandingPage";
 import DashboardPage from "./pages/DashboardPage";
 import PublicLayout from "./components/layout/PublicLayout";
 import DashboardLayout from "./components/layout/DashboardLayout";
+import ProtectedRoute from "./components/layout/ProtectedRoute";
 import { ThemeProvider } from "./lib/ThemeContext";
 
 function App() {
@@ -17,10 +18,16 @@ function App() {
           </Route>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
-          <Route element={<DashboardLayout />}>
+          <Route
+            element={
+              <ProtectedRoute>
+                <DashboardLayout />
+              </ProtectedRoute>
+            }
+          >
             <Route path="/dashboard/client" element={<DashboardPage />} />
             <Route path="/dashboard/employee" element={<DashboardPage />} />
-            <Route path="/dashboard/owner" element={<DashboardPage />} />
+            <Route path="/dashboard/admin" element={<DashboardPage />} />
           </Route>
         </Routes>
       </BrowserRouter>
