@@ -117,12 +117,12 @@ export default function RegisterPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="flex flex-col gap-2">
             <Label htmlFor="first_name">Nombre</Label>
-            <Input id="first_name" name="first_name" type="text" placeholder="Ej. Juan" value={form.first_name} onChange={handleChange} aria-invalid={!!errors.first_name} />
+            <Input id="first_name" name="first_name" type="text" maxLength={100} placeholder="Ej. Juan" value={form.first_name} onChange={handleChange} aria-invalid={!!errors.first_name} />
             {errors.first_name && <p className="text-xs text-destructive">{errors.first_name}</p>}
           </div>
           <div className="flex flex-col gap-2">
             <Label htmlFor="last_name">Apellido</Label>
-            <Input id="last_name" name="last_name" type="text" placeholder="Ej. Pérez" value={form.last_name} onChange={handleChange} aria-invalid={!!errors.last_name} />
+            <Input id="last_name" name="last_name" type="text" maxLength={100} placeholder="Ej. Pérez" value={form.last_name} onChange={handleChange} aria-invalid={!!errors.last_name} />
             {errors.last_name && <p className="text-xs text-destructive">{errors.last_name}</p>}
           </div>
         </div>
@@ -130,12 +130,12 @@ export default function RegisterPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="flex flex-col gap-2">
             <Label htmlFor="dni">DNI</Label>
-            <Input id="dni" name="dni" type="text"  placeholder="12345678" value={form.dni} onChange={handleChange} aria-invalid={!!errors.dni} />
+            <Input id="dni" name="dni" type="text" maxLength={20} placeholder="12345678" value={form.dni} onChange={handleChange} aria-invalid={!!errors.dni} />
             {errors.dni && <p className="text-xs text-destructive">{errors.dni}</p>}
           </div>
           <div className="flex flex-col gap-2">
             <Label htmlFor="phone">Teléfono</Label>
-            <Input id="phone" name="phone" type="tel" placeholder="1113467371" value={form.phone} onChange={handleChange} aria-invalid={!!errors.phone} />
+            <Input id="phone" name="phone" type="tel" maxLength={20} placeholder="1113467371" value={form.phone} onChange={handleChange} aria-invalid={!!errors.phone} />
             {errors.phone && <p className="text-xs text-destructive">{errors.phone}</p>}
           </div>
         </div>
@@ -143,7 +143,7 @@ export default function RegisterPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="flex flex-col gap-2">
             <Label htmlFor="email">Email</Label>
-            <Input id="email" name="email" type="email" placeholder="correo@ejemplo.com" value={form.email} onChange={handleChange} aria-invalid={!!errors.email} />
+            <Input id="email" name="email" type="email" maxLength={255} placeholder="correo@ejemplo.com" value={form.email} onChange={handleChange} aria-invalid={!!errors.email} />
             {errors.email && <p className="text-xs text-destructive">{errors.email}</p>}
           </div>
           <div className="flex flex-col gap-2">
@@ -156,12 +156,12 @@ export default function RegisterPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="flex flex-col gap-2">
             <Label htmlFor="password">Contraseña</Label>
-            <Input id="password" name="password" type="password" placeholder="••••••••" value={form.password} onChange={handleChange} aria-invalid={!!errors.password} />
+            <Input id="password" name="password" type="password" maxLength={15} placeholder="••••••••" value={form.password} onChange={handleChange} aria-invalid={!!errors.password} />
             {errors.password && <p className="text-xs text-destructive">{errors.password}</p>}
           </div>
           <div className="flex flex-col gap-2">
             <Label htmlFor="confirm_password">Confirmar contraseña</Label>
-            <Input id="confirm_password" name="confirm_password" type="password" placeholder="••••••••" value={form.confirm_password} onChange={handleChange} aria-invalid={!!errors.confirm_password} />
+            <Input id="confirm_password" name="confirm_password" type="password" maxLength={15} placeholder="••••••••" value={form.confirm_password} onChange={handleChange} aria-invalid={!!errors.confirm_password} />
             {errors.confirm_password && <p className="text-xs text-destructive">{errors.confirm_password}</p>}
           </div>
         </div>

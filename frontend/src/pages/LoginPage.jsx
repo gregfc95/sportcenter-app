@@ -95,6 +95,7 @@ export default function LoginPage() {
             id="email"
             name="email"
             type="email"
+            maxLength={255}
             placeholder="correo@ejemplo.com"
             value={form.email}
             onChange={handleChange}
@@ -114,6 +115,7 @@ export default function LoginPage() {
               id="password"
               name="password"
               type={showPassword ? "text" : "password"}
+              maxLength={15}
               placeholder="••••••••"
               value={form.password}
               onChange={handleChange}
