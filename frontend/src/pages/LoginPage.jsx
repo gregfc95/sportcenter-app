@@ -1,40 +1,48 @@
 import { useState } from "react";
 import { Link, useNavigate, Navigate } from "react-router-dom";
 import { ShieldCheck, Eye, EyeOff } from "lucide-react";
+import { toast } from "sonner";
 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import AuthLayout from "@/components/layout/AuthLayout";
 import { usePageTitle } from "@/lib/usePageTitle";
-
-const ROLE_ROUTES = {
-  client: "/dashboard/client",
-  employee: "/dashboard/employee",
-  admin: "/dashboard/admin",
-};
+import { isValidEmail } from "@/lib/validators";
 
 export default function LoginPage() {
   usePageTitle("Iniciar sesión");
   const navigate = useNavigate();
   const [form, setForm] = useState({ email: "", password: "" });
+  const [errors, setErrors] = useState({});
   const [showPassword, setShowPassword] = useState(false);
-  const [error, setError] = useState(null);
+  const [formError, setFormError] = useState(null);
 
   const stored = localStorage.getItem("user");
   if (stored) {
-    const savedUser = JSON.parse(stored);
-    return <Navigate to={ROLE_ROUTES[savedUser.role] || "/dashboard/client"} replace />;
+    return <Navigate to="/dashboard" replace />;
   }
 
   const handleChange = (e) => {
     const { name, value } = e.target;
     setForm((prev) => ({ ...prev, [name]: value }));
+    setErrors((prev) => ({ ...prev, [name]: undefined }));
+    setFormError(null);
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError(null);
+    setFormError(null);
+
+    const newErrors = {};
+    if (!form.email) newErrors.email = "Campo requerido faltante";
+    else if (!isValidEmail(form.email)) newErrors.email = "El email ingresado no es valido";
+    if (!form.password) newErrors.password = "Campo requerido faltante";
+    if (Object.keys(newErrors).length) {
+      setErrors(newErrors);
+      return;
+    }
+
     try {
       const res = await fetch("/api/users/login", {
         method: "POST",
@@ -43,13 +51,14 @@ export default function LoginPage() {
       });
       const data = await res.json();
       if (!res.ok) {
-        setError(data.error || "Email y/o contraseña inválidos");
+        setFormError(data.error || "Email y/o contraseña inválidos");
         return;
       }
       localStorage.setItem("user", JSON.stringify(data));
-      navigate(ROLE_ROUTES[data.role] || "/dashboard/client");
+      toast.success("Sesión iniciada");
+      navigate("/dashboard");
     } catch {
-      setError("Error de conexión con el servidor.");
+      toast.error("Error de conexión con el servidor.");
     }
   };
 
@@ -79,7 +88,7 @@ export default function LoginPage() {
         </p>
       </div>
 
-      <form className="flex flex-col gap-5" onSubmit={handleSubmit}>
+      <form className="flex flex-col gap-5" onSubmit={handleSubmit} noValidate>
         <div className="flex flex-col gap-2">
           <Label htmlFor="email">Email</Label>
           <Input
@@ -89,15 +98,16 @@ export default function LoginPage() {
             placeholder="correo@ejemplo.com"
             value={form.email}
             onChange={handleChange}
+            aria-invalid={!!errors.email}
           />
+          {errors.email && (
+            <p className="text-xs text-destructive">{errors.email}</p>
+          )}
         </div>
 
         <div className="flex flex-col gap-2">
           <div className="flex justify-between items-center">
             <Label htmlFor="password">Contraseña</Label>
-            <a href="#" className="text-xs text-primary font-semibold hover:underline">
-              ¿Olvidaste tu contraseña?
-            </a>
           </div>
           <div className="relative">
             <Input
@@ -107,6 +117,7 @@ export default function LoginPage() {
               placeholder="••••••••"
               value={form.password}
               onChange={handleChange}
+              aria-invalid={!!errors.password}
               className="pr-10"
             />
             <button
@@ -118,10 +129,18 @@ export default function LoginPage() {
               {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
             </button>
           </div>
+          {errors.password && (
+            <p className="text-xs text-destructive">{errors.password}</p>
+          )}
         </div>
 
-        {error && (
-          <div className="rounded-lg bg-red-50 p-3 text-sm text-red-600">{error}</div>
+        {formError && (
+          <div
+            role="alert"
+            className="rounded-lg border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive"
+          >
+            {formError}
+          </div>
         )}
 
         <Button
