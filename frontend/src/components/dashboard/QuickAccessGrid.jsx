@@ -22,7 +22,7 @@ export default function QuickAccessGrid() {
       <h3 className="text-label-md text-on-surface uppercase tracking-wider">
         Acceso rápido
       </h3>
-      <div className="grid grid-cols-4 gap-gutter">
+      <div className="grid grid-cols-4 gap-gutter md:grid-cols-[repeat(4,minmax(0,120px))] md:gap-md">
         {TILES.map(({ name, tone }) => {
           const { Icon } = SPORT_BY_NAME[name];
           return (
