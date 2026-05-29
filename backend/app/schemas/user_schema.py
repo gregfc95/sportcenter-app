@@ -71,6 +71,7 @@ class UserResponseSchema(Schema):
     dni = fields.Str()
     email = fields.Str()
     phone = fields.Str()
+    birth_date = fields.Date(format="%Y-%m-%d")
     role = fields.Method("get_role")
 
     def get_role(self, obj) -> str:
