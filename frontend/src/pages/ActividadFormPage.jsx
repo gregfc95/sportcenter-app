@@ -240,7 +240,6 @@ export default function ActividadFormPage() {
                 asChild
                 variant="outline"
                 size="lg"
-                className="rounded-full"
                 disabled={submitting}
               >
                 <Link to="/actividades">Cancelar</Link>
@@ -248,7 +247,6 @@ export default function ActividadFormPage() {
               <Button
                 type="submit"
                 size="lg"
-                className="rounded-full"
                 disabled={submitting}
               >
                 <Check className="size-4" />
