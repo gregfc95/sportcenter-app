@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 import { getActividadIcon } from "@/components/actividades/actividadIcons";
 import { listActividades } from "@/components/actividades/api";
@@ -20,6 +21,7 @@ const TONE_CLASSES = {
 };
 
 export default function QuickAccessGrid() {
+  const navigate = useNavigate();
   const [actividades, setActividades] = useState([]);
 
   useEffect(() => {
@@ -54,6 +56,9 @@ export default function QuickAccessGrid() {
             <button
               key={actividad.id}
               type="button"
+              onClick={() =>
+                navigate(`/nueva-reserva?actividad=${actividad.id}`)
+              }
               className="flex flex-col items-center gap-xs group"
             >
               <span
