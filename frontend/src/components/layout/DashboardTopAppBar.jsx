@@ -58,6 +58,8 @@ export default function DashboardTopAppBar({ user }) {
 
           <button
             type="button"
+            onClick={() => navigate("/dashboard/client/perfil")}
+            aria-label="Ir al perfil"
             className="flex items-center gap-xs bg-surface-container px-sm py-xs rounded-full border border-outline-variant hover:bg-surface-container-high transition-colors active:scale-95 duration-100"
           >
             <span className="text-label-md text-on-surface">{user?.name}</span>
