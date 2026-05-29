@@ -48,13 +48,13 @@ export default function DashboardTopAppBar({ user }) {
             {isDark ? <Sun className="size-5" /> : <Moon className="size-5" />}
           </button>
 
-          <button
+{/*           <button
             type="button"
             aria-label="Buscar"
             className="p-xs rounded-full text-on-surface-variant hover:text-primary active:text-primary transition-colors flex items-center justify-center"
           >
             <Search className="size-5" />
-          </button>
+          </button> */}
 
           <button
             type="button"
