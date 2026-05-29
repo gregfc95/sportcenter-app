@@ -121,7 +121,7 @@ export default function CrearTurnoPage() {
         <p className="text-on-surface-variant">
           Falta indicar la actividad para la que querés crear un turno.
         </p>
-        <Button asChild variant="outline" className="self-start rounded-full">
+        <Button asChild variant="outline" className="self-start">
           <Link to="/actividades">Volver a Actividades</Link>
         </Button>
       </div>
@@ -174,7 +174,7 @@ export default function CrearTurnoPage() {
         ) : loadError ? (
           <div className="bg-surface-container border border-outline-variant rounded-xl p-lg flex flex-col gap-sm">
             <p className="text-destructive">{loadError}</p>
-            <Button asChild variant="outline" className="self-start rounded-full">
+            <Button asChild variant="outline" className="self-start">
               <Link to="/actividades">Volver a Actividades</Link>
             </Button>
           </div>
@@ -290,7 +290,6 @@ export default function CrearTurnoPage() {
                 asChild
                 variant="outline"
                 size="lg"
-                className="rounded-full"
                 disabled={submitting}
               >
                 <Link to={backHref}>Cancelar</Link>
@@ -298,7 +297,6 @@ export default function CrearTurnoPage() {
               <Button
                 type="submit"
                 size="lg"
-                className="rounded-full"
                 disabled={submitting}
               >
                 <Check className="size-4" />
