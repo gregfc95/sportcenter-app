@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { CalendarDays, Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { usePageTitle } from "@/lib/usePageTitle";
 import { Button } from "@/components/ui/button";
-import ActividadFormDialog from "@/components/actividades/ActividadFormDialog";
 import DeleteActividadDialog from "@/components/actividades/DeleteActividadDialog";
 import { getActividadIcon } from "@/components/actividades/actividadIcons";
 import { listActividades } from "@/components/actividades/api";
@@ -27,13 +27,11 @@ function padId(id) {
 
 export default function ActividadesPage() {
   usePageTitle("Actividades");
+  const navigate = useNavigate();
 
   const [actividades, setActividades] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
-
-  const [formOpen, setFormOpen] = useState(false);
-  const [editing, setEditing] = useState(null);
 
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(null);
@@ -55,29 +53,9 @@ export default function ActividadesPage() {
     fetchActividades();
   }, [fetchActividades]);
 
-  const openCreate = () => {
-    setEditing(null);
-    setFormOpen(true);
-  };
-
-  const openEdit = (actividad) => {
-    setEditing(actividad);
-    setFormOpen(true);
-  };
-
   const openDelete = (actividad) => {
     setDeleting(actividad);
     setDeleteOpen(true);
-  };
-
-  const handleSaved = (saved, { isEdit }) => {
-    setActividades((prev) => {
-      if (isEdit) {
-        return prev.map((a) => (a.id === saved.id ? saved : a));
-      }
-      return [...prev, saved];
-    });
-    toast.success(isEdit ? "Actividad actualizada" : "Actividad creada");
   };
 
   const handleDeleted = (deletedItem) => {
@@ -97,9 +75,11 @@ export default function ActividadesPage() {
     <div className="flex flex-col gap-lg px-margin-mobile md:px-lg mt-md md:mt-lg max-w-6xl mx-auto w-full">
       <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-gutter">
         <h2 className="text-headline-lg text-on-surface">Actividades</h2>
-        <Button onClick={openCreate} className="self-start sm:self-auto">
-          <Plus className="size-4" />
-          Crear Actividad
+        <Button asChild className="self-start sm:self-auto">
+          <Link to="/actividades/nueva">
+            <Plus className="size-4" />
+            Crear Actividad
+          </Link>
         </Button>
       </header>
 
@@ -114,7 +94,7 @@ export default function ActividadesPage() {
                   Nombre
                 </th>
                 <th className="py-md px-md text-label-sm text-on-surface-variant uppercase">
-                  Precio Base
+                  Precio
                 </th>
                 <th className="py-md px-md text-label-sm text-on-surface-variant uppercase text-right w-40">
                   Acciones
@@ -178,7 +158,7 @@ export default function ActividadesPage() {
                             size="icon-sm"
                             aria-label={`Editar ${actividad.nombre}`}
                             title="Editar"
-                            onClick={() => openEdit(actividad)}
+                            onClick={() => navigate(`/actividades/${actividad.id}/editar`)}
                           >
                             <Pencil className="size-4" />
                           </Button>
@@ -207,12 +187,6 @@ export default function ActividadesPage() {
         </div>
       </div>
 
-      <ActividadFormDialog
-        open={formOpen}
-        onOpenChange={setFormOpen}
-        actividad={editing}
-        onSaved={handleSaved}
-      />
       <DeleteActividadDialog
         open={deleteOpen}
         onOpenChange={setDeleteOpen}
