@@ -27,7 +27,12 @@ const CLIENT_NAV_LINKS = [
 const EMPLOYEE_NAV_LINKS = [
   { label: "Inicio", href: "/dashboard", Icon: Home },
   { label: "Clientes", href: "/clientes", Icon: Users },
-  { label: "Turnos Reservados", href: "/turnos", Icon: CalendarDays },
+  {
+    label: "Turnos Reservados",
+    href: "/turnos",
+    Icon: CalendarDays,
+    comingSoon: true,
+  },
 ];
 
 const ADMIN_NAV_LINKS = [
@@ -35,8 +40,13 @@ const ADMIN_NAV_LINKS = [
   { label: "Clientes", href: "/clientes", Icon: Users },
   { label: "Empleados", href: "/empleados", Icon: Briefcase },
   { label: "Actividades", href: "/actividades", Icon: Dumbbell },
-  { label: "Pagos", href: "/pagos", Icon: Wallet },
-  { label: "Turnos Reservados", href: "/turnos", Icon: CalendarDays },
+  { label: "Pagos", href: "/pagos", Icon: Wallet, comingSoon: true },
+  {
+    label: "Turnos Reservados",
+    href: "/turnos",
+    Icon: CalendarDays,
+    comingSoon: true,
+  },
 ];
 
 export const DASHBOARD_NAV_LINKS_BY_ROLE = {
