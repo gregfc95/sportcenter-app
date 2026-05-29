@@ -9,7 +9,15 @@ CUPO_MSGS = {**MSGS, "invalid": "El cupo debe ser un numero valido"}
 
 
 class TurnoSchema(Schema):
-    dia_semana = fields.Str(required=True, error_messages=DIA_SEMANA_MSGS)
+    # DiaSemana is a (str, Enum); fields.Str would dump it via str() as
+    # "DiaSemana.LUNES". Serialize the underlying value ("lunes") instead, while
+    # keeping deserialization as the plain string the service/SQL filters expect.
+    dia_semana = fields.Function(
+        serialize=lambda turno: turno.dia_semana.value if turno.dia_semana else None,
+        deserialize=lambda value: value,
+        required=True,
+        error_messages=DIA_SEMANA_MSGS,
+    )
     hora = fields.Time(required=True, error_messages=HORA_MSGS)
     cupo = fields.Int(required=True, error_messages=CUPO_MSGS)
 
