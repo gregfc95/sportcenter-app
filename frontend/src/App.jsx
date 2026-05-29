@@ -36,7 +36,7 @@ function App() {
             <Route path="/dashboard/client/perfil" element={<ProfilePage />} />
             <Route path="/dashboard/employee" element={<DashboardPage />} />
             <Route path="/dashboard/admin" element={<DashboardPage />} />
-            <Route path="/dashboard/admin/turnos" element={<ViewAppointments onModificar={(turno) => console.log("modificar", turno)} />} />
+            <Route path="/turnos" element={<ViewAppointments />} />
           </Route>
         </Routes>
       </BrowserRouter>

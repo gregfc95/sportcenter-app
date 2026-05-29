@@ -37,6 +37,7 @@ const ADMIN_NAV_LINKS = [
   { label: "Actividades", href: "/actividades", Icon: Dumbbell },
   { label: "Pagos", href: "/pagos", Icon: Wallet },
   { label: "Turnos Reservados", href: "/turnos", Icon: CalendarDays },
+  { label: "Crear Turno", href: "/crear-turno", Icon: CalendarDays },
 ];
 
 export const DASHBOARD_NAV_LINKS_BY_ROLE = {

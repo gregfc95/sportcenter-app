@@ -33,6 +33,7 @@ const CARD_DESC_BY_HREF = {
   "/actividades": "Administrá las actividades disponibles",
   "/pagos": "Consultá los pagos del centro",
   "/turnos": "Administrá los turnos reservados",
+  "/crear-turno": "Creá nuevos turnos para los clientes",
 };
 
 function getStaffCards(role) {
