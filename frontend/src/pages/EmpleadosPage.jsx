@@ -5,6 +5,7 @@ import { UserPlus } from "lucide-react";
 import { usePageTitle } from "@/lib/usePageTitle";
 import { Button } from "@/components/ui/button";
 import { listEmpleados } from "@/components/empleados/api";
+import { PageHeading } from "@/components/ui/page-heading";
 
 export default function EmpleadosPage() {
   usePageTitle("Empleados");
@@ -42,7 +43,7 @@ export default function EmpleadosPage() {
     <div className="flex flex-col gap-lg px-margin-mobile md:px-lg mt-md md:mt-lg max-w-6xl mx-auto w-full">
       <header className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-gutter">
         <div className="flex flex-col gap-1">
-          <h2 className="text-headline-lg text-on-surface">Gestión de Empleados</h2>
+          <PageHeading>Gestión de Empleados</PageHeading>
           <p className="text-on-surface-variant text-sm">
             Administra el directorio del personal y sus datos de contacto.
           </p>

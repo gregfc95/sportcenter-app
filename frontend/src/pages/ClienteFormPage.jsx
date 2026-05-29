@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { usePageTitle } from "@/lib/usePageTitle";
 import { isValidEmail } from "@/lib/validators";
 import { createCliente } from "@/components/clientes/api";
+import { PageHeading } from "@/components/ui/page-heading";
 
 const REQUIRED = [
   "first_name",
@@ -106,13 +107,7 @@ export default function ClienteFormPage() {
           <ChevronRight className="size-3.5" aria-hidden="true" />
           <span className="text-primary">Agregar Cliente</span>
         </nav>
-        <div className="flex items-center gap-sm">
-          <span
-            aria-hidden="true"
-            className="w-1.5 h-7 rounded-full bg-accent shadow-[0_0_10px_rgba(255,183,0,0.5)]"
-          />
-          <h2 className="text-headline-lg text-on-surface">Agregar Cliente</h2>
-        </div>
+        <PageHeading>Agregar Cliente</PageHeading>
         <p className="text-body-md text-on-surface-variant">
           Completá los datos del nuevo cliente. Recibirá una cuenta con la contraseña que ingreses.
         </p>
