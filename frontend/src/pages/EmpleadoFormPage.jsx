@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { usePageTitle } from "@/lib/usePageTitle";
 import { isValidEmail } from "@/lib/validators";
 import { createEmpleado } from "@/components/empleados/api";
+import { PageHeading } from "@/components/ui/page-heading";
 
 const REQUIRED = [
   "first_name",
@@ -106,13 +107,7 @@ export default function EmpleadoFormPage() {
           <ChevronRight className="size-3.5" aria-hidden="true" />
           <span className="text-primary">Agregar Empleado</span>
         </nav>
-        <div className="flex items-center gap-sm">
-          <span
-            aria-hidden="true"
-            className="w-1.5 h-7 rounded-full bg-accent shadow-[0_0_10px_rgba(255,183,0,0.5)]"
-          />
-          <h2 className="text-headline-lg text-on-surface">Agregar Empleado</h2>
-        </div>
+        <PageHeading>Agregar Empleado</PageHeading>
         <p className="text-body-md text-on-surface-variant">
           Completá los datos del nuevo empleado. Recibirá una cuenta con la contraseña que ingreses.
         </p>
