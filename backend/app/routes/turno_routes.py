@@ -46,7 +46,7 @@ def update_appointment(turno_id):
         return jsonify({"error": "No se recibieron datos."}), 400
  
     try:
-        turno = turno_service.modificar_turno(turno_id, data.get("cupo"), data.get("descripcion"))
+        turno = turno_service.appointment_modification(turno_id, data.get("cupo"), data.get("descripcion"))
         return jsonify(turno), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 400
