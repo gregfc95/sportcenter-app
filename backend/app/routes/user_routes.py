@@ -4,6 +4,7 @@ from app.models.user import UserRole
 from app.services import UserService
 from app.schemas import (
     UserRegisterSchema,
+    EmployeeRegisterSchema,
     UserResponseSchema,
     UserLoginSchema,
     UserUpdateProfileSchema,
@@ -13,6 +14,7 @@ user_bp = Blueprint("users", __name__, url_prefix="/api/users")
 
 user_service = UserService()
 register_schema = UserRegisterSchema()
+employee_register_schema = EmployeeRegisterSchema()
 login_schema = UserLoginSchema()
 update_profile_schema = UserUpdateProfileSchema()
 response_schema = UserResponseSchema()
@@ -49,6 +51,32 @@ def register() -> Response:
 
     try:
         user = user_service.register_user(data)
+        return jsonify(response_schema.dump(user)), 201
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 409
+
+
+@user_bp.route("", methods=["POST"])
+def create_user() -> Response:
+    require_role(UserRole.ADMIN)
+
+    data = request.get_json() or {}
+    role_param = data.pop("role", None)
+    if role_param is None:
+        return jsonify({"error": "El campo role es requerido"}), 400
+    try:
+        role = UserRole(role_param)
+    except ValueError:
+        valid = ", ".join(r.value for r in UserRole)
+        return jsonify({"error": f"role debe ser uno de: {valid}"}), 400
+
+    schema = employee_register_schema if role == UserRole.EMPLOYEE else register_schema
+    errors = schema.validate(data)
+    if errors:
+        return jsonify(errors), 400
+
+    try:
+        user = user_service.register_user(data, role=role)
         return jsonify(response_schema.dump(user)), 201
     except ValueError as e:
         return jsonify({"error": str(e)}), 409
