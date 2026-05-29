@@ -7,6 +7,7 @@ import DashboardPage from "./pages/DashboardPage";
 import ProfilePage from "./pages/ProfilePage";
 import ActividadesPage from "./pages/ActividadesPage";
 import ActividadFormPage from "./pages/ActividadFormPage";
+import ActividadDetailPage from "./pages/ActividadDetailPage";
 import PublicLayout from "./components/layout/PublicLayout";
 import DashboardLayout from "./components/layout/DashboardLayout";
 import ProtectedRoute from "./components/layout/ProtectedRoute";
@@ -43,6 +44,7 @@ function App() {
               path="/actividades/:id/editar"
               element={<ActividadFormPage />}
             />
+            <Route path="/actividades/:id" element={<ActividadDetailPage />} />
           </Route>
         </Routes>
       </BrowserRouter>

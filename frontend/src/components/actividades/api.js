@@ -8,6 +8,24 @@ export class ApiError extends Error {
   }
 }
 
+function getCurrentUserId() {
+  try {
+    const stored = localStorage.getItem("user");
+    if (!stored) return null;
+    const parsed = JSON.parse(stored);
+    return parsed?.id ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function authHeaders(extra = {}) {
+  const userId = getCurrentUserId();
+  const headers = { ...extra };
+  if (userId != null) headers["X-User-ID"] = String(userId);
+  return headers;
+}
+
 async function parseJsonSafely(res) {
   try {
     return await res.json();
@@ -41,13 +59,13 @@ function toApiError(body, status, fallback) {
 }
 
 export async function listActividades() {
-  const res = await fetch(BASE);
+  const res = await fetch(BASE, { headers: authHeaders() });
   if (!res.ok) throw new ApiError("No pudimos cargar las actividades.", { status: res.status });
   return res.json();
 }
 
 export async function getActividad(id) {
-  const res = await fetch(`${BASE}/${id}`);
+  const res = await fetch(`${BASE}/${id}`, { headers: authHeaders() });
   const body = await parseJsonSafely(res);
   if (!res.ok) throw toApiError(body, res.status, "No pudimos cargar la actividad.");
   return body;
@@ -56,7 +74,7 @@ export async function getActividad(id) {
 export async function createActividad(payload) {
   const res = await fetch(BASE, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: authHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify(payload),
   });
   const body = await parseJsonSafely(res);
@@ -67,7 +85,7 @@ export async function createActividad(payload) {
 export async function updateActividad(id, payload) {
   const res = await fetch(`${BASE}/${id}`, {
     method: "PUT",
-    headers: { "Content-Type": "application/json" },
+    headers: authHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify(payload),
   });
   const body = await parseJsonSafely(res);
@@ -76,9 +94,43 @@ export async function updateActividad(id, payload) {
 }
 
 export async function deleteActividad(id) {
-  const res = await fetch(`${BASE}/${id}`, { method: "DELETE" });
+  const res = await fetch(`${BASE}/${id}`, {
+    method: "DELETE",
+    headers: authHeaders(),
+  });
   if (!res.ok && res.status !== 204) {
     const body = await parseJsonSafely(res);
     throw toApiError(body, res.status, "No se pudo eliminar la actividad.");
+  }
+}
+
+export async function listTurnosByActividad(actividadId) {
+  const res = await fetch(`${BASE}/${actividadId}/turnos`, {
+    headers: authHeaders(),
+  });
+  const body = await parseJsonSafely(res);
+  if (!res.ok) throw toApiError(body, res.status, "No pudimos cargar los turnos.");
+  return body;
+}
+
+export async function createTurno(actividadId, payload) {
+  const res = await fetch(`${BASE}/${actividadId}/turnos`, {
+    method: "POST",
+    headers: authHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify(payload),
+  });
+  const body = await parseJsonSafely(res);
+  if (!res.ok) throw toApiError(body, res.status, "No se pudo crear el turno.");
+  return body;
+}
+
+export async function deleteTurno(turnoId) {
+  const res = await fetch(`/api/turnos/${turnoId}`, {
+    method: "DELETE",
+    headers: authHeaders(),
+  });
+  if (!res.ok && res.status !== 204) {
+    const body = await parseJsonSafely(res);
+    throw toApiError(body, res.status, "No se pudo eliminar el turno.");
   }
 }

@@ -77,7 +77,6 @@ export default function ActividadesPage() {
         <h2 className="text-headline-lg text-on-surface">Actividades</h2>
         <Button asChild className="self-start sm:self-auto">
           <Link to="/actividades/nueva">
-            <Plus className="size-4" />
             Crear Actividad
           </Link>
         </Button>
@@ -134,11 +133,21 @@ export default function ActividadesPage() {
                       <td className="py-sm px-md">
                         <Icon className="size-5 text-primary" />
                       </td>
-                      <td className="py-sm px-md text-primary font-semibold">
-                        {padId(actividad.id)}
+                      <td className="py-sm px-md">
+                        <Link
+                          to={`/actividades/${actividad.id}`}
+                          className="text-primary font-semibold hover:underline"
+                        >
+                          {padId(actividad.id)}
+                        </Link>
                       </td>
-                      <td className="py-sm px-md text-on-surface font-medium">
-                        {actividad.nombre}
+                      <td className="py-sm px-md">
+                        <Link
+                          to={`/actividades/${actividad.id}`}
+                          className="text-on-surface font-medium hover:text-primary transition-colors"
+                        >
+                          {actividad.nombre}
+                        </Link>
                       </td>
                       <td className="py-sm px-md text-on-surface-variant">
                         {formatPrice(actividad.precio)}
@@ -146,12 +155,15 @@ export default function ActividadesPage() {
                       <td className="py-sm px-md">
                         <div className="flex items-center justify-end gap-1">
                           <Button
+                            asChild
                             variant="ghost"
                             size="icon-sm"
                             aria-label={`Ver turnos de ${actividad.nombre}`}
                             title="Ver turnos"
                           >
-                            <CalendarDays className="size-4" />
+                            <Link to={`/actividades/${actividad.id}`}>
+                              <CalendarDays className="size-4" />
+                            </Link>
                           </Button>
                           <Button
                             variant="ghost"
