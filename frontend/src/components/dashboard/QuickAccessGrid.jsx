@@ -1,11 +1,14 @@
-import { SPORT_BY_NAME } from "@/components/layout/constants";
+import { useEffect, useState } from "react";
+
+import { getActividadIcon } from "@/components/actividades/actividadIcons";
+import { listActividades } from "@/components/actividades/api";
 import { cn } from "@/lib/utils";
 
-const TILES = [
-  { name: "Pádel", tone: "amber-solid" },
-  { name: "Básquet", tone: "burgundy-solid" },
-  { name: "Voley", tone: "amber-outline" },
-  { name: "Fútbol", tone: "burgundy-outline" },
+const TONES = [
+  "amber-solid",
+  "burgundy-solid",
+  "amber-outline",
+  "burgundy-outline",
 ];
 
 const TONE_CLASSES = {
@@ -17,17 +20,39 @@ const TONE_CLASSES = {
 };
 
 export default function QuickAccessGrid() {
+  const [actividades, setActividades] = useState([]);
+
+  useEffect(() => {
+    let active = true;
+    listActividades()
+      .then((data) => {
+        if (active) setActividades(data);
+      })
+      .catch(() => {
+        if (active) setActividades([]);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
   return (
     <section className="flex flex-col gap-sm">
       <h3 className="text-label-md text-on-surface uppercase tracking-wider">
         Acceso rápido
       </h3>
-      <div className="grid grid-cols-4 gap-gutter md:grid-cols-[repeat(4,minmax(0,120px))] md:gap-md">
-        {TILES.map(({ name, tone }) => {
-          const { Icon } = SPORT_BY_NAME[name];
+      {actividades.length === 0 ? (
+        <div className="bg-surface-container border border-outline-variant rounded-xl px-md py-lg text-center text-on-surface-variant">
+          Todavía no hay actividades disponibles.
+        </div>
+      ) : (
+        <div className="grid grid-cols-4 gap-gutter md:grid-cols-[repeat(4,minmax(0,120px))] md:gap-md">
+        {actividades.map((actividad, index) => {
+          const Icon = getActividadIcon(actividad.nombre);
+          const tone = TONES[index % TONES.length];
           return (
             <button
-              key={name}
+              key={actividad.id}
               type="button"
               className="flex flex-col items-center gap-xs group"
             >
@@ -40,12 +65,13 @@ export default function QuickAccessGrid() {
                 <Icon className="size-8" strokeWidth={2} />
               </span>
               <span className="text-[11px] font-medium text-on-surface">
-                {name}
+                {actividad.nombre}
               </span>
             </button>
           );
         })}
-      </div>
+        </div>
+      )}
     </section>
   );
 }
