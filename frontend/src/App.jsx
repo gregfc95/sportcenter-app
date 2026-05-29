@@ -10,6 +10,7 @@ import DashboardLayout from "./components/layout/DashboardLayout";
 import ProtectedRoute from "./components/layout/ProtectedRoute";
 import { ThemeProvider } from "./lib/ThemeContext";
 import { Toaster } from "./components/ui/sonner";
+import ViewAppointments from "./pages/ViewAppointments";
 
 function App() {
   return (
@@ -35,6 +36,7 @@ function App() {
             <Route path="/dashboard/client/perfil" element={<ProfilePage />} />
             <Route path="/dashboard/employee" element={<DashboardPage />} />
             <Route path="/dashboard/admin" element={<DashboardPage />} />
+            <Route path="/dashboard/admin/turnos" element={<ViewAppointments onModificar={(turno) => console.log("modificar", turno)} />} />
           </Route>
         </Routes>
       </BrowserRouter>

@@ -62,3 +62,35 @@ class TurnoService:
         turno_guardado = self.turno_repository.save(nuevo_turno)
         disponibles = self.lugares_disponibles(turno_guardado)
         return turno_guardado.to_dict(disponibles=disponibles)
+    
+    def appointment_modification(self, turno_id, nuevo_cupo, nueva_descripcion):
+        turno = self.turno_repository.find_by_id(turno_id)
+ 
+        if turno is None:
+            raise ValueError("El turno no existe.")
+ 
+        if nuevo_cupo is None or not isinstance(nuevo_cupo, int) or nuevo_cupo < 1:
+            raise ValueError("El cupo debe ser un número entero mayor a 0.")
+ 
+        inscriptos_actuales = self.cantidad_inscriptos(turno)
+        if nuevo_cupo < inscriptos_actuales:
+            raise ValueError(
+                f"No podés reducir el cupo a {nuevo_cupo}. "
+                f"Ya hay {inscriptos_actuales} persona{'s' if inscriptos_actuales != 1 else ''} "
+                f"inscripta{'s' if inscriptos_actuales != 1 else ''}."
+            )
+ 
+        turno.cupo = nuevo_cupo
+ 
+        # None significa que no se envió el campo → no se toca
+        # "" significa que se quiere limpiar → se acepta
+        if nueva_descripcion is not None:
+            turno.descripcion = nueva_descripcion
+ 
+        turno_actualizado = self.turno_repository.update(turno)
+        disponibles = self.lugares_disponibles(turno_actualizado)
+        return turno_actualizado.to_dict(disponibles=disponibles)
+ 
+    def obtener_todos(self):
+        turnos = self.turno_repository.find_all()
+        return [t.to_dict(disponibles=self.lugares_disponibles(t)) for t in turnos]

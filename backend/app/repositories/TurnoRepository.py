@@ -13,3 +13,13 @@ class TurnoRepository:
         db.session.add(turno)
         db.session.commit()
         return turno
+
+    def find_by_id(self, turno_id):
+        return Turno.query.get(turno_id)
+ 
+    def update(self, turno):
+        db.session.commit()
+        return turno
+ 
+    def find_all(self):
+        return Turno.query.all()

@@ -25,3 +25,37 @@ def create_turno():
         return jsonify(turno), 201
     except Exception as e:
         return jsonify({"error": str(e)}), 400
+    
+@turno_bp.route("/<int:turno_id>", methods=["GET"])
+def get_appointment(turno_id):
+    try:
+        turno = turno_service.turno_repository.find_by_id(turno_id)
+        if turno is None:
+            return jsonify({"error": "Turno no encontrado."}), 404
+        disponibles = turno_service.lugares_disponibles(turno)
+        return jsonify(turno.to_dict(disponibles=disponibles)), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+ 
+ 
+@turno_bp.route("/<int:turno_id>/update", methods=["PATCH"])
+def update_appointment(turno_id):
+    data = request.get_json()
+ 
+    if data is None:
+        return jsonify({"error": "No se recibieron datos."}), 400
+ 
+    try:
+        turno = turno_service.modificar_turno(turno_id, data.get("cupo"), data.get("descripcion"))
+        return jsonify(turno), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+ 
+ 
+@turno_bp.route("/", methods=["GET"])
+def get_all_appointments():
+    try:
+        turnos = turno_service.obtener_todos()
+        return jsonify(turnos), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
