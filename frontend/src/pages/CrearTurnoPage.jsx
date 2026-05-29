@@ -1,7 +1,15 @@
 import { useEffect, useState } from "react";
-import { Clock, FileText, Users, AlertCircle, CheckCircle } from "lucide-react";
+import { Clock, Users, AlertCircle, CheckCircle } from "lucide-react";
 
-const DIAS = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"];
+const DIAS = [
+  { value: "lunes", label: "Lunes" },
+  { value: "martes", label: "Martes" },
+  { value: "miercoles", label: "Miércoles" },
+  { value: "jueves", label: "Jueves" },
+  { value: "viernes", label: "Viernes" },
+  { value: "sabado", label: "Sábado" },
+  { value: "domingo", label: "Domingo" },
+];
 
 export default function CrearTurnoPage() {
 
@@ -9,7 +17,6 @@ export default function CrearTurnoPage() {
   const [actividadSeleccionada, setActividadSeleccionada] = useState(null);
   const [dia, setDia] = useState(null);
   const [hora, setHora] = useState("");
-  const [descripcion, setDescripcion] = useState("");
   const [cupo, setCupo] = useState(1);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
@@ -40,16 +47,12 @@ export default function CrearTurnoPage() {
       actividad_id: actividadSeleccionada,
       dia_semana: dia,
       hora: `${hora}:00`,
-      descripcion: descripcion.trim(),
       cupo: parseInt(cupo)
     };
 
     try {
-      const res = await fetch("/api/turnos/create", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(turnoData),
-      });
+      const res = await fetch(`/api/actividades/${actividadSeleccionada}/turnos`, { method: "POST", body: JSON.stringify(turnoData) })
+
 
       const data = await res.json();
 
@@ -62,7 +65,6 @@ export default function CrearTurnoPage() {
       setActividadSeleccionada(null);
       setDia(null);
       setHora("");
-      setDescripcion("");
       setCupo(1);
 
     } catch (err) {
