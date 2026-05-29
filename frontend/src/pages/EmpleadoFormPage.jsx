@@ -18,8 +18,6 @@ const REQUIRED = [
   "email",
   "phone",
   "birth_date",
-  "password",
-  "confirm_password",
 ];
 
 export default function EmpleadoFormPage() {
@@ -33,8 +31,6 @@ export default function EmpleadoFormPage() {
     email: "",
     phone: "",
     birth_date: "",
-    password: "",
-    confirm_password: "",
   });
   const [errors, setErrors] = useState({});
   const [formError, setFormError] = useState(null);
@@ -58,13 +54,6 @@ export default function EmpleadoFormPage() {
     if (form.email && !isValidEmail(form.email)) {
       newErrors.email = "El email ingresado no es valido";
     }
-    if (
-      form.password &&
-      form.confirm_password &&
-      form.password !== form.confirm_password
-    ) {
-      newErrors.confirm_password = "Las contraseñas no coinciden";
-    }
     if (Object.keys(newErrors).length) {
       setErrors(newErrors);
       return;
@@ -79,7 +68,6 @@ export default function EmpleadoFormPage() {
         email: form.email,
         phone: form.phone,
         birth_date: form.birth_date,
-        password: form.password,
       });
       toast.success("Usuario creado con éxito");
       navigate("/empleados");
@@ -109,7 +97,7 @@ export default function EmpleadoFormPage() {
         </nav>
         <PageHeading>Agregar Empleado</PageHeading>
         <p className="text-body-md text-on-surface-variant">
-          Completá los datos del nuevo empleado. Recibirá una cuenta con la contraseña que ingreses.
+          Completá los datos del nuevo empleado. Se generará una contraseña y se enviará a su correo.
         </p>
       </header>
 
@@ -216,41 +204,6 @@ export default function EmpleadoFormPage() {
             />
             {errors.birth_date && (
               <p className="text-xs text-destructive">{errors.birth_date}</p>
-            )}
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="password">Contraseña</Label>
-            <Input
-              id="password"
-              name="password"
-              type="password"
-              maxLength={15}
-              placeholder="••••••••"
-              value={form.password}
-              onChange={handleChange}
-              aria-invalid={!!errors.password}
-            />
-            {errors.password && (
-              <p className="text-xs text-destructive">{errors.password}</p>
-            )}
-          </div>
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="confirm_password">Confirmar contraseña</Label>
-            <Input
-              id="confirm_password"
-              name="confirm_password"
-              type="password"
-              maxLength={15}
-              placeholder="••••••••"
-              value={form.confirm_password}
-              onChange={handleChange}
-              aria-invalid={!!errors.confirm_password}
-            />
-            {errors.confirm_password && (
-              <p className="text-xs text-destructive">{errors.confirm_password}</p>
             )}
           </div>
         </div>
