@@ -2,13 +2,9 @@ from datetime import date
 from marshmallow import Schema, fields, validates, ValidationError
 import re
 
-PASSWORD_RULE = "La contraseña debe tener: 8 - 15 caracteres, 1 mayuscula, 1 minuscula, 1 caracter especial, 1 numero"
+from .messages import MSGS
 
-MSGS = {
-    "required": "Campo requerido faltante",
-    "null": "Campo requerido faltante",
-    "invalid": "Valor inválido",
-}
+PASSWORD_RULE = "La contraseña debe tener: 8 - 15 caracteres, 1 mayuscula, 1 minuscula, 1 caracter especial, 1 numero"
 
 EMAIL_MSGS = {**MSGS, "invalid": "El email ingresado no es valido"}
 
