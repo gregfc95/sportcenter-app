@@ -1,4 +1,21 @@
-from .turno_schema import TurnoCreateSchema
+from .turno_schema import TurnoSchema
 from .actividad_schema import ActividadSchema
-from .user_schema import UserRegisterSchema, UserResponseSchema, UserLoginSchema
-from .user_schema import UserRegisterSchema, UserResponseSchema, UserLoginSchema, UserUpdateProfileSchema
+from .reserva_schema import ReservaSchema
+from .pago_schema import PagoSchema
+from .user_schema import (
+    UserRegisterSchema,
+    UserResponseSchema,
+    UserLoginSchema,
+    UserUpdateProfileSchema,
+)
+
+__all__ = [
+    "TurnoSchema",
+    "ActividadSchema",
+    "ReservaSchema",
+    "PagoSchema",
+    "UserRegisterSchema",
+    "UserResponseSchema",
+    "UserLoginSchema",
+    "UserUpdateProfileSchema",
+]
