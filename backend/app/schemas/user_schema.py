@@ -9,6 +9,15 @@ PASSWORD_RULE = "La contraseña debe tener: 8 - 15 caracteres, 1 mayuscula, 1 mi
 EMAIL_MSGS = {**MSGS, "invalid": "El email ingresado no es valido"}
 
 
+def calculate_age(birth_date: date, today: date | None = None) -> int:
+    today = today or date.today()
+    return (
+        today.year
+        - birth_date.year
+        - ((today.month, today.day) < (birth_date.month, birth_date.day))
+    )
+
+
 class UserUpdateProfileSchema(Schema):
     first_name = fields.Str(required=True, error_messages=MSGS)
     last_name = fields.Str(required=True, error_messages=MSGS)
@@ -31,13 +40,7 @@ class UserRegisterSchema(Schema):
 
     @validates("birth_date")
     def validate_birth_date(self, value: date) -> None:
-        today = date.today()
-        age = (
-            today.year
-            - value.year
-            - ((today.month, today.day) < (value.month, value.day))
-        )
-        if age < 16:
+        if calculate_age(value) < 16:
             raise ValidationError("El usuario debe tener 16 años de edad")
 
     @validates("password")
@@ -54,12 +57,20 @@ class UserRegisterSchema(Schema):
             raise ValidationError(PASSWORD_RULE)
 
 
+class EmployeeRegisterSchema(UserRegisterSchema):
+    @validates("birth_date")
+    def validate_birth_date(self, value: date) -> None:
+        if calculate_age(value) < 18:
+            raise ValidationError("El empleado debe ser mayor de edad")
+
+
 class UserResponseSchema(Schema):
     id = fields.Int()
     first_name = fields.Str()
     last_name = fields.Str()
     dni = fields.Str()
     email = fields.Str()
+    phone = fields.Str()
     role = fields.Method("get_role")
 
     def get_role(self, obj) -> str:
