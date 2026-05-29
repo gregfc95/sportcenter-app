@@ -8,6 +8,10 @@ import ProfilePage from "./pages/ProfilePage";
 import ActividadesPage from "./pages/ActividadesPage";
 import ActividadFormPage from "./pages/ActividadFormPage";
 import ActividadDetailPage from "./pages/ActividadDetailPage";
+import ClientesPage from "./pages/ClientesPage";
+import ClienteFormPage from "./pages/ClienteFormPage";
+import EmpleadosPage from "./pages/EmpleadosPage";
+import EmpleadoFormPage from "./pages/EmpleadoFormPage";
 import PublicLayout from "./components/layout/PublicLayout";
 import DashboardLayout from "./components/layout/DashboardLayout";
 import ProtectedRoute from "./components/layout/ProtectedRoute";
@@ -45,6 +49,10 @@ function App() {
               element={<ActividadFormPage />}
             />
             <Route path="/actividades/:id" element={<ActividadDetailPage />} />
+            <Route path="/clientes" element={<ClientesPage />} />
+            <Route path="/clientes/nuevo" element={<ClienteFormPage />} />
+            <Route path="/empleados" element={<EmpleadosPage />} />
+            <Route path="/empleados/nuevo" element={<EmpleadoFormPage />} />
           </Route>
         </Routes>
       </BrowserRouter>
