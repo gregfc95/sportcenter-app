@@ -1,5 +1,8 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import CrearTurnoPage from "./pages/CrearTurnoPage";
+import MisTurnosPage from "./pages/MisTurnosPage";
+import MisPagosPage from "./pages/MisPagosPage";
+import NuevaReservaPage from "./pages/NuevaReservaPage";
 import RegisterPage from "./pages/RegisterPage";
 import LoginPage from "./pages/LoginPage";
 import LandingPage from "./pages/LandingPage";
@@ -8,6 +11,10 @@ import ProfilePage from "./pages/ProfilePage";
 import ActividadesPage from "./pages/ActividadesPage";
 import ActividadFormPage from "./pages/ActividadFormPage";
 import ActividadDetailPage from "./pages/ActividadDetailPage";
+import ClientesPage from "./pages/ClientesPage";
+import ClienteFormPage from "./pages/ClienteFormPage";
+import EmpleadosPage from "./pages/EmpleadosPage";
+import EmpleadoFormPage from "./pages/EmpleadoFormPage";
 import PublicLayout from "./components/layout/PublicLayout";
 import DashboardLayout from "./components/layout/DashboardLayout";
 import ProtectedRoute from "./components/layout/ProtectedRoute";
@@ -34,6 +41,9 @@ function App() {
           >
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/crear-turno" element={<CrearTurnoPage />} />
+            <Route path="/mis-turnos" element={<MisTurnosPage />} />
+            <Route path="/mis-pagos" element={<MisPagosPage />} />
+            <Route path="/nueva-reserva" element={<NuevaReservaPage />} />
             <Route path="/dashboard/client" element={<DashboardPage />} />
             <Route path="/dashboard/client/perfil" element={<ProfilePage />} />
             <Route path="/dashboard/employee" element={<DashboardPage />} />
@@ -45,6 +55,10 @@ function App() {
               element={<ActividadFormPage />}
             />
             <Route path="/actividades/:id" element={<ActividadDetailPage />} />
+            <Route path="/clientes" element={<ClientesPage />} />
+            <Route path="/clientes/nuevo" element={<ClienteFormPage />} />
+            <Route path="/empleados" element={<EmpleadosPage />} />
+            <Route path="/empleados/nuevo" element={<EmpleadoFormPage />} />
           </Route>
         </Routes>
       </BrowserRouter>

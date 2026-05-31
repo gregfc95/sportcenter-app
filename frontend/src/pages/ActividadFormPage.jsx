@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { usePageTitle } from "@/lib/usePageTitle";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { PageHeading } from "@/components/ui/page-heading";
 import { cn } from "@/lib/utils";
 import {
   ApiError,
@@ -134,13 +135,7 @@ export default function ActividadFormPage() {
             <ChevronRight className="size-3.5" aria-hidden="true" />
             <span className="text-primary">{breadcrumbCurrent}</span>
           </nav>
-          <div className="flex items-center gap-sm">
-            <span
-              aria-hidden="true"
-              className="w-1.5 h-7 rounded-full bg-accent shadow-[0_0_10px_rgba(255,183,0,0.5)]"
-            />
-            <h2 className="text-headline-lg text-on-surface">{heading}</h2>
-          </div>
+          <PageHeading>{heading}</PageHeading>
           <p className="text-body-md text-on-surface-variant">{subtitle}</p>
         </div>
 
@@ -240,7 +235,6 @@ export default function ActividadFormPage() {
                 asChild
                 variant="outline"
                 size="lg"
-                className="rounded-full"
                 disabled={submitting}
               >
                 <Link to="/actividades">Cancelar</Link>
@@ -248,7 +242,6 @@ export default function ActividadFormPage() {
               <Button
                 type="submit"
                 size="lg"
-                className="rounded-full"
                 disabled={submitting}
               >
                 <Check className="size-4" />

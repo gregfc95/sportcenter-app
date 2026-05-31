@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { usePageTitle } from "@/lib/usePageTitle";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { PageHeading } from "@/components/ui/page-heading";
 import { cn } from "@/lib/utils";
 import {
   ApiError,
@@ -121,7 +122,7 @@ export default function CrearTurnoPage() {
         <p className="text-on-surface-variant">
           Falta indicar la actividad para la que querés crear un turno.
         </p>
-        <Button asChild variant="outline" className="self-start rounded-full">
+        <Button asChild variant="outline" className="self-start">
           <Link to="/actividades">Volver a Actividades</Link>
         </Button>
       </div>
@@ -155,13 +156,7 @@ export default function CrearTurnoPage() {
             <ChevronRight className="size-3.5" aria-hidden="true" />
             <span className="text-primary">Agregar Turno</span>
           </nav>
-          <div className="flex items-center gap-sm">
-            <span
-              aria-hidden="true"
-              className="w-1.5 h-7 rounded-full bg-accent shadow-[0_0_10px_rgba(255,183,0,0.5)]"
-            />
-            <h2 className="text-headline-lg text-on-surface">Crear Turno</h2>
-          </div>
+          <PageHeading>Crear Turno</PageHeading>
           <p className="text-body-md text-on-surface-variant">
             Configurá un nuevo horario recurrente para esta actividad.
           </p>
@@ -174,7 +169,7 @@ export default function CrearTurnoPage() {
         ) : loadError ? (
           <div className="bg-surface-container border border-outline-variant rounded-xl p-lg flex flex-col gap-sm">
             <p className="text-destructive">{loadError}</p>
-            <Button asChild variant="outline" className="self-start rounded-full">
+            <Button asChild variant="outline" className="self-start">
               <Link to="/actividades">Volver a Actividades</Link>
             </Button>
           </div>
@@ -290,7 +285,6 @@ export default function CrearTurnoPage() {
                 asChild
                 variant="outline"
                 size="lg"
-                className="rounded-full"
                 disabled={submitting}
               >
                 <Link to={backHref}>Cancelar</Link>
@@ -298,7 +292,6 @@ export default function CrearTurnoPage() {
               <Button
                 type="submit"
                 size="lg"
-                className="rounded-full"
                 disabled={submitting}
               >
                 <Check className="size-4" />

@@ -163,7 +163,7 @@ export default function ActividadDetailPage() {
               </div>
             </div>
           </div>
-          <Button asChild variant="outline" className="rounded-full shrink-0 self-end md:self-auto">
+          <Button asChild variant="outline" className="shrink-0 self-end md:self-auto">
             <Link to={`/actividades/${actividad.id}/editar`}>
               <Pencil className="size-4" />
               Editar
@@ -180,7 +180,7 @@ export default function ActividadDetailPage() {
               Gestión de horarios y cupos
             </p>
           </div>
-          <Button asChild size="lg" className="rounded-full self-start sm:self-auto">
+          <Button asChild size="lg" className="self-start sm:self-auto">
             <Link to={`/crear-turno?actividad=${actividad.id}`}>
               Agregar Turno
             </Link>
@@ -227,7 +227,7 @@ export default function ActividadDetailPage() {
             <CalendarX2 className="size-12 mb-3 opacity-70" />
             <p className="text-headline-md">Todavía no hay turnos.</p>
             <p className="text-body-md opacity-70 mt-1">
-              Hacé clic en el botón superior para empezar a gestionar horarios.
+               Crea el primer turno con el botón de arriba.
             </p>
           </div>
         )}

@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import DeleteActividadDialog from "@/components/actividades/DeleteActividadDialog";
 import { getActividadIcon } from "@/components/actividades/actividadIcons";
 import { listActividades } from "@/components/actividades/api";
+import { PageHeading } from "@/components/ui/page-heading";
 
 const PRICE_FORMATTER = new Intl.NumberFormat("es-AR", {
   style: "currency",
@@ -74,7 +75,7 @@ export default function ActividadesPage() {
   return (
     <div className="flex flex-col gap-lg px-margin-mobile md:px-lg mt-md md:mt-lg max-w-6xl mx-auto w-full">
       <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-gutter">
-        <h2 className="text-headline-lg text-on-surface">Actividades</h2>
+        <PageHeading>Actividades</PageHeading>
         <Button asChild className="self-start sm:self-auto">
           <Link to="/actividades/nueva">
             Crear Actividad

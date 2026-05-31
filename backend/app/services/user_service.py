@@ -14,7 +14,7 @@ class UserService:
             stmt = stmt.where(User.role == role)
         return db.session.execute(stmt).scalars().all()
 
-    def register_user(self, data: dict) -> User:
+    def register_user(self, data: dict, role: UserRole | None = None) -> User:
         if self._find_by_email(data["email"]) is not None:
             raise ValueError("El email ya se encuentra registrado")
         if self._find_by_dni(data["dni"]) is not None:
@@ -29,6 +29,8 @@ class UserService:
             birth_date=data.get("birth_date"),
             password_hash=generate_password_hash(data["password"]),
         )
+        if role is not None:
+            user.role = role
         db.session.add(user)
         try:
             db.session.commit()

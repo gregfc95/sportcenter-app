@@ -8,13 +8,14 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 export default function TurnoCard({ turno, onEdit, onDelete }) {
+  const hora = turno.hora?.slice(0, 5) ?? turno.hora;
   return (
     <div className="bg-surface-container-high border border-outline-variant rounded-lg p-sm relative hover:border-primary/40 transition-colors">
       <div className="flex items-start justify-between gap-2">
-        <p className="text-label-md text-on-surface">{turno.hora}</p>
+        <p className="text-label-md text-on-surface">{hora}</p>
         <DropdownMenu>
           <DropdownMenuTrigger
-            aria-label={`Acciones para el turno de las ${turno.hora}`}
+            aria-label={`Acciones para el turno de las ${hora}`}
             className="text-on-surface-variant hover:text-on-surface focus:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded -mt-0.5 -mr-1 p-0.5"
           >
             <MoreVertical className="size-4" />
