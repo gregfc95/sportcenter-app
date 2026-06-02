@@ -1,5 +1,6 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { Plus, LogOut } from "lucide-react";
+import { LogOut } from "lucide-react";
+import { toast } from "sonner";
 
 import { DASHBOARD_NAV_LINKS_BY_ROLE } from "./constants";
 import { cn } from "@/lib/utils";
@@ -37,25 +38,37 @@ export default function DashboardSidebar({ user }) {
       </Link>
 
       <ul className="flex flex-col gap-sm flex-1">
-        {navLinks.map(({ label, href, Icon }) => {
+        {navLinks.map(({ label, href, Icon, comingSoon }) => {
           const active = pathname === href;
+          const className = cn(
+            "flex items-center gap-md px-md py-sm rounded-lg transition-colors",
+            active
+              ? "bg-secondary-container text-on-secondary-container font-bold"
+              : "text-on-surface-variant hover:text-primary",
+          );
+          const inner = (
+            <>
+              <Icon className="size-5" strokeWidth={active ? 2.5 : 2} />
+              <span>{label}</span>
+            </>
+          );
           return (
             <li key={label}>
-              <Link
-                to={href}
-                className={cn(
-                  "flex items-center gap-md px-md py-sm rounded-lg transition-colors",
-                  active
-                    ? "bg-secondary-container text-on-secondary-container font-bold"
-                    : "text-on-surface-variant hover:text-primary",
-                )}
-              >
-                <Icon
-                  className="size-5"
-                  strokeWidth={active ? 2.5 : 2}
-                />
-                <span>{label}</span>
-              </Link>
+              {comingSoon ? (
+                <button
+                  type="button"
+                  onClick={() =>
+                    toast.info(`${label} estará disponible próximamente`)
+                  }
+                  className={cn(className, "w-full text-left")}
+                >
+                  {inner}
+                </button>
+              ) : (
+                <Link to={href} className={className}>
+                  {inner}
+                </Link>
+              )}
             </li>
           );
         })}
@@ -70,16 +83,6 @@ export default function DashboardSidebar({ user }) {
           </button>
         </li>
       </ul>
-
-      {user?.role === "client" && (
-        <button
-          type="button"
-          className="mt-md flex items-center justify-center gap-sm bg-primary text-primary-foreground text-label-md font-bold px-md py-sm rounded-lg shadow-md shadow-primary/20 hover:bg-primary/90 active:scale-[0.98] transition-all"
-        >
-          <Plus className="size-5" />
-          Nueva Reserva
-        </button>
-      )}
     </nav>
   );
 }

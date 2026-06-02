@@ -1,16 +1,25 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import CrearTurnoPage from "./pages/CrearTurnoPage";
+import MisTurnosPage from "./pages/MisTurnosPage";
+import MisPagosPage from "./pages/MisPagosPage";
+import NuevaReservaPage from "./pages/NuevaReservaPage";
 import RegisterPage from "./pages/RegisterPage";
 import LoginPage from "./pages/LoginPage";
 import LandingPage from "./pages/LandingPage";
 import DashboardPage from "./pages/DashboardPage";
 import ProfilePage from "./pages/ProfilePage";
+import ActividadesPage from "./pages/ActividadesPage";
+import ActividadFormPage from "./pages/ActividadFormPage";
+import ActividadDetailPage from "./pages/ActividadDetailPage";
+import ClientesPage from "./pages/ClientesPage";
+import ClienteFormPage from "./pages/ClienteFormPage";
+import EmpleadosPage from "./pages/EmpleadosPage";
+import EmpleadoFormPage from "./pages/EmpleadoFormPage";
 import PublicLayout from "./components/layout/PublicLayout";
 import DashboardLayout from "./components/layout/DashboardLayout";
 import ProtectedRoute from "./components/layout/ProtectedRoute";
 import { ThemeProvider } from "./lib/ThemeContext";
 import { Toaster } from "./components/ui/sonner";
-import ViewAppointments from "./pages/ViewAppointments";
 
 function App() {
   return (
@@ -32,11 +41,24 @@ function App() {
           >
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/crear-turno" element={<CrearTurnoPage />} />
+            <Route path="/mis-turnos" element={<MisTurnosPage />} />
+            <Route path="/mis-pagos" element={<MisPagosPage />} />
+            <Route path="/nueva-reserva" element={<NuevaReservaPage />} />
             <Route path="/dashboard/client" element={<DashboardPage />} />
             <Route path="/dashboard/client/perfil" element={<ProfilePage />} />
             <Route path="/dashboard/employee" element={<DashboardPage />} />
             <Route path="/dashboard/admin" element={<DashboardPage />} />
-            <Route path="/turnos" element={<ViewAppointments />} />
+            <Route path="/actividades" element={<ActividadesPage />} />
+            <Route path="/actividades/nueva" element={<ActividadFormPage />} />
+            <Route
+              path="/actividades/:id/editar"
+              element={<ActividadFormPage />}
+            />
+            <Route path="/actividades/:id" element={<ActividadDetailPage />} />
+            <Route path="/clientes" element={<ClientesPage />} />
+            <Route path="/clientes/nuevo" element={<ClienteFormPage />} />
+            <Route path="/empleados" element={<EmpleadosPage />} />
+            <Route path="/empleados/nuevo" element={<EmpleadoFormPage />} />
           </Route>
         </Routes>
       </BrowserRouter>
