@@ -2,6 +2,7 @@ from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import func, select
+from sqlalchemy.orm import joinedload
 
 from .. import db
 from ..models.reserva import MotivoCancelacion, Reserva, ReservaTipo
@@ -68,6 +69,47 @@ class ReservaService:
             .order_by(Reserva.fecha.asc())
         )
         return db.session.execute(stmt).scalars().all()
+
+    def listar_sesiones_reservadas(self) -> list[tuple[Turno, date]]:
+        """Sesiones (turno + fecha) con al menos una reserva activa, de hoy en adelante.
+
+        Una "sesión" es la instancia de un turno semanal en una fecha concreta. Para
+        la vista de administración de turnos reservados: agrupa las reservas activas
+        por (turno, fecha) —el filtro de soft-delete descarta las canceladas— y
+        devuelve cada sesión, próximas primero y ordenadas por horario. No incluye
+        sesiones sin reservas.
+        """
+        hoy = date.today()
+        stmt = (
+            select(Reserva.turno_id, Reserva.fecha)
+            .join(Reserva.turno)
+            .where(Reserva.fecha >= hoy)
+            .group_by(Reserva.turno_id, Reserva.fecha, Turno.hora)
+            .order_by(Reserva.fecha.asc(), Turno.hora.asc())
+        )
+        rows = db.session.execute(stmt).all()
+
+        sesiones = []
+        for turno_id, fecha in rows:
+            turno = db.session.get(Turno, turno_id)
+            if turno is not None:
+                sesiones.append((turno, fecha))
+        return sesiones
+
+    def listar_por_turno_fecha(self, turno_id: int, fecha: date) -> list[Reserva]:
+        """Reservas activas de una sesión (turno + fecha) con su cliente y pagos.
+
+        Para el detalle de una sesión en la vista de administración: carga el usuario
+        y los pagos de cada reserva para mostrar quién reservó y en qué estado de pago
+        está. El filtro de soft-delete excluye las reservas canceladas.
+        """
+        stmt = (
+            select(Reserva)
+            .where(Reserva.turno_id == turno_id, Reserva.fecha == fecha)
+            .options(joinedload(Reserva.user), joinedload(Reserva.pagos))
+            .order_by(Reserva.created_at.asc())
+        )
+        return db.session.execute(stmt).unique().scalars().all()
 
     def _validar_dia_semana(self, turno: Turno, fecha: date) -> None:
         esperado = WEEKDAY_TO_DIA_SEMANA[fecha.weekday()]
