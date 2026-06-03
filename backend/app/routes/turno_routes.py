@@ -6,7 +6,7 @@ from marshmallow import ValidationError
 from ..auth import current_user_id, require_role
 from ..models.user import UserRole
 from ..schemas import TurnoSchema
-from ..services import ActividadService, TurnoService
+from ..services import ActividadService, TurnoService, ClaseService
 
 
 turno_bp = Blueprint("turnos", __name__)
@@ -15,6 +15,7 @@ turno_service = TurnoService()
 actividad_service = ActividadService()
 turno_schema = TurnoSchema()
 turnos_schema = TurnoSchema(many=True)
+clase_service = ClaseService()
 
 
 @turno_bp.route("/api/actividades/<int:actividad_id>/turnos", methods=["GET"])
@@ -32,12 +33,13 @@ def list_turnos_por_actividad(actividad_id: int) -> Response:
         except ValueError:
             return jsonify({"error": "fecha debe tener formato YYYY-MM-DD"}), 400
 
-    turnos = turno_service.obtener_por_actividad(actividad_id)
+    turnos = turno_service.obtener_por_actividad(actividad_id, fecha=fecha)
     dumped = turnos_schema.dump(turnos)
 
     if fecha is not None:
         for turno_dict, turno in zip(dumped, turnos):
-            turno_dict["disponibles"] = turno_service.lugares_disponibles(turno, fecha)
+            clase = clase_service.obtener_por_turno_y_fecha(turno.id, fecha)
+            turno_dict["disponibles"] = clase.cupo_disponible if clase else turno.cupo
 
     return jsonify(dumped), 200
 

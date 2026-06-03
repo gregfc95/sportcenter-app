@@ -4,6 +4,7 @@ from .user_service import UserService
 from .reserva_service import ReservaService
 from .pago_service import PagoService
 from .email_service import send_password_email
+from .clase_service import ClaseService
 
 __all__ = [
     "TurnoService",
@@ -12,4 +13,5 @@ __all__ = [
     "ReservaService",
     "PagoService",
     "send_password_email",
+    "ClaseService",
 ]

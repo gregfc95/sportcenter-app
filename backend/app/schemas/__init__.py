@@ -9,6 +9,7 @@ from .user_schema import (
     UserLoginSchema,
     UserUpdateProfileSchema,
 )
+from .clase_schema import ClaseSchema
 
 __all__ = [
     "TurnoSchema",
@@ -20,4 +21,5 @@ __all__ = [
     "UserResponseSchema",
     "UserLoginSchema",
     "UserUpdateProfileSchema",
+    "ClaseSchema",
 ]

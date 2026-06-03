@@ -5,6 +5,7 @@ from sqlalchemy import func, select
 from .. import db
 from ..models.reserva import MotivoCancelacion, Reserva, ReservaTipo
 from ..models.turno import Turno, DiaSemana
+from ..models.clase import Clase
 
 
 CANCELACION_VENTANA = timedelta(hours=24)
@@ -26,25 +27,21 @@ class ReservaService:
     def crear_reserva(
         self,
         user_id: int,
-        turno_id: int,
-        fecha: date,
+        clase_id: int,
         tipo: ReservaTipo = ReservaTipo.EVENTUAL,
     ) -> Reserva:
-        turno = db.session.get(Turno, turno_id)
-        if turno is None:
-            raise ValueError("El turno indicado no existe.")
 
-        if tipo == ReservaTipo.EVENTUAL:
-            self._validar_dia_semana(turno, fecha)
-            self._validar_sin_conflicto_horario(user_id, fecha, turno)
-            self._validar_cupo_disponible(turno, fecha)
 
-        reserva = Reserva(
-            user_id=user_id,
-            turno_id=turno_id,
-            fecha=fecha,
-            tipo=tipo,
-        )
+        clase = db.session.get(Clase, clase_id)
+        
+        if clase is None:
+            raise ValueError("La clase indicada no existe.")
+
+        self._validar_sin_conflicto_horario(user_id, clase)
+        self._validar_cupo_disponible(clase)
+
+        clase.cupo_disponible -= 1
+        reserva = Reserva(user_id=user_id, clase_id=clase_id, tipo=tipo)
         db.session.add(reserva)
         db.session.commit()
         return reserva
@@ -57,22 +54,19 @@ class ReservaService:
                 f"pero el turno es de {turno.dia_semana.value}."
             )
 
-    def _validar_sin_conflicto_horario(
-        self, user_id: int, fecha: date, turno: Turno
-    ) -> None:
+    def _validar_sin_conflicto_horario(self, user_id: int, clase: Clase) -> None:
         stmt = (
             select(Reserva)
-            .join(Reserva.turno)
+            .join(Reserva.clase)
+            .join(Clase.turno)
             .where(
                 Reserva.user_id == user_id,
-                Reserva.fecha == fecha,
-                Reserva.tipo == ReservaTipo.EVENTUAL,
-                Turno.hora == turno.hora,
+                Clase.fecha == clase.fecha,
+                Turno.hora == clase.turno.hora,
             )
         )
-        conflicto = db.session.execute(stmt).scalars().first()
-        if conflicto is not None:
-            raise ValueError("Ya tienes un turno reservado para el mismo horario")
+        if db.session.execute(stmt).scalars().first() is not None:
+            raise ValueError("Ya tenés un turno reservado para el mismo horario.")
 
     # --- Cancelación ---
 
@@ -99,17 +93,12 @@ class ReservaService:
 
     # --- Validaciones internas ---
 
-    def _validar_cupo_disponible(self, turno: Turno, fecha: date) -> None:
-        stmt = (
-            select(func.count(Reserva.id))
-            .where(
-                Reserva.turno_id == turno.id,
-                Reserva.fecha == fecha,
-                Reserva.tipo == ReservaTipo.EVENTUAL,
-            )
-        )
-        ocupados = db.session.execute(stmt).scalar()
-        if ocupados >= turno.cupo:
+    def _validar_cupo_disponible(self, clase: Clase) -> None:
+        if clase.cupo_disponible < 1:
             raise ValueError(
-                f"El turno no tiene cupo disponible para el {fecha.isoformat()}."
+                f"El turno no tiene cupo disponible para el {clase.fecha.isoformat()}."
             )
+        
+    def obtener_por_usuario(self, user_id: int) -> list[Reserva]:
+        stmt = select(Reserva).where(Reserva.user_id == user_id)
+        return db.session.execute(stmt).scalars().all()

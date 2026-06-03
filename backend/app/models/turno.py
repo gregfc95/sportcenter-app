@@ -48,8 +48,8 @@ class Turno(SoftDeleteMixin, db.Model):
     )
 
     actividad = db.relationship("Actividad", back_populates="turnos")
-    reservas = db.relationship(
-        "Reserva",
+    clases = db.relationship(
+        "Clase",
         back_populates="turno",
         lazy=True,
         passive_deletes=True,

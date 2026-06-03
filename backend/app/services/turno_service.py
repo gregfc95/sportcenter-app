@@ -5,7 +5,8 @@ from sqlalchemy.exc import IntegrityError
 
 from .. import db
 from ..models.reserva import ReservaTipo
-from ..models.turno import Turno
+from ..models.turno import Turno, DiaSemana
+from ..services.reserva_service import WEEKDAY_TO_DIA_SEMANA    
 
 
 SUPERPOSICION_MIN_MINUTOS = 60
@@ -13,20 +14,6 @@ SUPERPOSICION_MIN_MINUTOS = 60
 
 class TurnoService:
 
-    # --- Lógica de negocio de reservas y cupo ---
-
-    def cantidad_reservas(self, turno: Turno, fecha: date) -> int:
-        return sum(
-            1
-            for r in turno.reservas
-            if r.fecha == fecha and r.tipo == ReservaTipo.EVENTUAL
-        )
-
-    def hay_cupo(self, turno: Turno, fecha: date) -> bool:
-        return self.cantidad_reservas(turno, fecha) < turno.cupo
-
-    def lugares_disponibles(self, turno: Turno, fecha: date) -> int:
-        return turno.cupo - self.cantidad_reservas(turno, fecha)
 
     # --- Lógica de superposición de horarios ---
 
@@ -48,8 +35,11 @@ class TurnoService:
     def obtener_por_id(self, turno_id: int) -> Turno | None:
         return db.session.get(Turno, turno_id)
 
-    def obtener_por_actividad(self, actividad_id: int) -> list[Turno]:
+    def obtener_por_actividad(self, actividad_id: int, fecha: date | None = None) -> list[Turno]:
         stmt = select(Turno).where(Turno.actividad_id == actividad_id)
+        if fecha is not None:
+            dia = WEEKDAY_TO_DIA_SEMANA[fecha.weekday()]
+            stmt = stmt.where(Turno.dia_semana == dia)
         return db.session.execute(stmt).scalars().all()
 
     def _turnos_por_actividad_y_dia(
