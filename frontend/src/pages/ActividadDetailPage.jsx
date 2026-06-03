@@ -73,10 +73,6 @@ export default function ActividadDetailPage() {
   const grouped = useMemo(() => groupByDay(turnos), [turnos]);
   const hasTurnos = turnos.length > 0;
 
-  const handleEditTurno = () => {
-    toast.info("La edición de turnos llega próximamente.");
-  };
-
   const handleDeleteTurnoRequest = (turno) => {
     setDeletingTurno(turno);
     setDeleteOpen(true);
@@ -201,7 +197,6 @@ export default function ActividadDetailPage() {
                         <TurnoCard
                           key={turno.id}
                           turno={turno}
-                          onEdit={handleEditTurno}
                           onDelete={handleDeleteTurnoRequest}
                         />
                       ))

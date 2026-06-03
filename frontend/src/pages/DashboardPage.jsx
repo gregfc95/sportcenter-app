@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { useOutletContext, Link } from "react-router-dom";
-import { toast } from "sonner";
 
 import { usePageTitle } from "@/lib/usePageTitle";
 import { Button } from "@/components/ui/button";
@@ -91,11 +90,11 @@ function AdminDashboard({ user }) {
     <div className="flex flex-col gap-lg px-margin-mobile md:px-lg mt-md md:mt-lg max-w-4xl mx-auto w-full">
       <WelcomeSection user={user} />
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-md">
-        {cards.map(({ label, desc, href, Icon, comingSoon }) => {
+        {cards.map(({ label, desc, href, Icon }) => {
           const className =
             "bg-surface-container border border-outline-variant rounded-xl p-md flex flex-col gap-sm hover:border-primary hover:shadow-md transition-all group";
-          const inner = (
-            <>
+          return (
+            <Link key={label} to={href} className={className}>
               <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center group-hover:bg-primary/20 transition-colors">
                 <Icon className="size-5 text-primary" />
               </div>
@@ -107,27 +106,6 @@ function AdminDashboard({ user }) {
                   {desc}
                 </p>
               </div>
-            </>
-          );
-
-          if (comingSoon) {
-            return (
-              <button
-                key={label}
-                type="button"
-                onClick={() =>
-                  toast.info(`${label} estará disponible próximamente`)
-                }
-                className={`${className} text-left`}
-              >
-                {inner}
-              </button>
-            );
-          }
-
-          return (
-            <Link key={label} to={href} className={className}>
-              {inner}
             </Link>
           );
         })}
