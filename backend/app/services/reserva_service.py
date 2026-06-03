@@ -94,6 +94,7 @@ class ReservaService:
     # --- Validaciones internas ---
 
     def _validar_cupo_disponible(self, clase: Clase) -> None:
+        print("cupo disponible:", clase.cupo_disponible)
         if clase.cupo_disponible < 1:
             raise ValueError(
                 f"El turno no tiene cupo disponible para el {clase.fecha.isoformat()}."

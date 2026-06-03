@@ -35,7 +35,7 @@ class ClaseService:
             clase = Clase(turno_id=turno_id, fecha=fecha, cupo_disponible=turno.cupo)
             db.session.add(clase)
             try:
-                db.session.flush()
+                db.session.commit()
             except IntegrityError:
                 db.session.rollback()
                 raise ValueError("Ya existe una clase para ese turno y fecha.")

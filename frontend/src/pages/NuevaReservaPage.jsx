@@ -95,7 +95,7 @@ export default function NuevaReservaPage() {
   const mappedSlots = slots.map((turno) => ({
     turno_id: turno.id,
     time: turno.hora.slice(0, 5),
-    status: turno.disponibles > 0 ? "available" : "full",
+    status: (turno.disponibles ?? turno.cupo) > 0 ? "available" : "full",
   }));
 
   const selectedActividad = useMemo(
