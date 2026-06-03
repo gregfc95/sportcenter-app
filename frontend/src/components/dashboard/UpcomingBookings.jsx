@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 
 import BookingCard from "./BookingCard";
 
-export default function UpcomingBookings({ bookings = [] }) {
+export default function UpcomingBookings({ bookings = [], onCancelled }) {
   return (
     <section className="flex flex-col gap-md pb-lg">
       <div className="flex items-center justify-between">
@@ -27,7 +27,7 @@ export default function UpcomingBookings({ bookings = [] }) {
       ) : (
         <div className="flex flex-col gap-gutter">
           {bookings.map((booking) => (
-            <BookingCard key={booking.id} {...booking} />
+            <BookingCard key={booking.id} {...booking} onCancelled={onCancelled} />
           ))}
         </div>
       )}

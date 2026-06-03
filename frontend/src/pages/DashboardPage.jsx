@@ -1,16 +1,18 @@
+import { useEffect, useState } from "react";
 import { useOutletContext, Link } from "react-router-dom";
-import { Plus } from "lucide-react";
 import { toast } from "sonner";
 
 import { usePageTitle } from "@/lib/usePageTitle";
 import { Button } from "@/components/ui/button";
 import WelcomeSection from "@/components/dashboard/WelcomeSection";
-import AccountStatusCard from "@/components/dashboard/AccountStatusCard";
 import QuickAccessGrid from "@/components/dashboard/QuickAccessGrid";
 import UpcomingBookings from "@/components/dashboard/UpcomingBookings";
+import { listMisReservas } from "@/components/reservas/api";
+import { formatReservaFecha } from "@/lib/fecha";
 import { DASHBOARD_NAV_LINKS_BY_ROLE } from "@/components/layout/constants";
 
-const ACCOUNT = { status: "Al día", paid: true };
+// Cuántos próximos turnos mostrar en el dashboard antes de "Ver todos".
+const MAX_PROXIMOS = 4;
 
 const CARD_DESC_BY_HREF = {
   "/clientes": "Gestioná los clientes del centro",
@@ -27,7 +29,45 @@ function getStaffCards(role) {
     .map((link) => ({ ...link, desc: CARD_DESC_BY_HREF[link.href] ?? "" }));
 }
 
+// Próximos turnos: los de hoy en adelante, ordenados por fecha, recortados.
+function toUpcomingBookings(reservas) {
+  const todayISO = new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD local
+  return reservas
+    .filter((r) => r.fecha >= todayISO)
+    .slice(0, MAX_PROXIMOS)
+    .map((r) => ({
+      id: r.id,
+      reservaId: r.id,
+      sport: r.actividad,
+      datetime: formatReservaFecha(r.fecha, r.turno.hora),
+      status: r.estado,
+      capacity: { taken: r.turno.ocupados, total: r.turno.cupo },
+      precio: r.precio,
+      sena: r.sena,
+    }));
+}
+
 function ClientDashboard({ user }) {
+  const [bookings, setBookings] = useState([]);
+
+  useEffect(() => {
+    let active = true;
+    listMisReservas()
+      .then((data) => {
+        if (active) setBookings(toUpcomingBookings(Array.isArray(data) ? data : []));
+      })
+      .catch(() => {
+        if (active) setBookings([]);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const handleCancelled = (reservaId) => {
+    setBookings((prev) => prev.filter((b) => b.reservaId !== reservaId));
+  };
+
   return (
     <div className="flex flex-col gap-lg px-margin-mobile md:px-lg mt-md md:mt-lg max-w-4xl mx-auto w-full">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-gutter">
@@ -38,9 +78,8 @@ function ClientDashboard({ user }) {
           </Link>
         </Button>
       </div>
-{/*       <AccountStatusCard status={ACCOUNT.status} paid={ACCOUNT.paid} /> */}
       <QuickAccessGrid />
-      <UpcomingBookings bookings={[]} />
+      <UpcomingBookings bookings={bookings} onCancelled={handleCancelled} />
     </div>
   );
 }

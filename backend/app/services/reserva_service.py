@@ -1,4 +1,5 @@
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import func, select
 
@@ -8,6 +9,11 @@ from ..models.turno import Turno, DiaSemana
 
 
 CANCELACION_VENTANA = timedelta(hours=24)
+
+# La `hora` del turno es hora de pared local de Argentina (así se agenda y se
+# muestra), no UTC. Para medir la anticipación real hay que interpretarla en
+# esta zona.
+AR_TZ = ZoneInfo("America/Argentina/Buenos_Aires")
 
 
 WEEKDAY_TO_DIA_SEMANA = {
@@ -49,6 +55,20 @@ class ReservaService:
         db.session.commit()
         return reserva
 
+    def listar_por_usuario(self, user_id: int) -> list[Reserva]:
+        """Reservas activas del usuario de hoy en adelante, próximas primero.
+
+        Excluye turnos pasados (fecha anterior a hoy). Los de hoy se siguen
+        mostrando aunque el horario ya haya pasado.
+        """
+        hoy = date.today()
+        stmt = (
+            select(Reserva)
+            .where(Reserva.user_id == user_id, Reserva.fecha >= hoy)
+            .order_by(Reserva.fecha.asc())
+        )
+        return db.session.execute(stmt).scalars().all()
+
     def _validar_dia_semana(self, turno: Turno, fecha: date) -> None:
         esperado = WEEKDAY_TO_DIA_SEMANA[fecha.weekday()]
         if turno.dia_semana != esperado:
@@ -88,12 +108,19 @@ class ReservaService:
         db.session.commit()
         return reserva
 
-    def _motivo_segun_anticipacion(self, reserva: Reserva) -> MotivoCancelacion:
+    def es_reembolsable(self, reserva: Reserva) -> bool:
+        """True si la reserva se cancela con más de 24 h de anticipación.
+
+        Determina si la cancelación da derecho a reembolso de lo abonado.
+        """
         inicio_reserva = datetime.combine(
-            reserva.fecha, reserva.turno.hora, tzinfo=timezone.utc
+            reserva.fecha, reserva.turno.hora, tzinfo=AR_TZ
         )
-        anticipacion = inicio_reserva - datetime.now(tz=timezone.utc)
-        if anticipacion > CANCELACION_VENTANA:
+        anticipacion = inicio_reserva - datetime.now(tz=AR_TZ)
+        return anticipacion > CANCELACION_VENTANA
+
+    def _motivo_segun_anticipacion(self, reserva: Reserva) -> MotivoCancelacion:
+        if self.es_reembolsable(reserva):
             return MotivoCancelacion.REEMBOLSADO
         return MotivoCancelacion.CANCELADO
 
