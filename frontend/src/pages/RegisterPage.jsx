@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import AuthLayout from "@/components/layout/AuthLayout";
 import { usePageTitle } from "@/lib/usePageTitle";
 import { isValidEmail } from "@/lib/validators";
+import { register, ApiError } from "@/components/auth/api";
 
 const REQUIRED = ["first_name", "last_name", "dni", "email", "phone", "birth_date", "password", "confirm_password"];
 
@@ -55,38 +56,27 @@ export default function RegisterPage() {
     }
 
     try {
-      const res = await fetch("/api/users/register", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          first_name: form.first_name,
-          last_name: form.last_name,
-          dni: form.dni,
-          email: form.email,
-          phone: form.phone,
-          birth_date: form.birth_date,
-          password: form.password,
-        }),
+      await register({
+        first_name: form.first_name,
+        last_name: form.last_name,
+        dni: form.dni,
+        email: form.email,
+        phone: form.phone,
+        birth_date: form.birth_date,
+        password: form.password,
       });
-      const data = await res.json();
-      if (!res.ok) {
-        if (data.error) {
-          setFormError(data.error);
-        } else if (typeof data === "object" && data !== null) {
-          const fieldErrors = {};
-          Object.entries(data).forEach(([field, msgs]) => {
-            fieldErrors[field] = Array.isArray(msgs) ? msgs[0] : String(msgs);
-          });
-          setErrors(fieldErrors);
-        } else {
-          setFormError("Error al registrarse.");
-        }
-        return;
-      }
       toast.success("Usuario creado con éxito");
       setTimeout(() => navigate("/login"), 2000);
-    } catch {
-      toast.error("Error de conexión con el servidor.");
+    } catch (err) {
+      if (err instanceof ApiError) {
+        if (Object.keys(err.fieldErrors).length) {
+          setErrors(err.fieldErrors);
+        } else {
+          setFormError(err.message);
+        }
+      } else {
+        toast.error("Error de conexión con el servidor.");
+      }
     }
   };
 

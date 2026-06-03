@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import AuthLayout from "@/components/layout/AuthLayout";
 import { usePageTitle } from "@/lib/usePageTitle";
 import { isValidEmail } from "@/lib/validators";
+import { login, ApiError } from "@/components/auth/api";
 
 export default function LoginPage() {
   usePageTitle("Iniciar sesión");
@@ -44,21 +45,16 @@ export default function LoginPage() {
     }
 
     try {
-      const res = await fetch("/api/users/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setFormError(data.error || "Email y/o contraseña inválidos");
-        return;
-      }
+      const data = await login(form);
       localStorage.setItem("user", JSON.stringify(data));
       toast.success("Sesión iniciada");
       navigate("/dashboard");
-    } catch {
-      toast.error("Error de conexión con el servidor.");
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setFormError(err.message);
+      } else {
+        toast.error("Error de conexión con el servidor.");
+      }
     }
   };
 

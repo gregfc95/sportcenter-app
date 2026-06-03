@@ -5,6 +5,7 @@ import { toast } from "sonner";
 
 import { usePageTitle } from "@/lib/usePageTitle";
 import { isValidEmail } from "@/lib/validators";
+import { updateProfile, ApiError } from "@/components/auth/api";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -47,23 +48,15 @@ export default function ProfilePage() {
 
     setSubmitting(true);
     try {
-      const res = await fetch(`/api/users/me`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          "X-User-ID": String(user.id),
-        },
-        body: JSON.stringify(form),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setFormError(data.error || "Error al guardar los cambios.");
-        return;
-      }
+      const data = await updateProfile(form);
       updateUser(data);
       toast.success("Cambios guardados");
-    } catch {
-      setFormError("Error de conexión con el servidor.");
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setFormError(err.message);
+      } else {
+        setFormError("Error de conexión con el servidor.");
+      }
     } finally {
       setSubmitting(false);
     }
