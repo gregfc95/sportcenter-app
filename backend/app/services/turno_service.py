@@ -135,7 +135,7 @@ class TurnoService:
         db.session.commit()
         return turno
 
-    def appointment_modification(self, turno_id: int, nuevo_cupo: int, nueva_descripcion: str | None) -> Turno | None:
+    def appointment_modification(self, turno_id: int, nuevo_cupo: int) -> Turno | None:
         turno = db.session.get(Turno, turno_id)
 
         if turno is None:
@@ -173,9 +173,6 @@ class TurnoService:
                 )
             ).scalar()
             clase.cupo_disponible = nuevo_cupo - reservas_clase
-
-        if nueva_descripcion is not None:
-            turno.descripcion = nueva_descripcion
 
         db.session.commit()
         return turno

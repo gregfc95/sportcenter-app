@@ -51,7 +51,6 @@ function groupByDay(turnos) {
 
 function ModalModificar({ turno, actividadNombre, onCerrar, onGuardado }) {
   const [cupo, setCupo] = useState(turno.cupo);
-  const [descripcion, setDescripcion] = useState(turno.descripcion || "");
   const [errorCupo, setErrorCupo] = useState("");
   const [guardando, setGuardando] = useState(false);
   const [errorGuardar, setErrorGuardar] = useState("");
@@ -79,7 +78,6 @@ function ModalModificar({ turno, actividadNombre, onCerrar, onGuardado }) {
         headers: authHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({
           cupo: parseInt(cupo, 10),
-          descripcion: descripcion.trim() || null,
           dia_semana: turno.dia_semana,
           hora: turno.hora,
         }),
@@ -131,17 +129,6 @@ function ModalModificar({ turno, actividadNombre, onCerrar, onGuardado }) {
               <AlertCircle size={12} /> {errorCupo}
             </p>
           )}
-        </div>
-
-        <div className="mb-6">
-          <label className="block text-sm font-bold text-on-surface mb-1.5">Descripción</label>
-          <textarea
-            rows={3}
-            value={descripcion}
-            onChange={(e) => setDescripcion(e.target.value)}
-            placeholder="Ej: Traer ropa cómoda"
-            className="w-full rounded-lg border border-outline-variant bg-surface px-3 py-2 text-sm text-foreground resize-none focus:outline-none focus:border-primary"
-          />
         </div>
 
         {errorGuardar && (

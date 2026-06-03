@@ -20,7 +20,6 @@ class TurnoSchema(Schema):
     )
     hora = fields.Time(required=True, error_messages=HORA_MSGS)
     cupo = fields.Int(required=True, error_messages=CUPO_MSGS)
-    descripcion = fields.Str(required=False, allow_none=True)
 
     id = fields.Int(dump_only=True)
     created_at = fields.DateTime(dump_only=True, format="iso")
