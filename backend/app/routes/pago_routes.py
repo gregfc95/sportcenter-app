@@ -3,8 +3,9 @@ from datetime import date
 from flask import Blueprint, Response, jsonify, request
 
 from .. import db
-from ..auth import current_user_id
+from ..auth import current_user_id, require_role
 from ..models.reserva import MotivoCancelacion, Reserva, ReservaTipo
+from ..models.user import UserRole
 from ..services import PagoService, ReservaService
 
 
@@ -37,6 +38,55 @@ def list_mis_pagos() -> Response:
                 "monto": float(pago.monto) if pago.monto is not None else None,
                 "estado": pago.estado.value if pago.estado else None,
                 "reserva_id": pago.reserva_id,
+                "actividad": actividad.nombre if actividad else None,
+                "turno": (
+                    {
+                        "fecha": reserva.fecha.isoformat() if reserva and reserva.fecha else None,
+                        "hora": turno.hora.strftime("%H:%M"),
+                        "dia_semana": turno.dia_semana.value,
+                    }
+                    if turno
+                    else None
+                ),
+            }
+        )
+
+    return jsonify(payload), 200
+
+
+@pago_bp.route("/admin", methods=["GET"])
+def list_todos_pagos() -> Response:
+    """Historial de pagos de todos los usuarios para la vista de administración.
+
+    Misma estructura que `list_mis_pagos`, pero sin filtrar por usuario y con un
+    campo `cliente` (nombre + email) para que el administrador vea a quién
+    pertenece cada transacción. Sólo accesible para administradores.
+    """
+    require_role(UserRole.ADMIN)
+    pagos = pago_service.listar_todos()
+
+    payload = []
+    for pago in pagos:
+        reserva = pago.reserva
+        turno = reserva.turno if reserva else None
+        actividad = turno.actividad if turno else None
+        user = pago.user
+        payload.append(
+            {
+                "id": pago.id,
+                "fecha_pago": pago.created_at.isoformat() if pago.created_at else None,
+                "monto": float(pago.monto) if pago.monto is not None else None,
+                "estado": pago.estado.value if pago.estado else None,
+                "reserva_id": pago.reserva_id,
+                "cliente": (
+                    {
+                        "id": user.id,
+                        "nombre": f"{user.first_name} {user.last_name}".strip(),
+                        "email": user.email,
+                    }
+                    if user
+                    else None
+                ),
                 "actividad": actividad.nombre if actividad else None,
                 "turno": (
                     {

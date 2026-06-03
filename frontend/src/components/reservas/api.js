@@ -107,3 +107,41 @@ export function listMisPagos() {
     fallback: "No pudimos cargar tu historial de pagos.",
   });
 }
+
+/**
+ * Historial de pagos de todos los usuarios (vista de administración). Cada fila
+ * incluye el cliente al que pertenece la transacción.
+ *
+ * @returns {Promise<Array<{ id: number, fecha_pago: string, monto: number, estado: string, reserva_id: number, cliente: { id: number, nombre: string, email: string }|null, actividad: string|null, turno: { fecha: string, hora: string, dia_semana: string }|null }>>}
+ */
+export function listAllPagos() {
+  return request("/api/pagos/admin", {
+    fallback: "No pudimos cargar el historial de pagos.",
+  });
+}
+
+/**
+ * Sesiones con reservas (turno + fecha) para la vista de Turnos Reservados.
+ * Sólo admin/empleado.
+ *
+ * @returns {Promise<Array<{ turno_id: number, fecha: string, actividad: string, dia_semana: string, hora: string, cupo: number, ocupados: number, reservas: number }>>}
+ */
+export function listSesionesReservadas() {
+  return request("/api/reservas/sesiones", {
+    fallback: "No pudimos cargar los turnos reservados.",
+  });
+}
+
+/**
+ * Detalle de una sesión: el turno y la lista de reservas con su cliente y estado
+ * de pago. Sólo admin/empleado.
+ *
+ * @param {number|string} turnoId
+ * @param {string} fecha - YYYY-MM-DD
+ * @returns {Promise<{ turno: { id: number, actividad: string, dia_semana: string, hora: string, fecha: string, cupo: number, ocupados: number, precio: number }, reservas: Array<{ id: number, tipo: string, estado: string, monto_pagado: number, cliente: { id: number, nombre: string, email: string }|null }> }>}
+ */
+export function getSesionReservada(turnoId, fecha) {
+  return request(`/api/reservas/sesiones/${turnoId}/${fecha}`, {
+    fallback: "No pudimos cargar la sesión.",
+  });
+}

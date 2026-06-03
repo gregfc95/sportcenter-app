@@ -228,6 +228,29 @@ class PagoService:
         )
         return db.session.execute(stmt).scalars().all()
 
+    def listar_todos(self) -> list[Pago]:
+        """Historial de pagos de todos los usuarios, más recientes primero.
+
+        Variante de `listar_por_usuario` para la vista de administración: no
+        filtra por usuario y además carga el `user` de cada pago para mostrar a
+        quién pertenece la transacción. Igual que aquella, usa `include_deleted`
+        para resolver la reserva → turno → actividad aunque la reserva haya sido
+        cancelada o reembolsada (soft-delete).
+        """
+        stmt = (
+            select(Pago)
+            .where(Pago.deleted_at.is_(None))
+            .options(
+                joinedload(Pago.user),
+                joinedload(Pago.reserva)
+                .joinedload(Reserva.turno)
+                .joinedload(Turno.actividad),
+            )
+            .order_by(Pago.created_at.desc())
+            .execution_options(include_deleted=True)
+        )
+        return db.session.execute(stmt).scalars().all()
+
     def tiene_pago(self, reserva_id: int) -> bool:
         """True si la reserva ya tiene un pago (seña o total) registrado."""
         return self._pago_existente(reserva_id) is not None
