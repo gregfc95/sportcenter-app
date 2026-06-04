@@ -1,5 +1,4 @@
 from datetime import date
-from decimal import Decimal
 
 from flask import Blueprint, Response, jsonify
 
@@ -32,16 +31,32 @@ def _estado_pago(reserva) -> str:
     return "pendiente"
 
 
-_ESTADOS_COBRADOS = {PagoEstado.SENADO, PagoEstado.PAGADO}
+def _reserva_sesion_dict(reserva) -> dict:
+    """Reserva serializada para el detalle de una sesión (vista admin/empleado).
 
-
-def _monto_cobrado(reserva) -> float:
-    """Total efectivamente cobrado de la reserva (seña y/o saldo)."""
-    total = sum(
-        (p.monto for p in reserva.pagos if p.estado in _ESTADOS_COBRADOS),
-        Decimal("0"),
-    )
-    return float(total)
+    Incluye el precio bloqueado al señar y el saldo restante (ver
+    PagoService.resumen_pago) para que el cobro de mostrador no dependa del
+    precio actual del turno.
+    """
+    resumen = pago_service.resumen_pago(reserva)
+    return {
+        "id": reserva.id,
+        "tipo": reserva.tipo.value,
+        "estado": _estado_pago(reserva),
+        "monto_pagado": float(resumen["cobrado"]),
+        "precio": float(resumen["total"]),
+        "saldo": float(resumen["saldo"]),
+        "cliente": (
+            {
+                "id": reserva.user.id,
+                "nombre": reserva.user.first_name,
+                "apellido": reserva.user.last_name,
+                "email": reserva.user.email,
+            }
+            if reserva.user
+            else None
+        ),
+    }
 
 
 @reserva_bp.route("", methods=["GET"])
@@ -145,25 +160,7 @@ def get_sesion_reservada(turno_id: int, fecha: str) -> Response:
             "ocupados": turno.cupo - disponibles,
             "precio": float(actividad.precio),
         },
-        "reservas": [
-            {
-                "id": reserva.id,
-                "tipo": reserva.tipo.value,
-                "estado": _estado_pago(reserva),
-                "monto_pagado": _monto_cobrado(reserva),
-                "cliente": (
-                    {
-                        "id": reserva.user.id,
-                        "nombre": reserva.user.first_name,
-                        "apellido": reserva.user.last_name,
-                        "email": reserva.user.email,
-                    }
-                    if reserva.user
-                    else None
-                ),
-            }
-            for reserva in reservas
-        ],
+        "reservas": [_reserva_sesion_dict(reserva) for reserva in reservas],
     }
 
     return jsonify(payload), 200
