@@ -45,7 +45,9 @@ export default function DeleteActividadDialog({
               <>
                 ¿Seguro que querés eliminar{" "}
                 <span className="font-semibold text-on-surface">{actividad.nombre}</span>?
-                Esta acción no se puede deshacer.
+                Se eliminarán también sus turnos y las reservas vigentes se
+                cancelarán y reembolsarán automáticamente. Esta acción no se
+                puede deshacer.
               </>
             ) : null}
           </DialogDescription>
