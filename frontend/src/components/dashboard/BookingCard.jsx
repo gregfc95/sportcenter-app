@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { getActividadIcon } from "@/components/actividades/actividadIcons";
 import PagarSaldoDialog from "@/components/reservas/PagarSaldoDialog";
+import PagarSenaDialog from "@/components/reservas/PagarSenaDialog";
 import CancelarReservaDialog from "@/components/reservas/CancelarReservaDialog";
 import { cn } from "@/lib/utils";
 
@@ -45,7 +46,9 @@ export default function BookingCard({
   const meta = STATUS_META[status] ?? STATUS_META.pendiente;
   const Icon = getActividadIcon(sport);
   // "Ver QR" para pagados se implementará a futuro; por ahora solo el pago.
-  const showPagar = status === "pendiente" || status === "senado";
+  // Pendiente paga la seña (reanuda el checkout); señada paga el saldo.
+  const showSena = status === "pendiente";
+  const showSaldo = status === "senado";
   const showCapacity =
     (status === "pendiente" || status === "senado") && capacity;
 
@@ -78,22 +81,32 @@ export default function BookingCard({
     />
   );
 
-  const pagarButton = showPagar ? (
+  const pagarTrigger = (
+    <Button
+      variant="outline"
+      size="sm"
+      className="text-primary border-primary/40 hover:bg-primary/10 hover:text-primary"
+    >
+      Pagar
+    </Button>
+  );
+  const pagarButton = showSena ? (
+    <PagarSenaDialog
+      reservaId={reservaId}
+      actividad={sport}
+      datetime={datetime}
+      precio={precio}
+      sena={sena}
+      trigger={pagarTrigger}
+    />
+  ) : showSaldo ? (
     <PagarSaldoDialog
       reservaId={reservaId}
       actividad={sport}
       datetime={datetime}
       precio={precio}
       sena={sena}
-      trigger={
-        <Button
-          variant="outline"
-          size="sm"
-          className="text-primary border-primary/40 hover:bg-primary/10 hover:text-primary"
-        >
-          Pagar
-        </Button>
-      }
+      trigger={pagarTrigger}
     />
   ) : null;
   /* TODO (a futuro): "Ver QR" para turnos pagados. Reimportar `QrCode`

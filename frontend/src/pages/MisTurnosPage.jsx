@@ -8,6 +8,7 @@ import { PageHeading } from "@/components/ui/page-heading";
 import { getActividadIcon } from "@/components/actividades/actividadIcons";
 import { listMisReservas } from "@/components/reservas/api";
 import PagarSaldoDialog from "@/components/reservas/PagarSaldoDialog";
+import PagarSenaDialog from "@/components/reservas/PagarSenaDialog";
 import CancelarReservaDialog from "@/components/reservas/CancelarReservaDialog";
 import { formatReservaFecha } from "@/lib/fecha";
 import { cn } from "@/lib/utils";
@@ -119,24 +120,30 @@ function ReservaCard({ reserva, onCancelled }) {
             </Button>
           }
         />
-        {!pagado && (
-          <PagarSaldoDialog
-            reservaId={reserva.id}
-            actividad={reserva.actividad}
-            datetime={formatReservaFecha(reserva.fecha, reserva.turno.hora)}
-            precio={reserva.precio}
-            sena={reserva.sena}
-            trigger={
-              <Button
-                variant="outline"
-                size="sm"
-                className="ml-auto text-primary border-primary/40 hover:bg-primary/10 hover:text-primary"
-              >
-                Pagar
-              </Button>
-            }
-          />
-        )}
+        {!pagado &&
+          (() => {
+            // Pendiente reanuda la seña; señada paga el saldo restante.
+            const PagarDialog =
+              reserva.estado === "senado" ? PagarSaldoDialog : PagarSenaDialog;
+            return (
+              <PagarDialog
+                reservaId={reserva.id}
+                actividad={reserva.actividad}
+                datetime={formatReservaFecha(reserva.fecha, reserva.turno.hora)}
+                precio={reserva.precio}
+                sena={reserva.sena}
+                trigger={
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="ml-auto text-primary border-primary/40 hover:bg-primary/10 hover:text-primary"
+                  >
+                    Pagar
+                  </Button>
+                }
+              />
+            );
+          })()}
       </div>
       {/* TODO (a futuro): mostrar el QR del turno pagado. Reimportar `QrCode`
           de lucide-react al reactivar.
