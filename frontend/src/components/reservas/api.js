@@ -31,6 +31,21 @@ export function confirmarSena(reservaId) {
 }
 
 /**
+ * Genera el link de Checkout Pro para señar una reserva pendiente ya existente
+ * (reanuda el pago cuando no volvió la respuesta de Mercado Pago).
+ *
+ * @param {number} reservaId
+ * @returns {Promise<{ reserva_id: number, preference_id: string, init_point: string, sandbox_init_point: string }>}
+ */
+export function crearCheckoutSena(reservaId) {
+  return request("/api/pagos/sena/checkout", {
+    method: "POST",
+    body: { reserva_id: reservaId },
+    fallback: "No se pudo iniciar el pago.",
+  });
+}
+
+/**
  * Genera el link de Checkout Pro para abonar el saldo restante de una reserva
  * ya señada.
  *
@@ -121,6 +136,22 @@ export function listAllPagos() {
 }
 
 /**
+ * Registra manualmente (en efectivo) el saldo restante de una reserva. Lo ejecuta
+ * un empleado/admin desde la vista de Turnos Reservados; queda asentado quién lo
+ * registró. Sólo admin/empleado.
+ *
+ * @param {number} reservaId
+ * @returns {Promise<{ id: number, reserva_id: number, monto: number, estado: string, metodo: string, registrado_por_id: number }>}
+ */
+export function registrarPagoManual(reservaId) {
+  return request("/api/pagos/registrar", {
+    method: "POST",
+    body: { reserva_id: reservaId },
+    fallback: "No se pudo registrar el pago.",
+  });
+}
+
+/**
  * Sesiones con reservas (turno + fecha) para la vista de Turnos Reservados.
  * Sólo admin/empleado.
  *
@@ -138,7 +169,7 @@ export function listSesionesReservadas() {
  *
  * @param {number|string} turnoId
  * @param {string} fecha - YYYY-MM-DD
- * @returns {Promise<{ turno: { id: number, actividad: string, dia_semana: string, hora: string, fecha: string, cupo: number, ocupados: number, precio: number }, reservas: Array<{ id: number, tipo: string, estado: string, monto_pagado: number, cliente: { id: number, nombre: string, email: string }|null }> }>}
+ * @returns {Promise<{ turno: { id: number, actividad: string, dia_semana: string, hora: string, fecha: string, cupo: number, ocupados: number, precio: number }, reservas: Array<{ id: number, tipo: string, estado: string, monto_pagado: number, cliente: { id: number, nombre: string, apellido: string, email: string }|null }> }>}
  */
 export function getSesionReservada(turnoId, fecha) {
   return request(`/api/reservas/sesiones/${turnoId}/${fecha}`, {

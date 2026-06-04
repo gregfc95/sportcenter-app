@@ -5,7 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import joinedload
 
 from .. import db
-from ..models.pago import Pago, PagoEstado
+from ..models.pago import Pago, PagoEstado, PagoMedio
 from ..models.reserva import Reserva
 from ..models.turno import Turno
 from .mercadopago_client import get_sdk
@@ -170,6 +170,40 @@ class PagoService:
         db.session.commit()
         return pago
 
+    def registrar_pago_manual(self, reserva_id: int, registrado_por_id: int) -> Pago:
+        """Registra en efectivo el saldo restante de una reserva (cobro en mostrador).
+
+        Pensado para que un empleado/admin asiente un pago hecho fuera de Mercado
+        Pago. Crea un Pago PAGADO por lo que falta cobrar (precio - lo ya cobrado),
+        con medio EFECTIVO y el id del staff que lo registró. Falla si la reserva
+        ya está paga o no tiene saldo pendiente.
+        """
+        reserva = db.session.get(Reserva, reserva_id)
+        if reserva is None:
+            raise ValueError("La reserva indicada no existe.")
+
+        if self._pago_por_estado(reserva_id, PagoEstado.PAGADO) is not None:
+            raise ValueError("La reserva ya está paga.")
+
+        cobrado = sum(
+            (p.monto for p in self._pagos_cobrados(reserva_id)), Decimal("0")
+        )
+        restante = reserva.turno.actividad.precio - cobrado
+        if restante <= 0:
+            raise ValueError("La reserva no tiene saldo pendiente.")
+
+        pago = Pago(
+            user_id=reserva.user_id,
+            reserva_id=reserva_id,
+            monto=restante,
+            estado=PagoEstado.PAGADO,
+            metodo=PagoMedio.EFECTIVO,
+            registrado_por_id=registrado_por_id,
+        )
+        db.session.add(pago)
+        db.session.commit()
+        return pago
+
     def registrar_cancelacion(self, reserva_id: int, *, reembolsar: bool) -> Pago | None:
         """Cierra el historial de pagos de una reserva cancelada.
 
@@ -219,9 +253,10 @@ class PagoService:
             select(Pago)
             .where(Pago.user_id == user_id, Pago.deleted_at.is_(None))
             .options(
+                joinedload(Pago.registrado_por),
                 joinedload(Pago.reserva)
                 .joinedload(Reserva.turno)
-                .joinedload(Turno.actividad)
+                .joinedload(Turno.actividad),
             )
             .order_by(Pago.created_at.desc())
             .execution_options(include_deleted=True)
@@ -242,6 +277,7 @@ class PagoService:
             .where(Pago.deleted_at.is_(None))
             .options(
                 joinedload(Pago.user),
+                joinedload(Pago.registrado_por),
                 joinedload(Pago.reserva)
                 .joinedload(Reserva.turno)
                 .joinedload(Turno.actividad),

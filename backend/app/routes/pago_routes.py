@@ -15,6 +15,17 @@ reserva_service = ReservaService()
 pago_service = PagoService()
 
 
+def _registrado_por(pago) -> dict | None:
+    """Empleado/admin que cargó el pago manualmente (None si fue automático)."""
+    user = pago.registrado_por
+    if user is None:
+        return None
+    return {
+        "id": user.id,
+        "nombre": f"{user.first_name} {user.last_name}".strip(),
+    }
+
+
 @pago_bp.route("", methods=["GET"])
 def list_mis_pagos() -> Response:
     """Historial de pagos del usuario actual para la tabla de Mis Pagos.
@@ -37,6 +48,8 @@ def list_mis_pagos() -> Response:
                 "fecha_pago": pago.created_at.isoformat() if pago.created_at else None,
                 "monto": float(pago.monto) if pago.monto is not None else None,
                 "estado": pago.estado.value if pago.estado else None,
+                "metodo": pago.metodo.value if pago.metodo else None,
+                "registrado_por": _registrado_por(pago),
                 "reserva_id": pago.reserva_id,
                 "actividad": actividad.nombre if actividad else None,
                 "turno": (
@@ -77,6 +90,8 @@ def list_todos_pagos() -> Response:
                 "fecha_pago": pago.created_at.isoformat() if pago.created_at else None,
                 "monto": float(pago.monto) if pago.monto is not None else None,
                 "estado": pago.estado.value if pago.estado else None,
+                "metodo": pago.metodo.value if pago.metodo else None,
+                "registrado_por": _registrado_por(pago),
                 "reserva_id": pago.reserva_id,
                 "cliente": (
                     {
@@ -101,6 +116,32 @@ def list_todos_pagos() -> Response:
         )
 
     return jsonify(payload), 200
+
+
+@pago_bp.route("/registrar", methods=["POST"])
+def registrar_pago() -> Response:
+    """Registra manualmente (en efectivo) el pago de una reserva.
+
+    Acción de mostrador para admin/empleado: asienta el saldo restante como
+    PAGADO con medio EFECTIVO y guarda quién lo registró. Devuelve el pago creado.
+    """
+    staff = require_role(UserRole.ADMIN, UserRole.EMPLOYEE)
+    data = request.get_json() or {}
+
+    reserva_id = data.get("reserva_id")
+    if not isinstance(reserva_id, int):
+        return jsonify({"error": "reserva_id es requerido y debe ser un entero."}), 400
+
+    reserva = db.session.get(Reserva, reserva_id)
+    if reserva is None:
+        return jsonify({"error": "La reserva indicada no existe."}), 404
+
+    try:
+        pago = pago_service.registrar_pago_manual(reserva_id, staff.id)
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+
+    return jsonify(pago.to_dict()), 201
 
 
 @pago_bp.route("/checkout", methods=["POST"])
@@ -141,6 +182,39 @@ def checkout() -> Response:
         return jsonify({"error": str(e)}), 400
 
     return jsonify({"reserva_id": reserva.id, **pref}), 201
+
+
+@pago_bp.route("/sena/checkout", methods=["POST"])
+def checkout_sena() -> Response:
+    """Genera el link de Checkout Pro para señar una reserva ya existente.
+
+    A diferencia de `/checkout`, no crea una reserva: reanuda el pago de una
+    reserva pendiente (sin pago) que quedó así porque no volvió la respuesta de
+    Mercado Pago (el usuario cerró la ventana sin completar la seña). Devuelve el
+    `init_point` para reintentar el pago de la seña.
+    """
+    user_id = current_user_id()
+    data = request.get_json() or {}
+
+    reserva_id = data.get("reserva_id")
+    if not isinstance(reserva_id, int):
+        return jsonify({"error": "reserva_id es requerido y debe ser un entero."}), 400
+
+    reserva = db.session.get(Reserva, reserva_id)
+    if reserva is None:
+        return jsonify({"error": "La reserva indicada no existe."}), 404
+    if reserva.user_id != user_id:
+        return jsonify({"error": "La reserva no pertenece al usuario."}), 403
+    if pago_service.tiene_pago(reserva_id):
+        # Ya tiene seña/pago: no corresponde el checkout de seña.
+        return jsonify({"error": "La reserva ya tiene un pago registrado."}), 409
+
+    try:
+        pref = pago_service.crear_preferencia(reserva_id)
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+
+    return jsonify({"reserva_id": reserva_id, **pref}), 201
 
 
 @pago_bp.route("/saldo/checkout", methods=["POST"])
