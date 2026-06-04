@@ -1,3 +1,5 @@
+import logging
+
 from flask import Blueprint, abort, request, jsonify, Response
 from app.auth import current_user_id, require_role
 from app.models.user import UserRole
@@ -11,6 +13,8 @@ from app.schemas import (
     UserUpdateProfileSchema,
     UserChangePasswordSchema,
 )
+
+logger = logging.getLogger(__name__)
 
 user_bp = Blueprint("users", __name__, url_prefix="/api/users")
 
@@ -28,7 +32,7 @@ def _notify_password(email: str, password: str) -> None:
     try:
         send_password_email(email, password)
     except Exception:
-        pass
+        logger.exception("No se pudo enviar la contraseña a %s", email)
 
 
 @user_bp.route("", methods=["GET"])
