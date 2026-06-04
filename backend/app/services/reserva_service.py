@@ -11,6 +11,12 @@ from ..models.turno import Turno, DiaSemana
 
 CANCELACION_VENTANA = timedelta(hours=24)
 
+# Cada turno ocupa un bloque fijo de 1 h. Dos turnos se solapan (y por lo tanto
+# el usuario no puede tener ambos) cuando sus horas de inicio distan menos de
+# esto, sin importar la actividad. Ej: con un turno a las 16:00 ocupado, 16:30
+# choca pero 17:00 ya está libre.
+DURACION_TURNO = timedelta(hours=1)
+
 # La `hora` del turno es hora de pared local de Argentina (así se agenda y se
 # muestra), no UTC. Para medir la anticipación real hay que interpretarla en
 # esta zona.
@@ -122,29 +128,47 @@ class ReservaService:
     def _validar_sin_conflicto_horario(
         self, user_id: int, fecha: date, turno: Turno
     ) -> None:
+        """Impide reservar un turno que se solape con otro del usuario ese día.
+
+        El choque es por horario, no por actividad: dos turnos de actividades
+        distintas que arrancan dentro de la misma hora se pisan igual. Se comparan
+        las horas de inicio en esa fecha y se considera conflicto si distan menos
+        que `DURACION_TURNO`.
+        """
         stmt = (
-            select(Reserva)
+            select(Turno.hora)
+            .select_from(Reserva)
             .join(Reserva.turno)
             .where(
                 Reserva.user_id == user_id,
                 Reserva.fecha == fecha,
                 Reserva.tipo == ReservaTipo.EVENTUAL,
-                Turno.hora == turno.hora,
             )
         )
-        conflicto = db.session.execute(stmt).scalars().first()
-        if conflicto is not None:
-            raise ValueError("Ya tienes un turno reservado para el mismo horario")
+        nuevo_inicio = datetime.combine(fecha, turno.hora)
+        for hora in db.session.execute(stmt).scalars():
+            if abs(datetime.combine(fecha, hora) - nuevo_inicio) < DURACION_TURNO:
+                raise ValueError("Ya tienes un turno reservado para el mismo horario")
 
     # --- Cancelación ---
 
-    def cancelar_reserva(self, reserva_id: int) -> Reserva:
+    def cancelar_reserva(
+        self, reserva_id: int, motivo: MotivoCancelacion | None = None
+    ) -> Reserva:
+        """Cancela (soft-delete) una reserva.
+
+        Si se pasa `motivo` se usa tal cual (p. ej. una baja forzada por el centro
+        al eliminar la actividad, que siempre reembolsa). Si no, se deduce de la
+        antelación: reembolsable con más de 24 h, retenido dentro de las 24 h.
+        """
         reserva = db.session.get(Reserva, reserva_id)
         if reserva is None:
             raise ValueError("La reserva indicada no existe.")
 
         if reserva.tipo == ReservaTipo.EVENTUAL:
-            reserva.motivo_cancelacion = self._motivo_segun_anticipacion(reserva)
+            reserva.motivo_cancelacion = (
+                motivo or self._motivo_segun_anticipacion(reserva)
+            )
 
         reserva.soft_delete()
         db.session.commit()
