@@ -147,6 +147,9 @@ export default function PagosPage() {
                 <th className="py-md px-md text-label-sm text-on-surface-variant uppercase text-center">
                   Estado
                 </th>
+                <th className="py-md px-md text-label-sm text-on-surface-variant uppercase">
+                  Medio
+                </th>
                 <th className="py-md px-md text-label-sm text-on-surface-variant uppercase text-right">
                   Reserva
                 </th>
@@ -155,13 +158,13 @@ export default function PagosPage() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={8} className="py-lg px-md text-center text-on-surface-variant">
+                  <td colSpan={9} className="py-lg px-md text-center text-on-surface-variant">
                     Cargando pagos...
                   </td>
                 </tr>
               ) : loadError ? (
                 <tr>
-                  <td colSpan={8} className="py-lg px-md text-center">
+                  <td colSpan={9} className="py-lg px-md text-center">
                     <p className="text-destructive mb-2">{loadError}</p>
                     <Button variant="outline" size="sm" onClick={fetchPagos}>
                       Reintentar
@@ -170,7 +173,7 @@ export default function PagosPage() {
                 </tr>
               ) : count === 0 ? (
                 <tr>
-                  <td colSpan={8} className="py-lg px-md text-center text-on-surface-variant">
+                  <td colSpan={9} className="py-lg px-md text-center text-on-surface-variant">
                     {query.trim()
                       ? `No se encontraron pagos para "${query.trim()}".`
                       : "Todavía no hay pagos registrados."}
@@ -225,6 +228,22 @@ export default function PagosPage() {
                           <span className="size-1.5 rounded-full bg-current" />
                           {ESTADO_LABELS[pago.estado] ?? pago.estado}
                         </Badge>
+                      </td>
+                      <td className="py-sm px-md">
+                        {pago.metodo === "efectivo" ? (
+                          <div className="flex flex-col">
+                            <span className="text-on-surface">Efectivo</span>
+                            {pago.registrado_por && (
+                              <span className="text-on-surface-variant text-xs">
+                                por {pago.registrado_por.nombre}
+                              </span>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-on-surface-variant">
+                            Mercado Pago
+                          </span>
+                        )}
                       </td>
                       <td className="py-sm px-md text-right text-on-surface-variant font-mono text-sm">
                         #{pago.reserva_id}

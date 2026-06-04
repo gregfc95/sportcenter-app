@@ -151,7 +151,8 @@ def get_sesion_reservada(turno_id: int, fecha: str) -> Response:
                 "cliente": (
                     {
                         "id": reserva.user.id,
-                        "nombre": f"{reserva.user.first_name} {reserva.user.last_name}".strip(),
+                        "nombre": reserva.user.first_name,
+                        "apellido": reserva.user.last_name,
                         "email": reserva.user.email,
                     }
                     if reserva.user

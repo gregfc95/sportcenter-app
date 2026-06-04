@@ -111,6 +111,9 @@ export default function MisPagosPage() {
                 <th className="py-md px-md text-label-sm text-on-surface-variant uppercase text-center">
                   Estado
                 </th>
+                <th className="py-md px-md text-label-sm text-on-surface-variant uppercase">
+                  Medio
+                </th>
                 <th className="py-md px-md text-label-sm text-on-surface-variant uppercase text-right">
                   Reserva
                 </th>
@@ -119,7 +122,7 @@ export default function MisPagosPage() {
             <tbody>
               {!loaded ? null : count === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-lg px-md text-center text-on-surface-variant">
+                  <td colSpan={8} className="py-lg px-md text-center text-on-surface-variant">
                     Todavía no tenés pagos registrados.
                   </td>
                 </tr>
@@ -158,6 +161,9 @@ export default function MisPagosPage() {
                           <span className="size-1.5 rounded-full bg-current" />
                           {ESTADO_LABELS[pago.estado] ?? pago.estado}
                         </Badge>
+                      </td>
+                      <td className="py-sm px-md text-on-surface-variant">
+                        {pago.metodo === "efectivo" ? "Efectivo" : "Mercado Pago"}
                       </td>
                       <td className="py-sm px-md text-right text-on-surface-variant font-mono text-sm">
                         #{pago.reserva_id}
