@@ -132,6 +132,7 @@ function ReservaCard({ reserva, onCancelled }) {
                 datetime={formatReservaFecha(reserva.fecha, reserva.turno.hora)}
                 precio={reserva.precio}
                 sena={reserva.sena}
+                saldo={reserva.saldo}
                 trigger={
                   <Button
                     variant="outline"

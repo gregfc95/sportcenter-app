@@ -54,7 +54,9 @@ def list_mis_reservas() -> Response:
         turno = reserva.turno
         actividad = turno.actividad
         disponibles = turno_service.lugares_disponibles(turno, reserva.fecha)
-        precio = float(actividad.precio)
+        # Precio bloqueado al momento de la seña (ver PagoService.resumen_pago):
+        # un cambio posterior del precio no altera lo que el cliente debe.
+        resumen = pago_service.resumen_pago(reserva)
         payload.append(
             {
                 "id": reserva.id,
@@ -62,8 +64,9 @@ def list_mis_reservas() -> Response:
                 "tipo": reserva.tipo.value,
                 "estado": _estado_pago(reserva),
                 "actividad": actividad.nombre,
-                "precio": precio,
-                "sena": precio / 2,
+                "precio": float(resumen["total"]),
+                "sena": float(resumen["sena"]),
+                "saldo": float(resumen["saldo"]),
                 "turno": {
                     "id": turno.id,
                     "dia_semana": turno.dia_semana.value,

@@ -41,6 +41,7 @@ export default function BookingCard({
   capacity,
   precio,
   sena,
+  saldo,
   onCancelled,
 }) {
   const meta = STATUS_META[status] ?? STATUS_META.pendiente;
@@ -106,6 +107,7 @@ export default function BookingCard({
       datetime={datetime}
       precio={precio}
       sena={sena}
+      saldo={saldo}
       trigger={pagarTrigger}
     />
   ) : null;

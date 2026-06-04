@@ -43,6 +43,7 @@ function toUpcomingBookings(reservas) {
       capacity: { taken: r.turno.ocupados, total: r.turno.cupo },
       precio: r.precio,
       sena: r.sena,
+      saldo: r.saldo,
     }));
 }
 
