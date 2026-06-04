@@ -1,4 +1,4 @@
-import { MoreVertical, Trash2, Users } from "lucide-react";
+import { MoreVertical, Pencil, Trash2, Users } from "lucide-react";
 
 import {
   DropdownMenu,
@@ -7,7 +7,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-export default function TurnoCard({ turno, onDelete }) {
+export default function TurnoCard({ turno, onEdit, onDelete }) {
   const hora = turno.hora?.slice(0, 5) ?? turno.hora;
   return (
     <div className="bg-surface-container-high border border-outline-variant rounded-lg p-sm relative hover:border-primary/40 transition-colors">
@@ -21,6 +21,10 @@ export default function TurnoCard({ turno, onDelete }) {
             <MoreVertical className="size-4" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
+            <DropdownMenuItem onSelect={() => onEdit?.(turno)}>
+              <Pencil className="size-4" />
+              Editar
+            </DropdownMenuItem>
             <DropdownMenuItem
               variant="destructive"
               onSelect={() => onDelete?.(turno)}
