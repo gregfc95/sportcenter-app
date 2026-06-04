@@ -191,10 +191,9 @@ class PagoService:
         if self._pago_por_estado(reserva_id, PagoEstado.PAGADO) is not None:
             raise ValueError("La reserva ya está paga.")
 
-        cobrado = sum(
-            (p.monto for p in self._pagos_cobrados(reserva_id)), Decimal("0")
-        )
-        restante = reserva.turno.actividad.precio - cobrado
+        # Saldo sobre el precio bloqueado al momento de la seña (no el actual),
+        # para no cobrar de menos/de más si la actividad cambió de precio después.
+        restante = self.resumen_pago(reserva)["saldo"]
         if restante <= 0:
             raise ValueError("La reserva no tiene saldo pendiente.")
 
