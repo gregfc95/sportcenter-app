@@ -99,6 +99,9 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+
+  --color-success-green: var(--success-green);
+  --color-error: var(--error);
 }
 
 /* Brand palette. Dark mode adjusts luminance rather than inverting,
@@ -141,6 +144,9 @@
   --input: #EAEAEA;
   --ring: #9A2A46;
 
+  --success-green: #16A34A;
+  --error: #DC2626;
+
   --radius: 0.5rem;
 }
 
@@ -181,6 +187,9 @@
   --border: #353535;
   --input: #353535;
   --ring: #C4455F;
+
+  --success-green: #22C55E;
+  --error: #EF4444;
 }
 
 @layer base {

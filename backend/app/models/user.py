@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 from enum import Enum
+from sqlalchemy.orm import validates
 from .. import db
 from .limits import (
     FIRST_NAME_MAX,
@@ -16,6 +17,11 @@ class UserRole(str, Enum):
     CLIENT = "client"
     EMPLOYEE = "employee"
     ADMIN = "admin"
+
+
+def normalize_email(value: str | None) -> str | None:
+    """Minúsculas y sin espacios. Fuente única de la regla de normalización."""
+    return value.strip().lower() if isinstance(value, str) else value
 
 
 # Necesitamos DNI y EMAIL unique parcial para si el permitir que usuarios eliminados puedan volver a registrarse con el mismo DNI
@@ -52,12 +58,19 @@ class User(SoftDeleteMixin, db.Model):
     )
 
     reservas = db.relationship("Reserva", back_populates="user", lazy=True)
+    # Pago tiene dos FKs a users (user_id del cliente y registrado_por_id del
+    # staff); esta relación es la de los pagos del cliente (user_id).
     pagos = db.relationship(
         "Pago",
         back_populates="user",
+        foreign_keys="Pago.user_id",
         lazy=True,
         passive_deletes="all",
     )
+
+    @validates("email")
+    def _normalize_email(self, key: str, value: str | None) -> str | None:
+        return normalize_email(value)
 
     def __repr__(self) -> str:
         return f"<User {self.email}>"

@@ -6,6 +6,7 @@ from sqlalchemy.exc import IntegrityError
 from .. import db
 from ..models.reserva import ReservaTipo
 from ..models.turno import Turno
+from collections import Counter
 
 
 SUPERPOSICION_MIN_MINUTOS = 60
@@ -110,6 +111,19 @@ class TurnoService:
                 raise ValueError(
                     f"Ya existe un turno de esta actividad el {nuevo_dia} a las {hora_str}."
                 )
+
+        reservas_activas = [r for r in turno.reservas if r.deleted_at is None]
+        if reservas_activas:
+            max_inscriptos = max(Counter(r.fecha for r in reservas_activas).values())
+        else:
+            max_inscriptos = 0
+
+        if nuevo_cupo < max_inscriptos:
+            raise ValueError(
+                f"No podés reducir el cupo a {nuevo_cupo}. "
+                f"La clase con más inscriptos tiene {max_inscriptos} "
+                f"persona{'s' if max_inscriptos != 1 else ''} inscripta{'s' if max_inscriptos != 1 else ''}."
+            )
 
         turno.dia_semana = nuevo_dia
         turno.hora = nueva_hora

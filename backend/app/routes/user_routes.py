@@ -9,6 +9,7 @@ from app.schemas import (
     UserResponseSchema,
     UserLoginSchema,
     UserUpdateProfileSchema,
+    UserChangePasswordSchema,
 )
 
 user_bp = Blueprint("users", __name__, url_prefix="/api/users")
@@ -18,6 +19,7 @@ register_schema = UserRegisterSchema()
 employee_register_schema = EmployeeRegisterSchema()
 login_schema = UserLoginSchema()
 update_profile_schema = UserUpdateProfileSchema()
+change_password_schema = UserChangePasswordSchema()
 response_schema = UserResponseSchema()
 
 
@@ -128,10 +130,34 @@ def update_profile() -> Response:
     if errors:
         if "email" in errors:
             return jsonify({"error": "El email ingresado no es valido"}), 400
-        return jsonify({"error": "Campos requeridos faltantes"}), 400
+        return jsonify({"error": "Campos requeridos faltantes-Debug"}), 400
+
+    current_password = data.get("current_password")
+    new_password = data.get("new_password")
+    wants_password_change = bool(current_password or new_password)
+    if wants_password_change:
+        if not current_password:
+            return (
+                jsonify({"errors": {"current_password": "Campo requerido faltante"}}),
+                400,
+            )
+        pw_errors = change_password_schema.validate({"new_password": new_password})
+        if pw_errors:
+            return (
+                jsonify({"errors": {"new_password": pw_errors["new_password"][0]}}),
+                400,
+            )
 
     try:
-        user = user_service.update_profile(user_id, data)
+        user = user_service.update_profile(
+            user_id,
+            data,
+            current_password=current_password if wants_password_change else None,
+            new_password=new_password if wants_password_change else None,
+        )
         return jsonify(response_schema.dump(user)), 200
     except ValueError as e:
-        return jsonify({"error": str(e)}), 409
+        msg = str(e)
+        if msg == "La contraseña actual no es valida":
+            return jsonify({"errors": {"current_password": msg}}), 400
+        return jsonify({"error": msg}), 409

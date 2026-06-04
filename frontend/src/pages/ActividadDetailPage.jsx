@@ -4,6 +4,7 @@ import { AlertCircle, CalendarX2, ChevronRight, Pencil, Save, X } from "lucide-r
 import { toast } from "sonner";
 
 import { usePageTitle } from "@/lib/usePageTitle";
+import { formatPrice } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import TurnoCard from "@/components/actividades/TurnoCard";
 import DeleteTurnoDialog from "@/components/actividades/DeleteTurnoDialog";
@@ -12,7 +13,7 @@ import {
   getActividad,
   listTurnosByActividad,
 } from "@/components/actividades/api";
-import { authHeaders } from "@/components/empleados/api";
+import { authHeaders } from "@/lib/apiClient";
 
 
 const DAYS = [
@@ -24,18 +25,6 @@ const DAYS = [
   { key: "sabado", label: "Sábado" },
   { key: "domingo", label: "Domingo" },
 ];
-
-const PRICE_FORMATTER = new Intl.NumberFormat("es-AR", {
-  style: "currency",
-  currency: "ARS",
-  maximumFractionDigits: 0,
-});
-
-function formatPrice(value) {
-  const num = Number(value);
-  if (Number.isNaN(num)) return value ?? "—";
-  return PRICE_FORMATTER.format(num);
-}
 
 function groupByDay(turnos) {
   const grouped = Object.fromEntries(DAYS.map((d) => [d.key, []]));

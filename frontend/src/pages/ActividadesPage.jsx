@@ -4,23 +4,12 @@ import { CalendarDays, Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { usePageTitle } from "@/lib/usePageTitle";
+import { formatPrice } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import DeleteActividadDialog from "@/components/actividades/DeleteActividadDialog";
 import { getActividadIcon } from "@/components/actividades/actividadIcons";
 import { listActividades } from "@/components/actividades/api";
 import { PageHeading } from "@/components/ui/page-heading";
-
-const PRICE_FORMATTER = new Intl.NumberFormat("es-AR", {
-  style: "currency",
-  currency: "ARS",
-  maximumFractionDigits: 0,
-});
-
-function formatPrice(value) {
-  const num = Number(value);
-  if (Number.isNaN(num)) return value ?? "—";
-  return PRICE_FORMATTER.format(num);
-}
 
 function padId(id) {
   return String(id).padStart(3, "0");
