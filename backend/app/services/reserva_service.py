@@ -113,3 +113,7 @@ class ReservaService:
             raise ValueError(
                 f"El turno no tiene cupo disponible para el {fecha.isoformat()}."
             )
+        
+    def obtener_por_usuario(self, user_id: int) -> list[Reserva]:
+        stmt = select(Reserva).where(Reserva.user_id == user_id)
+        return db.session.execute(stmt).scalars().all()

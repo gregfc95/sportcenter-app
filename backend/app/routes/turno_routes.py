@@ -32,7 +32,7 @@ def list_turnos_por_actividad(actividad_id: int) -> Response:
         except ValueError:
             return jsonify({"error": "fecha debe tener formato YYYY-MM-DD"}), 400
 
-    turnos = turno_service.obtener_por_actividad(actividad_id)
+    turnos = turno_service.obtener_por_actividad(actividad_id, fecha=fecha)
     dumped = turnos_schema.dump(turnos)
 
     if fecha is not None:

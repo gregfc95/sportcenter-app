@@ -5,7 +5,8 @@ from sqlalchemy.exc import IntegrityError
 
 from .. import db
 from ..models.reserva import ReservaTipo
-from ..models.turno import Turno
+from ..models.turno import Turno, DiaSemana
+from ..services.reserva_service import WEEKDAY_TO_DIA_SEMANA
 
 
 SUPERPOSICION_MIN_MINUTOS = 60
@@ -48,8 +49,11 @@ class TurnoService:
     def obtener_por_id(self, turno_id: int) -> Turno | None:
         return db.session.get(Turno, turno_id)
 
-    def obtener_por_actividad(self, actividad_id: int) -> list[Turno]:
+    def obtener_por_actividad(self, actividad_id: int, fecha: date | None = None) -> list[Turno]:
         stmt = select(Turno).where(Turno.actividad_id == actividad_id)
+        if fecha is not None:
+            dia = WEEKDAY_TO_DIA_SEMANA[fecha.weekday()]
+            stmt = stmt.where(Turno.dia_semana == dia)
         return db.session.execute(stmt).scalars().all()
 
     def _turnos_por_actividad_y_dia(
@@ -110,6 +114,24 @@ class TurnoService:
                 raise ValueError(
                     f"Ya existe un turno de esta actividad el {nuevo_dia} a las {hora_str}."
                 )
+
+        # validar inscriptos por fecha
+        from sqlalchemy import func
+        from ..models.reserva import Reserva
+
+        inscriptos_max = db.session.execute(
+            select(func.count(Reserva.id))
+            .where(Reserva.turno_id == turno_id, Reserva.deleted_at.is_(None))
+            .group_by(Reserva.fecha)
+            .order_by(func.count(Reserva.id).desc())
+            .limit(1)
+        ).scalar() or 0
+
+        if nuevo_cupo < inscriptos_max:
+            raise ValueError(
+                f"No podés reducir el cupo a {nuevo_cupo}. "
+                f"Hay una fecha con {inscriptos_max} persona{'s' if inscriptos_max != 1 else ''} inscripta{'s' if inscriptos_max != 1 else ''}."
+            )
 
         turno.dia_semana = nuevo_dia
         turno.hora = nueva_hora

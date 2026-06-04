@@ -13,31 +13,16 @@ import { usePageTitle } from "@/lib/usePageTitle";
 import { Button } from "@/components/ui/button";
 import { PageHeading } from "@/components/ui/page-heading";
 import { listActividades } from "@/components/actividades/api";
+import { listTurnosPorActividad } from "@/components/turnos/api";
+import { createReserva } from "@/components/reservas/api";
 import { cn } from "@/lib/utils";
 
 const MONTHS = [
-  "Enero",
-  "Febrero",
-  "Marzo",
-  "Abril",
-  "Mayo",
-  "Junio",
-  "Julio",
-  "Agosto",
-  "Septiembre",
-  "Octubre",
-  "Noviembre",
-  "Diciembre",
+  "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+  "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
 ];
 
 const WEEKDAYS = ["LU", "MA", "MI", "JU", "VI", "SA", "DO"];
-
-// Static availability mock until the booking backend lands.
-const SLOTS = [
-  { time: "18:00", status: "available" },
-  { time: "19:00", status: "full" },
-  { time: "20:00", status: "available" },
-];
 
 const PRICE_FORMATTER = new Intl.NumberFormat("es-AR", {
   style: "currency",
@@ -55,7 +40,6 @@ function startOfDay(date) {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
 }
 
-// Monday-first weekday index (0 = Monday ... 6 = Sunday).
 function mondayIndex(date) {
   return (date.getDay() + 6) % 7;
 }
@@ -83,21 +67,35 @@ export default function NuevaReservaPage() {
   const [viewMonth, setViewMonth] = useState(today.getMonth());
   const [selectedDate, setSelectedDate] = useState(today);
   const [selectedSlot, setSelectedSlot] = useState(null);
+  const [slots, setSlots] = useState([]);
+  const [isConfirming, setIsConfirming] = useState(false);
 
   useEffect(() => {
     let active = true;
     listActividades()
-      .then((data) => {
-        if (!active) return;
-        setActividades(data);
-      })
-      .catch(() => {
-        if (active) setActividades([]);
-      });
-    return () => {
-      active = false;
-    };
+      .then((data) => { if (active) setActividades(data); })
+      .catch(() => { if (active) setActividades([]); });
+    return () => { active = false; };
   }, []);
+
+  useEffect(() => {
+    if (!actividadId || !selectedDate) return;
+    let active = true;
+
+    const fecha = selectedDate.toISOString().split("T")[0];
+    listTurnosPorActividad(actividadId, fecha)
+      .then((data) => { if (active) setSlots(data); })
+      .catch(() => { if (active) setSlots([]); });
+
+    setSelectedSlot(null);
+    return () => { active = false; };
+  }, [actividadId, selectedDate]);
+
+  const mappedSlots = slots.map((turno) => ({
+    turno_id: turno.id,
+    time: turno.hora.slice(0, 5),
+    status: (turno.disponibles ?? turno.cupo) > 0 ? "available" : "full",
+  }));
 
   const selectedActividad = useMemo(
     () => actividades.find((a) => String(a.id) === String(actividadId)) ?? null,
@@ -113,7 +111,7 @@ export default function NuevaReservaPage() {
     viewYear === today.getFullYear() && viewMonth === today.getMonth();
 
   const goToPrevMonth = () => {
-    if (atCurrentMonth) return; // don't navigate into the past
+    if (atCurrentMonth) return;
     setViewMonth((m) => (m === 0 ? 11 : m - 1));
     setViewYear((y) => (viewMonth === 0 ? y - 1 : y));
   };
@@ -131,8 +129,19 @@ export default function NuevaReservaPage() {
 
   const total = selectedActividad ? formatPrice(selectedActividad.precio) : "—";
 
-  const handleConfirm = () => {
-    toast.info("Confirmar reserva llegará próximamente");
+  const handleConfirm = async () => {
+    if (!selectedSlot || !selectedDate) return;
+
+    setIsConfirming(true);
+    try {
+      const fecha = selectedDate.toISOString().split("T")[0];
+      await createReserva(selectedSlot.turno_id, fecha);
+      toast.success("Reserva confirmada");
+    } catch (err) {
+      toast.error(err.message ?? "Error al confirmar la reserva");
+    } finally {
+      setIsConfirming(false);
+    }
   };
 
   return (
@@ -144,10 +153,7 @@ export default function NuevaReservaPage() {
             aria-label="Migas de pan"
             className="flex items-center gap-1 text-label-sm text-on-surface-variant"
           >
-            <Link
-              to="/mis-turnos"
-              className="hover:text-primary transition-colors"
-            >
+            <Link to="/mis-turnos" className="hover:text-primary transition-colors">
               Mis Turnos
             </Link>
             <ChevronRight className="size-3.5" aria-hidden="true" />
@@ -181,9 +187,7 @@ export default function NuevaReservaPage() {
                     <option value="">No hay actividades disponibles</option>
                   ) : (
                     <>
-                      <option value="" disabled>
-                        Seleccioná una actividad
-                      </option>
+                      <option value="" disabled>Seleccioná una actividad</option>
                       {actividades.map((actividad) => (
                         <option key={actividad.id} value={actividad.id}>
                           {actividad.nombre}
@@ -204,15 +208,12 @@ export default function NuevaReservaPage() {
                 Tipo de Reserva
               </span>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Mensual — disabled / coming soon */}
                 <div
                   aria-disabled="true"
                   className="relative flex flex-col gap-2 p-4 rounded-xl border border-outline-variant bg-surface-container-low opacity-60 cursor-not-allowed"
                 >
                   <div className="flex justify-between items-center w-full">
-                    <span className="text-label-md text-on-surface text-lg">
-                      Mensual
-                    </span>
+                    <span className="text-label-md text-on-surface text-lg">Mensual</span>
                     <span className="bg-surface-container-high text-on-surface-variant text-[10px] font-bold px-2 py-1 rounded-full uppercase tracking-wider">
                       Próximamente
                     </span>
@@ -222,12 +223,9 @@ export default function NuevaReservaPage() {
                   </p>
                 </div>
 
-                {/* Eventual — selected */}
                 <div className="relative flex flex-col gap-2 p-4 rounded-xl border-2 border-primary bg-primary/5">
                   <div className="flex justify-between items-center w-full">
-                    <span className="text-label-md text-on-surface text-lg">
-                      Eventual
-                    </span>
+                    <span className="text-label-md text-on-surface text-lg">Eventual</span>
                   </div>
                   <p className="text-label-sm text-on-surface-variant">
                     Un solo turno para una fecha.
@@ -278,9 +276,7 @@ export default function NuevaReservaPage() {
 
             <div className="grid grid-cols-7 text-center gap-y-2 text-label-md">
               {cells.map((day, index) => {
-                if (day === null) {
-                  return <div key={`blank-${index}`} />;
-                }
+                if (day === null) return <div key={`blank-${index}`} />;
                 const cellDate = new Date(viewYear, viewMonth, day);
                 const isPast = cellDate < today;
                 const selected = isSelected(day);
@@ -329,17 +325,16 @@ export default function NuevaReservaPage() {
                   : "Elegí una fecha"}
               </h3>
               <p className="text-label-sm text-on-surface-variant">
-                {SLOTS.filter((s) => s.status === "available").length} horarios
-                disponibles
+                {mappedSlots.filter((s) => s.status === "available").length} horarios disponibles
               </p>
             </div>
 
             <div className="flex flex-col gap-3">
-              {SLOTS.map((slot) => {
+              {mappedSlots.map((slot) => {
                 if (slot.status === "full") {
                   return (
                     <div
-                      key={slot.time}
+                      key={slot.turno_id}
                       className="w-full border border-error/20 bg-error/5 rounded-lg p-3 flex justify-between items-center opacity-70"
                     >
                       <span className="text-headline-md text-on-surface-variant text-lg line-through">
@@ -351,12 +346,12 @@ export default function NuevaReservaPage() {
                     </div>
                   );
                 }
-                const selected = selectedSlot === slot.time;
+                const selected = selectedSlot?.turno_id === slot.turno_id;
                 return (
                   <button
-                    key={slot.time}
+                    key={slot.turno_id}
                     type="button"
-                    onClick={() => setSelectedSlot(slot.time)}
+                    onClick={() => setSelectedSlot({ turno_id: slot.turno_id, time: slot.time })}
                     className={cn(
                       "w-full border rounded-lg p-3 flex justify-between items-center transition-all group",
                       selected
@@ -365,12 +360,8 @@ export default function NuevaReservaPage() {
                     )}
                   >
                     <div className="flex items-center gap-3">
-                      {selected && (
-                        <CheckCircle2 className="size-5 text-success-green" />
-                      )}
-                      <span className="text-headline-md text-on-surface text-lg">
-                        {slot.time}
-                      </span>
+                      {selected && <CheckCircle2 className="size-5 text-success-green" />}
+                      <span className="text-headline-md text-on-surface text-lg">{slot.time}</span>
                     </div>
                     <span className="text-label-sm text-on-surface-variant group-hover:text-primary transition-colors">
                       {selected ? "Seleccionado" : "Seleccionar"}
@@ -392,9 +383,7 @@ export default function NuevaReservaPage() {
             <div className="flex justify-between items-center">
               <span>Precio por clase:</span>
               <span className="text-on-surface text-label-md">
-                {selectedActividad
-                  ? formatPrice(selectedActividad.precio)
-                  : "—"}
+                {selectedActividad ? formatPrice(selectedActividad.precio) : "—"}
               </span>
             </div>
           </div>
@@ -404,15 +393,11 @@ export default function NuevaReservaPage() {
               <span className="text-label-sm text-on-surface-variant uppercase tracking-wider mb-1">
                 Total a pagar
               </span>
-              <span className="text-headline-lg text-primary leading-none">
-                {total}
-              </span>
+              <span className="text-headline-lg text-primary leading-none">{total}</span>
             </div>
             <div className="flex items-center gap-1 bg-[#009EE3]/10 px-3 py-1.5 rounded-full border border-[#009EE3]/30">
               <Handshake className="size-4 text-[#009EE3]" />
-              <span className="text-label-sm font-bold text-[#009EE3]">
-                MercadoPago
-              </span>
+              <span className="text-label-sm font-bold text-[#009EE3]">MercadoPago</span>
             </div>
           </div>
 
@@ -420,9 +405,10 @@ export default function NuevaReservaPage() {
             type="button"
             size="lg"
             onClick={handleConfirm}
+            disabled={!selectedSlot || !selectedDate || isConfirming}
             className="w-full mt-4"
           >
-            Confirmar Reserva
+            {isConfirming ? "Confirmando..." : "Confirmar Reserva"}
             <ArrowRight className="size-5" />
           </Button>
         </section>
