@@ -33,6 +33,10 @@ export function createTurno(actividadId, payload) {
   return request(`${BASE}/${actividadId}/turnos`, { method: "POST", body: payload, fallback: "No se pudo crear el turno." });
 }
 
+export function updateTurno(turnoId, payload) {
+  return request(`/api/turnos/${turnoId}`, { method: "PUT", body: payload, fallback: "No se pudo actualizar el turno." });
+}
+
 export function deleteTurno(turnoId) {
   return request(`/api/turnos/${turnoId}`, { method: "DELETE", fallback: "No se pudo eliminar el turno." });
 }

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { toast } from "sonner";
 
 import {
   Dialog,
@@ -28,18 +29,17 @@ export default function DeleteTurnoDialog({
   onDeleted,
 }) {
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState(null);
 
   const handleDelete = async () => {
     if (!turno) return;
-    setError(null);
     setSubmitting(true);
     try {
       await deleteTurno(turno.id);
       onDeleted?.(turno);
       onOpenChange(false);
     } catch (err) {
-      setError(err.message);
+      toast.error(err.message);
+      onOpenChange(false);
     } finally {
       setSubmitting(false);
     }
@@ -64,15 +64,6 @@ export default function DeleteTurnoDialog({
             ) : null}
           </DialogDescription>
         </DialogHeader>
-
-        {error && (
-          <p
-            role="alert"
-            className="text-label-md text-destructive bg-destructive/10 border border-destructive/30 rounded-lg px-3 py-2"
-          >
-            {error}
-          </p>
-        )}
 
         <DialogFooter>
           <Button
