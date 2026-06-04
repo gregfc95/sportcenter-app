@@ -1,6 +1,5 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { LogOut } from "lucide-react";
-import { toast } from "sonner";
 
 import { DASHBOARD_NAV_LINKS_BY_ROLE } from "./constants";
 import { cn } from "@/lib/utils";
@@ -38,7 +37,7 @@ export default function DashboardSidebar({ user }) {
       </Link>
 
       <ul className="flex flex-col gap-sm flex-1">
-        {navLinks.map(({ label, href, Icon, comingSoon }) => {
+        {navLinks.map(({ label, href, Icon }) => {
           const active = pathname === href;
           const className = cn(
             "flex items-center gap-md px-md py-sm rounded-lg transition-colors",
@@ -46,29 +45,12 @@ export default function DashboardSidebar({ user }) {
               ? "bg-secondary-container text-on-secondary-container font-bold"
               : "text-on-surface-variant hover:text-primary",
           );
-          const inner = (
-            <>
-              <Icon className="size-5" strokeWidth={active ? 2.5 : 2} />
-              <span>{label}</span>
-            </>
-          );
           return (
             <li key={label}>
-              {comingSoon ? (
-                <button
-                  type="button"
-                  onClick={() =>
-                    toast.info(`${label} estará disponible próximamente`)
-                  }
-                  className={cn(className, "w-full text-left")}
-                >
-                  {inner}
-                </button>
-              ) : (
-                <Link to={href} className={className}>
-                  {inner}
-                </Link>
-              )}
+              <Link to={href} className={className}>
+                <Icon className="size-5" strokeWidth={active ? 2.5 : 2} />
+                <span>{label}</span>
+              </Link>
             </li>
           );
         })}

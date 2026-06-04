@@ -2,7 +2,12 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import CrearTurnoPage from "./pages/CrearTurnoPage";
 import MisTurnosPage from "./pages/MisTurnosPage";
 import MisPagosPage from "./pages/MisPagosPage";
+import PagosPage from "./pages/PagosPage";
+import TurnosReservadosPage from "./pages/TurnosReservadosPage";
+import TurnoReservadoDetailPage from "./pages/TurnoReservadoDetailPage";
 import NuevaReservaPage from "./pages/NuevaReservaPage";
+import PagoResultadoPage from "./pages/PagoResultadoPage";
+import PagoCanceladoPage from "./pages/PagoCanceladoPage";
 import RegisterPage from "./pages/RegisterPage";
 import LoginPage from "./pages/LoginPage";
 import LandingPage from "./pages/LandingPage";
@@ -43,7 +48,17 @@ function App() {
             <Route path="/crear-turno" element={<CrearTurnoPage />} />
             <Route path="/mis-turnos" element={<MisTurnosPage />} />
             <Route path="/mis-pagos" element={<MisPagosPage />} />
+            <Route path="/pagos" element={<PagosPage />} />
+            <Route path="/turnos" element={<TurnosReservadosPage />} />
+            <Route
+              path="/turnos/:turnoId/:fecha"
+              element={<TurnoReservadoDetailPage />}
+            />
             <Route path="/nueva-reserva" element={<NuevaReservaPage />} />
+            <Route path="/pago/exito" element={<PagoResultadoPage />} />
+            <Route path="/pago/error" element={<PagoResultadoPage />} />
+            <Route path="/pago/pendiente" element={<PagoResultadoPage />} />
+            <Route path="/pago/cancelado" element={<PagoCanceladoPage />} />
             <Route path="/dashboard/client" element={<DashboardPage />} />
             <Route path="/dashboard/client/perfil" element={<ProfilePage />} />
             <Route path="/dashboard/employee" element={<DashboardPage />} />

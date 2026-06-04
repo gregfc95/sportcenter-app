@@ -4,6 +4,7 @@ import { CalendarX2, ChevronRight, Pencil, Plus } from "lucide-react";
 import { toast } from "sonner";
 
 import { usePageTitle } from "@/lib/usePageTitle";
+import { formatPrice } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import TurnoCard from "@/components/actividades/TurnoCard";
 import DeleteTurnoDialog from "@/components/actividades/DeleteTurnoDialog";
@@ -22,18 +23,6 @@ const DAYS = [
   { key: "sabado", label: "Sábado" },
   { key: "domingo", label: "Domingo" },
 ];
-
-const PRICE_FORMATTER = new Intl.NumberFormat("es-AR", {
-  style: "currency",
-  currency: "ARS",
-  maximumFractionDigits: 0,
-});
-
-function formatPrice(value) {
-  const num = Number(value);
-  if (Number.isNaN(num)) return value ?? "—";
-  return PRICE_FORMATTER.format(num);
-}
 
 function groupByDay(turnos) {
   const grouped = Object.fromEntries(DAYS.map((d) => [d.key, []]));
@@ -83,10 +72,6 @@ export default function ActividadDetailPage() {
 
   const grouped = useMemo(() => groupByDay(turnos), [turnos]);
   const hasTurnos = turnos.length > 0;
-
-  const handleEditTurno = () => {
-    toast.info("La edición de turnos llega próximamente.");
-  };
 
   const handleDeleteTurnoRequest = (turno) => {
     setDeletingTurno(turno);
@@ -212,7 +197,6 @@ export default function ActividadDetailPage() {
                         <TurnoCard
                           key={turno.id}
                           turno={turno}
-                          onEdit={handleEditTurno}
                           onDelete={handleDeleteTurnoRequest}
                         />
                       ))

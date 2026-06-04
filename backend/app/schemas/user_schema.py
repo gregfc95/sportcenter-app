@@ -1,5 +1,5 @@
 from datetime import date
-from marshmallow import Schema, fields, validates, ValidationError
+from marshmallow import Schema, fields, validates, ValidationError, EXCLUDE
 import re
 
 from .messages import MSGS
@@ -18,10 +18,37 @@ def calculate_age(birth_date: date, today: date | None = None) -> int:
     )
 
 
+def validate_password_strength(value: str) -> None:
+    if not (8 <= len(value) <= 15):
+        raise ValidationError(PASSWORD_RULE)
+    if not re.search(r"[A-Z]", value):
+        raise ValidationError(PASSWORD_RULE)
+    if not re.search(r"[a-z]", value):
+        raise ValidationError(PASSWORD_RULE)
+    if not re.search(r"[0-9]", value):
+        raise ValidationError(PASSWORD_RULE)
+    if not re.search(r"[!@#$%^&*(),.?\":{}|<>]", value):
+        raise ValidationError(PASSWORD_RULE)
+
+
 class UserUpdateProfileSchema(Schema):
+    # El payload de /me también trae current_password/new_password cuando se
+    # cambia la contraseña; esos campos los valida change_password_schema, así
+    # que acá se ignoran en vez de fallar como "Unknown field".
+    class Meta:
+        unknown = EXCLUDE
+
     first_name = fields.Str(required=True, error_messages=MSGS)
     last_name = fields.Str(required=True, error_messages=MSGS)
     email = fields.Email(required=True, error_messages=EMAIL_MSGS)
+
+
+class UserChangePasswordSchema(Schema):
+    new_password = fields.Str(required=True, load_only=True, error_messages=MSGS)
+
+    @validates("new_password")
+    def validate_new_password(self, value: str) -> None:
+        validate_password_strength(value)
 
 
 class UserRegisterSchema(Schema):
@@ -45,16 +72,7 @@ class UserRegisterSchema(Schema):
 
     @validates("password")
     def validate_password(self, value: str) -> None:
-        if not (8 <= len(value) <= 15):
-            raise ValidationError(PASSWORD_RULE)
-        if not re.search(r"[A-Z]", value):
-            raise ValidationError(PASSWORD_RULE)
-        if not re.search(r"[a-z]", value):
-            raise ValidationError(PASSWORD_RULE)
-        if not re.search(r"[0-9]", value):
-            raise ValidationError(PASSWORD_RULE)
-        if not re.search(r"[!@#$%^&*(),.?\":{}|<>]", value):
-            raise ValidationError(PASSWORD_RULE)
+        validate_password_strength(value)
 
 
 class EmployeeRegisterSchema(UserRegisterSchema):

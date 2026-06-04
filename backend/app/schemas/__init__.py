@@ -8,6 +8,7 @@ from .user_schema import (
     UserResponseSchema,
     UserLoginSchema,
     UserUpdateProfileSchema,
+    UserChangePasswordSchema,
 )
 
 __all__ = [
@@ -20,4 +21,5 @@ __all__ = [
     "UserResponseSchema",
     "UserLoginSchema",
     "UserUpdateProfileSchema",
+    "UserChangePasswordSchema",
 ]
