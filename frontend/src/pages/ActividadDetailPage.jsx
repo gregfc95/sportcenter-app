@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { CalendarX2, ChevronRight, Pencil, Plus } from "lucide-react";
+import { AlertCircle, CalendarX2, ChevronRight, Pencil, Save, X } from "lucide-react";
 import { toast } from "sonner";
+import { authHeaders } from "@/lib/apiClient";
 
 import { usePageTitle } from "@/lib/usePageTitle";
+import { formatPrice } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import TurnoCard from "@/components/actividades/TurnoCard";
 import DeleteTurnoDialog from "@/components/actividades/DeleteTurnoDialog";
@@ -23,17 +25,6 @@ const DAYS = [
   { key: "domingo", label: "Domingo" },
 ];
 
-const PRICE_FORMATTER = new Intl.NumberFormat("es-AR", {
-  style: "currency",
-  currency: "ARS",
-  maximumFractionDigits: 0,
-});
-
-function formatPrice(value) {
-  const num = Number(value);
-  if (Number.isNaN(num)) return value ?? "—";
-  return PRICE_FORMATTER.format(num);
-}
 
 function groupByDay(turnos) {
   const grouped = Object.fromEntries(DAYS.map((d) => [d.key, []]));
@@ -47,6 +38,86 @@ function groupByDay(turnos) {
   return grouped;
 }
 
+function ModalModificar({ turno, actividadNombre, onCerrar, onGuardado }) {
+  const [cupo, setCupo] = useState(turno.cupo);
+  const [errorCupo, setErrorCupo] = useState("");
+  const [guardando, setGuardando] = useState(false);
+  const [errorGuardar, setErrorGuardar] = useState("");
+
+  const validarCupo = (valor) => {
+    const n = parseInt(valor, 10);
+    if (isNaN(n) || n < 1) return "El cupo mínimo es 1.";
+    return "";
+  };
+
+  const handleCupoChange = (e) => {
+    setCupo(e.target.value);
+    setErrorCupo(validarCupo(e.target.value));
+  };
+
+  const handleGuardar = async () => {
+    const err = validarCupo(cupo);
+    if (err) { setErrorCupo(err); return; }
+    setGuardando(true);
+    setErrorGuardar("");
+    try {
+      const res = await fetch(`/api/turnos/${turno.id}`, {
+        method: "PATCH",
+        headers: authHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify({ cupo: parseInt(cupo, 10), dia_semana: turno.dia_semana, hora: turno.hora }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Error al guardar.");
+      }
+      const turnoActualizado = await res.json();
+      onGuardado(turnoActualizado);
+      onCerrar();
+    } catch (e) {
+      setErrorGuardar(e.message);
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4"
+      onClick={(e) => { if (e.target === e.currentTarget) onCerrar(); }}>
+      <div className="w-full max-w-2xl rounded-2xl border border-outline-variant bg-surface p-6 shadow-xl">
+        <div className="flex items-start justify-between mb-5">
+          <div>
+            <h2 className="text-base font-black text-foreground">Modificar turno</h2>
+            <p className="text-sm text-on-surface-variant mt-0.5">
+              {actividadNombre} · {turno.dia_semana} · {turno.hora?.slice(0, 5)}
+            </p>
+          </div>
+          <button onClick={onCerrar} className="rounded-lg p-1.5 hover:bg-surface-container transition-all cursor-pointer">
+            <X size={16} className="text-on-surface-variant" />
+          </button>
+        </div>
+        <div className="mb-4">
+          <label className="block text-sm font-bold text-on-surface mb-1.5">Cupo máximo</label>
+          <input type="number" min={1} value={cupo} onChange={handleCupoChange}
+            className="w-full rounded-lg border border-outline-variant bg-surface px-3 py-2 text-sm text-foreground focus:outline-none focus:border-primary" />
+          {errorCupo && <p className="flex items-center gap-1 mt-1.5 text-xs text-red-600"><AlertCircle size={12} /> {errorCupo}</p>}
+        </div>
+        {errorGuardar && <p className="flex items-center gap-1 mb-4 text-xs text-red-600"><AlertCircle size={12} /> {errorGuardar}</p>}
+        <div className="flex justify-end gap-2">
+          <button onClick={onCerrar}
+            className="rounded-lg border border-outline-variant px-4 py-2 text-sm font-bold text-on-surface hover:bg-surface-container transition-all cursor-pointer">
+            Cancelar
+          </button>
+          <button onClick={handleGuardar} disabled={guardando || !!errorCupo}
+            className="flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-bold text-primary-foreground hover:opacity-90 disabled:opacity-50 transition-all cursor-pointer">
+            <Save size={13} />
+            {guardando ? "Guardando..." : "Guardar cambios"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function ActividadDetailPage() {
   const { id } = useParams();
 
@@ -57,6 +128,19 @@ export default function ActividadDetailPage() {
 
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deletingTurno, setDeletingTurno] = useState(null);
+
+  const [editingTurno, setEditingTurno] = useState(null);
+
+  const handleEditTurno = (turno) => {
+    setEditingTurno(turno);
+  };
+
+  const handleTurnoUpdated = (turnoActualizado) => {
+    setTurnos((prev) =>
+      prev.map((t) => (t.id === turnoActualizado.id ? { ...t, ...turnoActualizado } : t))
+    );
+    toast.success("Turno modificado");
+  };
 
   usePageTitle(actividad?.nombre ?? "Actividad");
 
@@ -83,10 +167,6 @@ export default function ActividadDetailPage() {
 
   const grouped = useMemo(() => groupByDay(turnos), [turnos]);
   const hasTurnos = turnos.length > 0;
-
-  const handleEditTurno = () => {
-    toast.info("La edición de turnos llega próximamente.");
-  };
 
   const handleDeleteTurnoRequest = (turno) => {
     setDeletingTurno(turno);
@@ -239,6 +319,14 @@ export default function ActividadDetailPage() {
         turno={deletingTurno}
         onDeleted={handleTurnoDeleted}
       />
+      {editingTurno && (
+        <ModalModificar
+          turno={editingTurno}
+          actividadNombre={actividad.nombre}
+          onCerrar={() => setEditingTurno(null)}
+          onGuardado={handleTurnoUpdated}
+        />
+      )}
     </div>
   );
 }

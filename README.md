@@ -242,24 +242,33 @@ sportcenter-app/
 ├── backend/
 │   ├── app/
 │   │   ├── __init__.py         # App factory
+│   │   ├── auth.py             # Autenticación y autorización
 │   │   ├── config.py           # Configuración por entorno
 │   │   ├── routes/             # Blueprints / endpoints
 │   │   ├── models/             # Modelos SQLAlchemy
-│   │   └── services/           # Lógica de negocio
+│   │   ├── schemas/            # Validación y serialización (Marshmallow)
+│   │   ├── services/           # Lógica de negocio (incluye mercadopago_client.py)
+│   │   └── utils/              # Helpers (password, etc.)
+│   ├── migrations/             # Migraciones de Alembic / Flask-Migrate
 │   ├── Dockerfile              # Multi-stage (dev / runtime)
 │   ├── requirements.txt
+│   ├── seed.py                 # Datos de prueba iniciales
+│   ├── .env.example            # Variables de entorno de referencia
 │   └── run.py
 ├── frontend/
 │   ├── src/
-│   │   ├── components/         # Componentes reutilizables
+│   │   ├── assets/             # Imágenes y recursos estáticos
+│   │   ├── components/         # Componentes por dominio (+ ui/ de shadcn)
+│   │   ├── lib/                # Utilidades, apiClient y contextos
 │   │   ├── pages/              # Vistas por ruta
+│   │   ├── App.jsx
 │   │   └── main.jsx
+│   ├── components.json         # Configuración de shadcn/ui
 │   ├── index.html
 │   ├── vite.config.js
 │   └── package.json
 ├── docker-compose.yml          # Producción
 ├── docker-compose.dev.yml      # Desarrollo
-├── .env.example                # Variables de entorno de referencia
 └── README.md
 ```
 
@@ -277,10 +286,10 @@ cd sportcenter-app
 ### 2 — Configurar variables de entorno
 
 ```bash
-cp .env.example .env
+cp backend/.env.example .env
 ```
 
-Editá el `.env` con tus valores locales. El archivo `.env` **nunca se commitea**.
+Editá el `.env` (en la raíz del proyecto) con tus valores locales. Docker Compose lo lee desde ahí. El archivo `.env` **nunca se commitea**.
 
 ```env
 FLASK_ENV=development
@@ -291,9 +300,17 @@ DB_PASSWORD=
 DB_NAME=
 DB_HOST=
 DB_PORT=
+
+# Credenciales de prueba de Mercado Pago
+MP_ACCESS_TOKEN=
+MP_PUBLIC_KEY=
+
+APP_BASE_URL=https://localhost:5173
 ```
 
 > **Importante:** `DB_HOST=db` hace referencia al nombre del servicio en Docker Compose. No lo cambies.
+
+> **Mercado Pago:** Para la integración de pagos necesitás las credenciales de prueba (`MP_ACCESS_TOKEN` y `MP_PUBLIC_KEY`), que obtenés desde el panel de [Mercado Pago Developers](https://www.mercadopago.com.ar/developers/panel/app). `APP_BASE_URL` es la URL base de la app que usa Mercado Pago para construir las URLs de retorno y los webhooks.
 
 ### 3 — Levantar el backend y la base de datos
 
@@ -339,7 +356,7 @@ El frontend queda disponible en `http://localhost:5173` y se comunica con el bac
 
 ```bash
 # Terminal 1 — Backend + DB
-docker compose -f docker-compose.dev.yml up
+docker compose -f docker-compose.dev.yml up -d
 
 # Terminal 2 — Frontend
 cd frontend && npm run dev
@@ -376,6 +393,33 @@ docker compose -f docker-compose.dev.yml exec backend flask db upgrade
 
 # Revertir la última migración
 docker compose -f docker-compose.dev.yml exec backend flask db downgrade
+```
+
+### Actualizar dependencias
+
+> Backend y frontend manejan sus paquetes por separado: el backend con **pip** (`backend/requirements.txt`) y el frontend con **npm** (`frontend/package.json`). No hay un único comando que actualice ambos.
+
+**Backend (Python / pip)**
+
+```bash
+# Instalar todas las dependencias de requirements.txt dentro del contenedor
+docker compose -f docker-compose.dev.yml exec backend pip install -r requirements.txt
+
+# Reconstruir la imagen para que tome los cambios de requirements.txt
+docker compose -f docker-compose.dev.yml up --build
+```
+
+**Frontend (Node / npm)**
+
+```bash
+cd frontend
+
+# Instalar / agregar un paquete (actualiza package.json y package-lock.json)
+npm install
+
+# Actualizar dependencias dentro del rango permitido en package.json
+npm update
+
 ```
 
 ### Base de datos (acceso directo)

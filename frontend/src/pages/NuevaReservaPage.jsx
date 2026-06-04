@@ -7,15 +7,18 @@ import {
   ArrowRight,
   Handshake,
 } from "lucide-react";
+
 import { toast } from "sonner";
 
 import { usePageTitle } from "@/lib/usePageTitle";
 import { Button } from "@/components/ui/button";
 import { PageHeading } from "@/components/ui/page-heading";
-import { listActividades } from "@/components/actividades/api";
-import { listTurnosPorActividad } from "@/components/turnos/api";
-import { createReserva } from "@/components/reservas/api";
-import { cn } from "@/lib/utils";
+import {
+  listActividades,
+  listTurnosByActividad,
+} from "@/components/actividades/api";
+import { crearCheckout } from "@/components/reservas/api";
+import { cn, formatPrice } from "@/lib/utils";
 
 const MONTHS = [
   "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
@@ -24,22 +27,36 @@ const MONTHS = [
 
 const WEEKDAYS = ["LU", "MA", "MI", "JU", "VI", "SA", "DO"];
 
-const PRICE_FORMATTER = new Intl.NumberFormat("es-AR", {
-  style: "currency",
-  currency: "ARS",
-  maximumFractionDigits: 0,
-});
-
-function formatPrice(value) {
-  const num = Number(value);
-  if (Number.isNaN(num)) return "—";
-  return PRICE_FORMATTER.format(num);
-}
+// Maps the backend's `dia_semana` value to a Monday-first weekday index, so a
+// turno can be matched against a calendar cell's day of week.
+const DIA_TO_INDEX = {
+  lunes: 0,
+  martes: 1,
+  miercoles: 2,
+  jueves: 3,
+  viernes: 4,
+  sabado: 5,
+  domingo: 6,
+};
 
 function startOfDay(date) {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
 }
 
+// Turnos serialize `hora` as ISO time ("14:00:00"); show just HH:MM.
+function formatHora(hora) {
+  return typeof hora === "string" ? hora.slice(0, 5) : hora;
+}
+
+// Local YYYY-MM-DD (avoids the UTC shift that toISOString() introduces).
+function toISODate(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+// Monday-first weekday index (0 = Monday ... 6 = Sunday).
 function mondayIndex(date) {
   return (date.getDay() + 6) % 7;
 }
@@ -65,10 +82,18 @@ export default function NuevaReservaPage() {
   const [actividadId, setActividadId] = useState(actividadParam ?? "");
   const [viewYear, setViewYear] = useState(today.getFullYear());
   const [viewMonth, setViewMonth] = useState(today.getMonth());
-  const [selectedDate, setSelectedDate] = useState(today);
+  // No pre-seleccionamos fecha: el usuario debe elegir un día explícitamente.
+  const [selectedDate, setSelectedDate] = useState(null);
   const [selectedSlot, setSelectedSlot] = useState(null);
-  const [slots, setSlots] = useState([]);
-  const [isConfirming, setIsConfirming] = useState(false);
+  // All turnos for the selected activity — drives the calendar's per-day cues.
+  const [turnos, setTurnos] = useState([]);
+  // Turnos for the selected date, carrying real-time `disponibles` (cupo).
+  const [dayTurnos, setDayTurnos] = useState([]);
+  // Identifies which (actividad, fecha) the loaded `dayTurnos` belong to. The
+  // loading state is derived by comparing it against the current selection,
+  // so it's already correct on the render where the selection changes — no
+  // flash of "no turnos" before the fetch effect gets a chance to run.
+  const [loadedDayTurnosKey, setLoadedDayTurnosKey] = useState(null);
 
   useEffect(() => {
     let active = true;
@@ -78,29 +103,81 @@ export default function NuevaReservaPage() {
     return () => { active = false; };
   }, []);
 
+  // Load every turno of the selected activity to know which weekdays it runs on.
   useEffect(() => {
-    if (!actividadId || !selectedDate) return;
     let active = true;
+    const load = actividadId
+      ? listTurnosByActividad(actividadId)
+      : Promise.resolve([]);
+    load
+      .then((data) => {
+        if (active) setTurnos(Array.isArray(data) ? data : []);
+      })
+      .catch(() => {
+        if (active) setTurnos([]);
+      });
+    return () => {
+      active = false;
+    };
+  }, [actividadId]);
 
-    const fecha = selectedDate.toISOString().split("T")[0];
-    listTurnosPorActividad(actividadId, fecha)
-      .then((data) => { if (active) setSlots(data); })
-      .catch(() => { if (active) setSlots([]); });
-
-    setSelectedSlot(null);
-    return () => { active = false; };
+  // Load the selected day's turnos with their availability (`disponibles`).
+  useEffect(() => {
+    let active = true;
+    const key =
+      actividadId && selectedDate
+        ? `${actividadId}:${toISODate(selectedDate)}`
+        : null;
+    const load = key
+      ? listTurnosByActividad(actividadId, toISODate(selectedDate))
+      : Promise.resolve([]);
+    load
+      .then((data) => {
+        if (active) setDayTurnos(Array.isArray(data) ? data : []);
+      })
+      .catch(() => {
+        if (active) setDayTurnos([]);
+      })
+      .finally(() => {
+        if (active) setLoadedDayTurnosKey(key);
+      });
+    return () => {
+      active = false;
+    };
   }, [actividadId, selectedDate]);
-
-  const mappedSlots = slots.map((turno) => ({
-    turno_id: turno.id,
-    time: turno.hora.slice(0, 5),
-    status: (turno.disponibles ?? turno.cupo) > 0 ? "available" : "full",
-  }));
 
   const selectedActividad = useMemo(
     () => actividades.find((a) => String(a.id) === String(actividadId)) ?? null,
     [actividades, actividadId],
   );
+
+  // Monday-first weekday indices the activity has at least one turno on.
+  const availableWeekdays = useMemo(() => {
+    const set = new Set();
+    for (const turno of turnos) {
+      const index = DIA_TO_INDEX[turno.dia_semana];
+      if (index !== undefined) set.add(index);
+    }
+    return set;
+  }, [turnos]);
+
+  // Turnos that fall on the selected date's weekday, sorted by time.
+  const slotsForDay = useMemo(() => {
+    if (!selectedDate) return [];
+    const weekday = mondayIndex(selectedDate);
+    return dayTurnos
+      .filter((turno) => DIA_TO_INDEX[turno.dia_semana] === weekday)
+      .sort((a, b) => a.hora.localeCompare(b.hora));
+  }, [dayTurnos, selectedDate]);
+
+  // Derived (not a flag set in an effect): true on the very render where the
+  // selection changes but the loaded turnos still belong to a prior selection.
+  const dayTurnosKey =
+    actividadId && selectedDate
+      ? `${actividadId}:${toISODate(selectedDate)}`
+      : null;
+  const loadingDayTurnos =
+    dayTurnosKey !== null && loadedDayTurnosKey !== dayTurnosKey;
 
   const cells = useMemo(
     () => buildMonthCells(viewYear, viewMonth),
@@ -127,20 +204,39 @@ export default function NuevaReservaPage() {
     selectedDate.getMonth() === viewMonth &&
     selectedDate.getDate() === day;
 
-  const total = selectedActividad ? formatPrice(selectedActividad.precio) : "—";
+  // Turno elegido (para mostrar el horario en el recap de la selección).
+  const selectedTurno = useMemo(
+    () => slotsForDay.find((slot) => slot.id === selectedSlot) ?? null,
+    [slotsForDay, selectedSlot],
+  );
+
+  // El cobro es siempre una seña del 50% del precio de la clase; el resto se
+  // abona en el establecimiento (la mitad coincide con iniciar_pago en el back).
+  const precioClase = selectedActividad ? Number(selectedActividad.precio) : null;
+  const sena = precioClase != null ? precioClase / 2 : null;
+  const total = sena != null ? formatPrice(sena) : "—";
+
+  const [submitting, setSubmitting] = useState(false);
 
   const handleConfirm = async () => {
-    if (!selectedSlot || !selectedDate) return;
-
-    setIsConfirming(true);
+    if (!selectedTurno || submitting) return;
+    setSubmitting(true);
     try {
-      const fecha = selectedDate.toISOString().split("T")[0];
-      await createReserva(selectedSlot.turno_id, fecha);
-      toast.success("Reserva confirmada");
+      const { init_point, reserva_id } = await crearCheckout({
+        turno_id: selectedTurno.id,
+        fecha: toISODate(selectedDate),
+        tipo: "eventual",
+      });
+      // Guardamos la seña y la reserva para confirmarla y mostrar el toast al
+      // volver de Mercado Pago; sessionStorage sobrevive la ida y vuelta en la
+      // misma pestaña.
+      if (sena != null) sessionStorage.setItem("pago_sena", String(sena));
+      sessionStorage.setItem("pago_reserva_id", String(reserva_id));
+      // Redirige al Checkout Pro de Mercado Pago.
+      window.location.href = init_point;
     } catch (err) {
-      toast.error(err.message ?? "Error al confirmar la reserva");
-    } finally {
-      setIsConfirming(false);
+      toast.error(err?.message ?? "No se pudo iniciar el pago.");
+      setSubmitting(false);
     }
   };
 
@@ -163,10 +259,10 @@ export default function NuevaReservaPage() {
         </div>
 
         {/* Section 1: configuration */}
-        <section className="relative overflow-hidden bg-surface-container border border-outline-variant rounded-xl p-md md:p-lg">
+        <section className="relative overflow-hidden bg-surface-container border border-accent/15 rounded-xl p-md md:p-lg">
           <div
             aria-hidden="true"
-            className="absolute -top-20 -right-20 w-40 h-40 bg-primary/10 rounded-full blur-3xl pointer-events-none"
+            className="absolute -top-20 -right-20 w-40 h-40 bg-primary/25 rounded-full blur-3xl pointer-events-none"
           />
           <div className="relative z-10 flex flex-col gap-md">
             <div className="flex flex-col gap-2">
@@ -180,7 +276,12 @@ export default function NuevaReservaPage() {
                 <select
                   id="reserva-actividad"
                   value={actividadId}
-                  onChange={(e) => setActividadId(e.target.value)}
+                  onChange={(e) => {
+                    setActividadId(e.target.value);
+                    // Cambiar de actividad invalida la fecha y el turno elegidos.
+                    setSelectedDate(null);
+                    setSelectedSlot(null);
+                  }}
                   className="w-full appearance-none bg-surface-container-high border border-outline-variant text-on-surface rounded-lg px-4 py-3 pr-10 cursor-pointer outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-colors text-body-md"
                 >
                   {actividades.length === 0 ? (
@@ -208,7 +309,8 @@ export default function NuevaReservaPage() {
                 Tipo de Reserva
               </span>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div
+                {/* Mensual — disabled / coming soon */}
+{/*                 <div
                   aria-disabled="true"
                   className="relative flex flex-col gap-2 p-4 rounded-xl border border-outline-variant bg-surface-container-low opacity-60 cursor-not-allowed"
                 >
@@ -221,7 +323,7 @@ export default function NuevaReservaPage() {
                   <p className="text-label-sm text-on-surface-variant">
                     Reserva fija para todo el mes.
                   </p>
-                </div>
+                </div> */}
 
                 <div className="relative flex flex-col gap-2 p-4 rounded-xl border-2 border-primary bg-primary/5">
                   <div className="flex justify-between items-center w-full">
@@ -242,7 +344,7 @@ export default function NuevaReservaPage() {
         {/* Section 2: date & time */}
         <section className="grid grid-cols-1 md:grid-cols-12 gap-gutter">
           {/* Calendar */}
-          <div className="md:col-span-7 bg-surface-container border border-outline-variant rounded-xl p-md md:p-lg flex flex-col">
+          <div className="md:col-span-7 bg-surface-container border border-accent/15 rounded-xl p-md md:p-lg flex flex-col">
             <div className="flex justify-between items-center mb-6">
               <h3 className="text-headline-md text-on-surface">
                 {MONTHS[viewMonth]} {viewYear}
@@ -251,7 +353,7 @@ export default function NuevaReservaPage() {
                 <button
                   type="button"
                   onClick={goToPrevMonth}
-                  disabled={atCurrentMonth}
+                  disabled={!actividadId || atCurrentMonth}
                   aria-label="Mes anterior"
                   className="w-8 h-8 rounded-full border border-outline-variant flex items-center justify-center text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-colors disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent"
                 >
@@ -260,8 +362,9 @@ export default function NuevaReservaPage() {
                 <button
                   type="button"
                   onClick={goToNextMonth}
+                  disabled={!actividadId}
                   aria-label="Mes siguiente"
-                  className="w-8 h-8 rounded-full border border-outline-variant flex items-center justify-center text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-colors"
+                  className="w-8 h-8 rounded-full border border-outline-variant flex items-center justify-center text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-colors disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent"
                 >
                   <ChevronRight className="size-5" />
                 </button>
@@ -274,7 +377,13 @@ export default function NuevaReservaPage() {
               ))}
             </div>
 
-            <div className="grid grid-cols-7 text-center gap-y-2 text-label-md">
+            <div
+              aria-disabled={!actividadId}
+              className={cn(
+                "grid grid-cols-7 text-center gap-y-2 text-label-md",
+                !actividadId && "opacity-40 pointer-events-none select-none",
+              )}
+            >
               {cells.map((day, index) => {
                 if (day === null) return <div key={`blank-${index}`} />;
                 const cellDate = new Date(viewYear, viewMonth, day);
@@ -290,6 +399,26 @@ export default function NuevaReservaPage() {
                     </div>
                   );
                 }
+                // Once an activity is chosen, block any day without a turno.
+                const hasActividad = Boolean(actividadId);
+                const hasTurno = availableWeekdays.has(mondayIndex(cellDate));
+                if (hasActividad && !hasTurno) {
+                  return (
+                    <div
+                      key={day}
+                      title="Sin turnos para este día"
+                      className="flex flex-col items-center justify-center h-10 cursor-not-allowed"
+                    >
+                      <span className="w-8 h-8 rounded-full flex items-center justify-center text-on-surface-variant opacity-40">
+                        {day}
+                      </span>
+                      <span
+                        aria-hidden="true"
+                        className="w-1.5 h-1.5 rounded-full mt-0.5 bg-error"
+                      />
+                    </div>
+                  );
+                }
                 return (
                   <button
                     key={day}
@@ -298,7 +427,7 @@ export default function NuevaReservaPage() {
                       setSelectedDate(cellDate);
                       setSelectedSlot(null);
                     }}
-                    className="flex items-center justify-center h-10 cursor-pointer"
+                    className="flex flex-col items-center justify-center h-10 cursor-pointer"
                   >
                     <span
                       className={cn(
@@ -310,6 +439,12 @@ export default function NuevaReservaPage() {
                     >
                       {day}
                     </span>
+                    {hasActividad && hasTurno && (
+                      <span
+                        aria-hidden="true"
+                        className="w-1.5 h-1.5 rounded-full mt-0.5 bg-success-green"
+                      />
+                    )}
                   </button>
                 );
               })}
@@ -317,7 +452,7 @@ export default function NuevaReservaPage() {
           </div>
 
           {/* Slots */}
-          <div className="md:col-span-5 bg-surface-container border border-outline-variant rounded-xl p-md md:p-lg flex flex-col">
+          <div className="md:col-span-5 bg-surface-container border border-accent/15 rounded-xl p-md md:p-lg flex flex-col">
             <div className="mb-6">
               <h3 className="text-headline-md text-on-surface">
                 {selectedDate
@@ -325,65 +460,133 @@ export default function NuevaReservaPage() {
                   : "Elegí una fecha"}
               </h3>
               <p className="text-label-sm text-on-surface-variant">
-                {mappedSlots.filter((s) => s.status === "available").length} horarios disponibles
+                {!actividadId
+                  ? "Elegí una actividad"
+                  : !selectedDate
+                    ? ""
+                    : loadingDayTurnos
+                      ? ""
+                      : `${slotsForDay.filter((t) => t.disponibles !== 0).length} horarios disponibles`}
               </p>
             </div>
 
             <div className="flex flex-col gap-3">
-              {mappedSlots.map((slot) => {
-                if (slot.status === "full") {
+              {!actividadId ? (
+                <p className="text-body-md text-on-surface-variant">
+                  Seleccioná una actividad para ver sus turnos.
+                </p>
+              ) : !selectedDate ? null : loadingDayTurnos ? null : slotsForDay.length === 0 ? (
+                <div className="w-full border border-error/20 bg-error/5 rounded-lg p-4 text-center">
+                  <span className="text-label-md text-error">
+                    No hay turnos disponibles para este día.
+                  </span>
+                </div>
+              ) : (
+                slotsForDay.map((slot) => {
+                  const isFull = slot.disponibles === 0;
+                  if (isFull) {
+                    return (
+                      <div
+                        key={slot.id}
+                        className="w-full border border-error/20 bg-error/5 rounded-lg p-3 flex justify-between items-center opacity-70"
+                      >
+                        <span className="text-headline-md text-on-surface-variant text-lg line-through">
+                          {formatHora(slot.hora)}
+                        </span>
+                        <span className="text-label-sm text-error bg-error/10 px-2 py-1 rounded">
+                          Turno Lleno
+                        </span>
+                      </div>
+                    );
+                  }
+                  const selected = selectedSlot === slot.id;
                   return (
-                    <div
-                      key={slot.turno_id}
-                      className="w-full border border-error/20 bg-error/5 rounded-lg p-3 flex justify-between items-center opacity-70"
+                    <button
+                      key={slot.id}
+                      type="button"
+                      onClick={() => setSelectedSlot(slot.id)}
+                      className={cn(
+                        "w-full border rounded-lg p-3 flex justify-between items-center transition-all group",
+                        selected
+                          ? "border-primary bg-surface-container-high"
+                          : "border-outline-variant bg-surface-container-low hover:border-primary hover:bg-surface-container-high",
+                      )}
                     >
-                      <span className="text-headline-md text-on-surface-variant text-lg line-through">
-                        {slot.time}
+                      <div className="flex items-center gap-3">
+                        {selected && (
+                          <CheckCircle2 className="size-5 text-success-green" />
+                        )}
+                        <span className="text-headline-md text-on-surface text-lg">
+                          {formatHora(slot.hora)}
+                        </span>
+                      </div>
+                      <span className="text-label-sm text-on-surface-variant text-right">
+                        {selected
+                          ? "Seleccionado"
+                          : slot.disponibles != null
+                            ? `${slot.disponibles} ${slot.disponibles === 1 ? "lugar" : "lugares"}`
+                            : "Seleccionar"}
                       </span>
-                      <span className="text-label-sm text-error bg-error/10 px-2 py-1 rounded">
-                        Turno Lleno
-                      </span>
-                    </div>
+                    </button>
                   );
-                }
-                const selected = selectedSlot?.turno_id === slot.turno_id;
-                return (
-                  <button
-                    key={slot.turno_id}
-                    type="button"
-                    onClick={() => setSelectedSlot({ turno_id: slot.turno_id, time: slot.time })}
-                    className={cn(
-                      "w-full border rounded-lg p-3 flex justify-between items-center transition-all group",
-                      selected
-                        ? "border-primary bg-surface-container-high"
-                        : "border-outline-variant bg-surface-container-low hover:border-primary hover:bg-surface-container-high",
-                    )}
-                  >
-                    <div className="flex items-center gap-3">
-                      {selected && <CheckCircle2 className="size-5 text-success-green" />}
-                      <span className="text-headline-md text-on-surface text-lg">{slot.time}</span>
-                    </div>
-                    <span className="text-label-sm text-on-surface-variant group-hover:text-primary transition-colors">
-                      {selected ? "Seleccionado" : "Seleccionar"}
-                    </span>
-                  </button>
-                );
-              })}
+                })
+              )}
             </div>
           </div>
         </section>
 
-        {/* Section 3: summary */}
-        <section className="bg-surface-container-high rounded-xl p-md md:p-lg border border-outline-variant flex flex-col gap-4 shadow-lg">
+        {/* Section 3: selection recap — only once a turno time is chosen */}
+        {selectedTurno && (
+          <section className="bg-surface-container border border-accent/15 rounded-xl p-md md:p-lg flex flex-col gap-3">
+            <span className="text-label-sm text-on-surface-variant uppercase tracking-widest">
+              Clase seleccionada (1 Eventual)
+            </span>
+            <div className="flex flex-wrap gap-x-6 gap-y-3">
+              <div className="flex flex-col gap-0.5">
+                <span className="text-label-sm text-on-surface-variant uppercase tracking-wider">
+                  Actividad
+                </span>
+                <span className="text-body-md text-on-surface">
+                  {selectedActividad ? selectedActividad.nombre : "—"}
+                </span>
+              </div>
+              <div className="flex flex-col gap-0.5">
+                <span className="text-label-sm text-on-surface-variant uppercase tracking-wider">
+                  Fecha
+                </span>
+                <span className="text-body-md text-on-surface">
+                  {selectedDate
+                    ? `${selectedDate.getDate()} de ${MONTHS[selectedDate.getMonth()]} ${selectedDate.getFullYear()}`
+                    : "—"}
+                </span>
+              </div>
+              <div className="flex flex-col gap-0.5">
+                <span className="text-label-sm text-on-surface-variant uppercase tracking-wider">
+                  Horario
+                </span>
+                <span className="text-body-md text-on-surface">
+                  {formatHora(selectedTurno.hora)}
+                </span>
+              </div>
+              <div className="flex flex-col gap-0.5">
+                <span className="text-label-sm text-on-surface-variant uppercase tracking-wider">
+                  Precio de la clase
+                </span>
+                <span className="text-body-md text-on-surface">
+                  {selectedActividad ? formatPrice(selectedActividad.precio) : "—"}
+                </span>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* Section 4: summary */}
+        <section className="bg-surface-container-high rounded-xl p-md md:p-lg border border-accent/15 flex flex-col gap-4 shadow-lg">
           <div className="flex flex-col gap-2 text-body-md text-on-surface-variant border-b border-outline-variant pb-4">
             <div className="flex justify-between items-center">
-              <span>Clases seleccionadas:</span>
-              <span className="text-on-surface text-label-md">1 (Eventual)</span>
-            </div>
-            <div className="flex justify-between items-center">
-              <span>Precio por clase:</span>
+              <span>Seña a pagar (50%):</span>
               <span className="text-on-surface text-label-md">
-                {selectedActividad ? formatPrice(selectedActividad.precio) : "—"}
+                {selectedTurno && sena != null ? formatPrice(sena) : "—"}
               </span>
             </div>
           </div>
@@ -391,9 +594,11 @@ export default function NuevaReservaPage() {
           <div className="flex justify-between items-end pt-2">
             <div className="flex flex-col">
               <span className="text-label-sm text-on-surface-variant uppercase tracking-wider mb-1">
-                Total a pagar
+                Total a pagar (seña)
               </span>
-              <span className="text-headline-lg text-primary leading-none">{total}</span>
+              <span className="text-headline-lg text-primary leading-none">
+                {selectedTurno ? total : "—"}
+              </span>
             </div>
             <div className="flex items-center gap-1 bg-[#009EE3]/10 px-3 py-1.5 rounded-full border border-[#009EE3]/30">
               <Handshake className="size-4 text-[#009EE3]" />
@@ -405,10 +610,10 @@ export default function NuevaReservaPage() {
             type="button"
             size="lg"
             onClick={handleConfirm}
-            disabled={!selectedSlot || !selectedDate || isConfirming}
+            disabled={!selectedTurno || submitting}
             className="w-full mt-4"
           >
-            {isConfirming ? "Confirmando..." : "Confirmar Reserva"}
+            {submitting ? "Redirigiendo…" : "Confirmar Reserva"}
             <ArrowRight className="size-5" />
           </Button>
         </section>

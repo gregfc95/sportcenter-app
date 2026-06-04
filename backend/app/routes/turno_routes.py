@@ -73,7 +73,7 @@ def create_turno(actividad_id: int) -> Response:
     return jsonify(turno_schema.dump(turno)), 201
 
 
-@turno_bp.route("/api/turnos/<int:turno_id>", methods=["PUT"])
+@turno_bp.route("/api/turnos/<int:turno_id>", methods=["PUT", "PATCH"])
 def update_turno(turno_id: int) -> Response:
     require_role(UserRole.ADMIN)
 

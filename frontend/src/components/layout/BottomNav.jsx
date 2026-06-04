@@ -1,17 +1,16 @@
 import { Link, useLocation } from "react-router-dom";
-import { toast } from "sonner";
 
 import { DASHBOARD_NAV_LINKS_BY_ROLE } from "./constants";
 import { cn } from "@/lib/utils";
 
-function NavItem({ Icon, label, href, active, comingSoon }) {
+function NavItem({ Icon, label, href, active }) {
   const className = cn(
     "flex flex-col items-center gap-xs flex-1 min-w-0 transition-colors",
     active ? "text-accent" : "text-on-surface-variant hover:text-accent",
   );
 
-  const inner = (
-    <>
+  return (
+    <Link to={href} className={className}>
       <span
         className={cn(
           "px-sm py-0.5 rounded-full flex items-center justify-center",
@@ -28,24 +27,6 @@ function NavItem({ Icon, label, href, active, comingSoon }) {
       >
         {label}
       </span>
-    </>
-  );
-
-  if (comingSoon) {
-    return (
-      <button
-        type="button"
-        onClick={() => toast.info(`${label} estará disponible próximamente`)}
-        className={className}
-      >
-        {inner}
-      </button>
-    );
-  }
-
-  return (
-    <Link to={href} className={className}>
-      {inner}
     </Link>
   );
 }
@@ -62,14 +43,13 @@ export default function BottomNav({ user }) {
       aria-label="Navegación principal"
     >
       <div className="flex items-stretch justify-between gap-xs">
-        {navLinks.map(({ label, href, Icon, comingSoon }) => (
+        {navLinks.map(({ label, href, Icon }) => (
           <NavItem
             key={label}
             Icon={Icon}
             label={label}
             href={href}
             active={pathname === href}
-            comingSoon={comingSoon}
           />
         ))}
       </div>

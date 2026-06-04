@@ -1,65 +1,178 @@
-const RESERVAS_BASE = "/api";
+import { request } from "@/lib/apiClient";
 
-export class ApiError extends Error {
-  constructor(message, { fieldErrors = {}, status } = {}) {
-    super(message);
-    this.fieldErrors = fieldErrors;
-    this.status = status;
-  }
-}
+export { ApiError } from "@/lib/apiClient";
 
-function getCurrentUserId() {
-  try {
-    const stored = localStorage.getItem("user");
-    if (!stored) return null;
-    const parsed = JSON.parse(stored);
-    return parsed?.id ?? null;
-  } catch {
-    return null;
-  }
-}
-
-function authHeaders(extra = {}) {
-  const userId = getCurrentUserId();
-  const headers = { ...extra };
-  if (userId != null) headers["X-User-ID"] = String(userId);
-  return headers;
-}
-
-async function parseJsonSafely(res) {
-  try {
-    return await res.json();
-  } catch {
-    return null;
-  }
-}
-
-function toApiError(body, status, fallback) {
-  if (!body) return new ApiError(fallback, { status });
-  if (body.error) return new ApiError(body.error, { status });
-  if (body.errors) {
-    const first = Object.values(body.errors).flat()[0];
-    return new ApiError(first ?? fallback, { status });
-  }
-  return new ApiError(fallback, { status });
-}
-
-export async function createReserva(turnoId, fecha) {
-  const res = await fetch(`${RESERVAS_BASE}/turnos/${turnoId}/reservas`, {
+/**
+ * Crea la reserva del turno elegido y devuelve el link de Checkout Pro.
+ *
+ * @param {{ turno_id: number, fecha: string, tipo?: string }} payload
+ * @returns {Promise<{ reserva_id: number, preference_id: string, init_point: string, sandbox_init_point: string }>}
+ */
+export function crearCheckout(payload) {
+  return request("/api/pagos/checkout", {
     method: "POST",
-    headers: authHeaders({ "Content-Type": "application/json" }),
-    body: JSON.stringify({ fecha, tipo: "eventual" }),
+    body: payload,
+    fallback: "No se pudo iniciar el pago.",
   });
-  const body = await parseJsonSafely(res);
-  if (!res.ok) throw toApiError(body, res.status, "No se pudo confirmar la reserva.");
-  return body;
 }
 
-export async function listMisReservas() {
-  const res = await fetch(`${RESERVAS_BASE}/reservas/mis-reservas`, {
-    headers: authHeaders(),
+/**
+ * Registra la seña de una reserva (al volver con éxito de Mercado Pago).
+ *
+ * @param {number} reservaId
+ * @returns {Promise<{ id: number, reserva_id: number, monto: number, estado: string }>}
+ */
+export function confirmarSena(reservaId) {
+  return request("/api/pagos/sena", {
+    method: "POST",
+    body: { reserva_id: reservaId },
+    fallback: "No se pudo registrar la seña.",
   });
-  const body = await parseJsonSafely(res);
-  if (!res.ok) throw toApiError(body, res.status, "No pudimos cargar tus reservas.");
-  return body;
+}
+
+/**
+ * Genera el link de Checkout Pro para señar una reserva pendiente ya existente
+ * (reanuda el pago cuando no volvió la respuesta de Mercado Pago).
+ *
+ * @param {number} reservaId
+ * @returns {Promise<{ reserva_id: number, preference_id: string, init_point: string, sandbox_init_point: string }>}
+ */
+export function crearCheckoutSena(reservaId) {
+  return request("/api/pagos/sena/checkout", {
+    method: "POST",
+    body: { reserva_id: reservaId },
+    fallback: "No se pudo iniciar el pago.",
+  });
+}
+
+/**
+ * Genera el link de Checkout Pro para abonar el saldo restante de una reserva
+ * ya señada.
+ *
+ * @param {number} reservaId
+ * @returns {Promise<{ reserva_id: number, preference_id: string, init_point: string, sandbox_init_point: string }>}
+ */
+export function crearCheckoutSaldo(reservaId) {
+  return request("/api/pagos/saldo/checkout", {
+    method: "POST",
+    body: { reserva_id: reservaId },
+    fallback: "No se pudo iniciar el pago del saldo.",
+  });
+}
+
+/**
+ * Registra el pago del saldo (al volver con éxito de Mercado Pago). Idempotente.
+ *
+ * @param {number} reservaId
+ * @returns {Promise<{ id: number, reserva_id: number, monto: number, estado: string }>}
+ */
+export function completarPago(reservaId) {
+  return request("/api/pagos/completar", {
+    method: "POST",
+    body: { reserva_id: reservaId },
+    fallback: "No se pudo registrar el pago.",
+  });
+}
+
+/**
+ * Cancela (soft-delete) una reserva cuyo pago no se concretó (abandono/rechazo
+ * en Mercado Pago). Idempotente; no cancela si ya tiene un pago registrado.
+ *
+ * @param {number} reservaId
+ */
+export function cancelarCheckout(reservaId) {
+  return request("/api/pagos/cancelar", {
+    method: "POST",
+    body: { reserva_id: reservaId },
+    fallback: "No se pudo cancelar la reserva.",
+  });
+}
+
+/**
+ * Cancela (soft-delete) una reserva del usuario actual. No interactúa con
+ * Mercado Pago: solo da de baja la reserva.
+ *
+ * @param {number} reservaId
+ */
+export function cancelarReserva(reservaId) {
+  return request(`/api/reservas/${reservaId}/cancelar`, {
+    method: "POST",
+    fallback: "No se pudo cancelar la reserva.",
+  });
+}
+
+/**
+ * Lista las reservas del usuario actual con su turno, cupo y estado de pago.
+ *
+ * @returns {Promise<Array<{ id: number, fecha: string, tipo: string, estado: string, actividad: string, precio: number, sena: number, turno: { id: number, dia_semana: string, hora: string, cupo: number, ocupados: number } }>>}
+ */
+export function listMisReservas() {
+  return request("/api/reservas", {
+    fallback: "No pudimos cargar tus turnos.",
+  });
+}
+
+/**
+ * Historial de pagos del usuario actual (registro transaccional inmutable).
+ *
+ * @returns {Promise<Array<{ id: number, fecha_pago: string, monto: number, estado: string, reserva_id: number, actividad: string|null, turno: { fecha: string, hora: string, dia_semana: string }|null }>>}
+ */
+export function listMisPagos() {
+  return request("/api/pagos", {
+    fallback: "No pudimos cargar tu historial de pagos.",
+  });
+}
+
+/**
+ * Historial de pagos de todos los usuarios (vista de administración). Cada fila
+ * incluye el cliente al que pertenece la transacción.
+ *
+ * @returns {Promise<Array<{ id: number, fecha_pago: string, monto: number, estado: string, reserva_id: number, cliente: { id: number, nombre: string, email: string }|null, actividad: string|null, turno: { fecha: string, hora: string, dia_semana: string }|null }>>}
+ */
+export function listAllPagos() {
+  return request("/api/pagos/admin", {
+    fallback: "No pudimos cargar el historial de pagos.",
+  });
+}
+
+/**
+ * Registra manualmente (en efectivo) el saldo restante de una reserva. Lo ejecuta
+ * un empleado/admin desde la vista de Turnos Reservados; queda asentado quién lo
+ * registró. Sólo admin/empleado.
+ *
+ * @param {number} reservaId
+ * @returns {Promise<{ id: number, reserva_id: number, monto: number, estado: string, metodo: string, registrado_por_id: number }>}
+ */
+export function registrarPagoManual(reservaId) {
+  return request("/api/pagos/registrar", {
+    method: "POST",
+    body: { reserva_id: reservaId },
+    fallback: "No se pudo registrar el pago.",
+  });
+}
+
+/**
+ * Sesiones con reservas (turno + fecha) para la vista de Turnos Reservados.
+ * Sólo admin/empleado.
+ *
+ * @returns {Promise<Array<{ turno_id: number, fecha: string, actividad: string, dia_semana: string, hora: string, cupo: number, ocupados: number, reservas: number }>>}
+ */
+export function listSesionesReservadas() {
+  return request("/api/reservas/sesiones", {
+    fallback: "No pudimos cargar los turnos reservados.",
+  });
+}
+
+/**
+ * Detalle de una sesión: el turno y la lista de reservas con su cliente y estado
+ * de pago. Sólo admin/empleado.
+ *
+ * @param {number|string} turnoId
+ * @param {string} fecha - YYYY-MM-DD
+ * @returns {Promise<{ turno: { id: number, actividad: string, dia_semana: string, hora: string, fecha: string, cupo: number, ocupados: number, precio: number }, reservas: Array<{ id: number, tipo: string, estado: string, monto_pagado: number, cliente: { id: number, nombre: string, apellido: string, email: string }|null }> }>}
+ */
+export function getSesionReservada(turnoId, fecha) {
+  return request(`/api/reservas/sesiones/${turnoId}/${fecha}`, {
+    fallback: "No pudimos cargar la sesión.",
+  });
 }

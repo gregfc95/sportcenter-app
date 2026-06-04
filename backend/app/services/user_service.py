@@ -3,7 +3,7 @@ from sqlalchemy.exc import IntegrityError
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from .. import db
-from ..models.user import User, UserRole
+from ..models.user import User, UserRole, normalize_email
 
 
 class UserService:
@@ -45,14 +45,25 @@ class UserService:
             raise ValueError("Email y/o contraseña inválidos")
         return user
 
-    def update_profile(self, user_id: int, data: dict) -> User:
+    def update_profile(
+        self,
+        user_id: int,
+        data: dict,
+        current_password: str | None = None,
+        new_password: str | None = None,
+    ) -> User:
         user = db.session.get(User, user_id)
         if user is None:
             raise ValueError("Usuario no encontrado")
 
-        if data["email"] != user.email:
+        if normalize_email(data["email"]) != user.email:
             if self._find_by_email(data["email"]) is not None:
                 raise ValueError("El email ya se encuentra registrado")
+
+        if new_password is not None:
+            if not check_password_hash(user.password_hash, current_password or ""):
+                raise ValueError("La contraseña actual no es valida")
+            user.password_hash = generate_password_hash(new_password)
 
         user.first_name = data["first_name"]
         user.last_name = data["last_name"]
@@ -68,8 +79,11 @@ class UserService:
     # --- Queries ---
 
     def _find_by_email(self, email: str) -> User | None:
+        # El email se almacena normalizado (ver User._normalize_email); la
+        # búsqueda debe normalizar igual porque el validador del modelo no
+        # aplica a los parámetros de la query.
         return db.session.execute(
-            select(User).where(User.email == email)
+            select(User).where(User.email == normalize_email(email))
         ).scalars().first()
 
     def _find_by_dni(self, dni: str) -> User | None:
