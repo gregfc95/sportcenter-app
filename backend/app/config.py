@@ -12,6 +12,14 @@ class Config:
     )
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
+    # Mailtrap (Email API via the python SDK).
+    MAILTRAP_TOKEN = os.getenv("MAILTRIP_TOKEN")
+    MAILTRAP_SANDBOX = os.getenv("MAILTRAP_SANDBOX", "true").lower() == "true"
+    _inbox_id = os.getenv("MAILTRAP_INBOX_ID")
+    MAILTRAP_INBOX_ID = int(_inbox_id) if _inbox_id else None
+    MAIL_FROM = os.getenv("MAIL_FROM", "no-reply@sportify.app")
+    MAIL_FROM_NAME = os.getenv("MAIL_FROM_NAME", "Sportify")
+
 
 class DevelopmentConfig(Config):
     DEBUG = True
