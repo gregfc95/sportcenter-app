@@ -26,8 +26,9 @@ import { formatPrice } from "@/lib/utils";
  * @param {number}      props.reservaId    - Reserva a la que se le abona el saldo.
  * @param {string}      props.actividad    - Nombre de la actividad (para el copy).
  * @param {string}      props.datetime     - Fecha y hora ya formateadas del turno.
- * @param {number}      props.precio       - Precio total de la clase.
+ * @param {number}      props.precio       - Precio total de la clase (bloqueado al momento de la seña).
  * @param {number}      props.sena         - Seña ya abonada.
+ * @param {number}      props.saldo        - Saldo restante a pagar (lo calcula el backend).
  */
 export default function PagarSaldoDialog({
   trigger,
@@ -36,9 +37,11 @@ export default function PagarSaldoDialog({
   datetime,
   precio,
   sena,
+  saldo,
 }) {
-  // El saldo restante es el precio menos lo ya cobrado (la seña).
-  const restante = Number(precio) - Number(sena);
+  // El saldo lo calcula el backend sobre el precio bloqueado y lo ya cobrado;
+  // si no llegara, se reconstruye como precio − seña por compatibilidad.
+  const restante = saldo != null ? Number(saldo) : Number(precio) - Number(sena);
   const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 

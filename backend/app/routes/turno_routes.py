@@ -97,6 +97,11 @@ def update_turno(turno_id: int) -> Response:
 def delete_turno(turno_id: int) -> Response:
     require_role(UserRole.ADMIN)
 
-    if turno_service.eliminar(turno_id) is None:
+    try:
+        eliminado = turno_service.eliminar(turno_id)
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+
+    if eliminado is None:
         return jsonify({"error": "Turno no encontrado"}), 404
     return "", 204

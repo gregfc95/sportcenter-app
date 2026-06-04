@@ -8,6 +8,7 @@ import { formatPrice } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import TurnoCard from "@/components/actividades/TurnoCard";
 import DeleteTurnoDialog from "@/components/actividades/DeleteTurnoDialog";
+import EditTurnoDialog from "@/components/actividades/EditTurnoDialog";
 import { getActividadIcon } from "@/components/actividades/actividadIcons";
 import {
   getActividad,
@@ -47,6 +48,9 @@ export default function ActividadDetailPage() {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deletingTurno, setDeletingTurno] = useState(null);
 
+  const [editOpen, setEditOpen] = useState(false);
+  const [editingTurno, setEditingTurno] = useState(null);
+
   usePageTitle(actividad?.nombre ?? "Actividad");
 
   const fetchAll = useCallback(async () => {
@@ -80,7 +84,16 @@ export default function ActividadDetailPage() {
 
   const handleTurnoDeleted = (turno) => {
     setTurnos((prev) => prev.filter((t) => t.id !== turno.id));
-    toast.success("Turno eliminado");
+    toast.success("Turno eliminado con éxito");
+  };
+
+  const handleEditTurnoRequest = (turno) => {
+    setEditingTurno(turno);
+    setEditOpen(true);
+  };
+
+  const handleTurnoUpdated = (updated) => {
+    setTurnos((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
   };
 
   if (loading) {
@@ -197,6 +210,7 @@ export default function ActividadDetailPage() {
                         <TurnoCard
                           key={turno.id}
                           turno={turno}
+                          onEdit={handleEditTurnoRequest}
                           onDelete={handleDeleteTurnoRequest}
                         />
                       ))
@@ -216,6 +230,13 @@ export default function ActividadDetailPage() {
           </div>
         )}
       </section>
+
+      <EditTurnoDialog
+        open={editOpen}
+        onOpenChange={setEditOpen}
+        turno={editingTurno}
+        onUpdated={handleTurnoUpdated}
+      />
 
       <DeleteTurnoDialog
         open={deleteOpen}

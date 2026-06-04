@@ -28,8 +28,9 @@ import { formatPrice } from "@/lib/utils";
  * @param {string}          [props.cliente]    - Nombre del cliente (para el copy).
  * @param {string}          props.actividad    - Nombre de la actividad.
  * @param {string}          [props.datetime]   - Fecha y hora ya formateadas del turno.
- * @param {number}          props.precio       - Precio total de la clase.
+ * @param {number}          props.precio       - Precio total de la clase (bloqueado al señar).
  * @param {number}          [props.pagado]     - Monto ya cobrado de la reserva.
+ * @param {number}          [props.saldo]      - Saldo restante a cobrar (lo calcula el backend).
  * @param {() => Promise<void>|void} [props.onConfirm] - Acción a ejecutar al confirmar.
  */
 export default function RegistrarPagoDialog({
@@ -39,13 +40,16 @@ export default function RegistrarPagoDialog({
   datetime,
   precio,
   pagado = 0,
+  saldo,
   onConfirm,
 }) {
   const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
-  // Lo que falta cobrar: el precio total menos lo ya abonado (la seña, si la hay).
-  const restante = Math.max(0, Number(precio) - Number(pagado));
+  // Lo que falta cobrar lo calcula el backend sobre el precio bloqueado; si no
+  // llegara, se reconstruye como precio − pagado por compatibilidad.
+  const restante =
+    saldo != null ? Number(saldo) : Math.max(0, Number(precio) - Number(pagado));
 
   const handleConfirm = async () => {
     if (submitting) return;

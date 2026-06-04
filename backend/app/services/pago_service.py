@@ -53,8 +53,11 @@ class PagoService:
         if self._pago_por_estado(reserva_id, PagoEstado.PAGADO) is not None:
             raise ValueError("El pago ya está completo.")
 
+        saldo = self.resumen_pago(reserva)["saldo"]
+        if saldo <= 0:
+            raise ValueError("La reserva no tiene saldo pendiente.")
+
         actividad = reserva.turno.actividad
-        saldo = actividad.precio - sena.monto
         return self._crear_preferencia(
             reserva_id,
             title=f"Saldo - {actividad.nombre}",
@@ -159,7 +162,10 @@ class PagoService:
         if sena is None:
             raise ValueError("No existe una seña para esta reserva.")
 
-        saldo = reserva.turno.actividad.precio - sena.monto
+        saldo = self.resumen_pago(reserva)["saldo"]
+        if saldo <= 0:
+            raise ValueError("La reserva no tiene saldo pendiente.")
+
         pago = Pago(
             user_id=reserva.user_id,
             reserva_id=reserva_id,
@@ -185,10 +191,9 @@ class PagoService:
         if self._pago_por_estado(reserva_id, PagoEstado.PAGADO) is not None:
             raise ValueError("La reserva ya está paga.")
 
-        cobrado = sum(
-            (p.monto for p in self._pagos_cobrados(reserva_id)), Decimal("0")
-        )
-        restante = reserva.turno.actividad.precio - cobrado
+        # Saldo sobre el precio bloqueado al momento de la seña (no el actual),
+        # para no cobrar de menos/de más si la actividad cambió de precio después.
+        restante = self.resumen_pago(reserva)["saldo"]
         if restante <= 0:
             raise ValueError("La reserva no tiene saldo pendiente.")
 
@@ -238,6 +243,47 @@ class PagoService:
         db.session.add(registro)
         db.session.commit()
         return registro
+
+    # --- Resumen económico ---
+
+    def resumen_pago(self, reserva: Reserva) -> dict:
+        """Total adeudado, seña abonada y saldo restante de una reserva.
+
+        El precio queda *bloqueado al momento de reservar*: la seña es un snapshot
+        inmutable del 50% del precio vigente cuando se señó, así que mientras esa
+        seña exista el total es `seña × 2` y no se ve afectado por cambios
+        posteriores del precio de la actividad. Si todavía no hay seña (reserva
+        pendiente) no hay nada bloqueado y se usa el precio actual.
+
+        El saldo es el total menos lo efectivamente cobrado (seña y/o saldo), con
+        piso en cero por seguridad. Opera sobre `reserva.pagos` en memoria para no
+        agregar consultas cuando la relación ya está cargada.
+        """
+        sena = next(
+            (p for p in reserva.pagos if p.estado == PagoEstado.SENADO), None
+        )
+        if sena is not None:
+            sena_monto = sena.monto
+            total = sena_monto * 2
+        else:
+            total = reserva.turno.actividad.precio
+            sena_monto = total / Decimal("2")
+
+        cobrado = sum(
+            (
+                p.monto
+                for p in reserva.pagos
+                if p.estado in (PagoEstado.SENADO, PagoEstado.PAGADO)
+            ),
+            Decimal("0"),
+        )
+        saldo = max(total - cobrado, Decimal("0"))
+        return {
+            "total": total,
+            "sena": sena_monto,
+            "cobrado": cobrado,
+            "saldo": saldo,
+        }
 
     # --- Queries ---
 

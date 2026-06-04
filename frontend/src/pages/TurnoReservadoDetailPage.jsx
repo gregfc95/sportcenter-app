@@ -336,8 +336,9 @@ export default function TurnoReservadoDetailPage() {
                                 turno.fecha,
                                 turno.dia_semana,
                               )} ${turno.hora}`}
-                              precio={turno.precio}
+                              precio={reserva.precio ?? turno.precio}
                               pagado={reserva.monto_pagado}
+                              saldo={reserva.saldo}
                               onConfirm={() => handleRegistrarPago(reserva.id)}
                               trigger={
                                 <Button

@@ -33,8 +33,8 @@ function SesionCard({ sesion }) {
           </div>
           <div className="flex flex-col">
             <h3 className="text-label-md text-on-surface">{sesion.actividad}</h3>
-            <span className="text-xs text-on-surface-variant capitalize">
-              {sesion.dia_semana}
+            <span className="text-xs text-on-surface-variant">
+              Turno #{sesion.turno_id}
             </span>
           </div>
         </div>
