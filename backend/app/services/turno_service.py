@@ -30,15 +30,20 @@ class TurnoService:
 
     # --- Lógica de superposición de horarios ---
 
-    def _hay_superposicion(
+    def _turno_superpuesto(
         self, turnos_existentes: list[Turno], hora_nueva: time
-    ) -> bool:
+    ) -> Turno | None:
+        """Devuelve el turno existente que se solapa con `hora_nueva`, o None.
+
+        Devuelve el turno en conflicto (no un bool) para que el mensaje de error
+        pueda mostrar su horario real, en vez del que se intenta cargar.
+        """
         mins_nueva = hora_nueva.hour * 60 + hora_nueva.minute
         for turno in turnos_existentes:
             mins_turno = turno.hora.hour * 60 + turno.hora.minute
             if abs(mins_nueva - mins_turno) < SUPERPOSICION_MIN_MINUTOS:
-                return True
-        return False
+                return turno
+        return None
 
     # --- Queries ---
 
@@ -71,8 +76,9 @@ class TurnoService:
 
         turnos_existentes = self._turnos_por_actividad_y_dia(actividad_id, dia_semana)
 
-        if self._hay_superposicion(turnos_existentes, hora):
-            hora_str = hora.strftime("%H:%M")
+        conflicto = self._turno_superpuesto(turnos_existentes, hora)
+        if conflicto is not None:
+            hora_str = conflicto.hora.strftime("%H:%M")
             raise ValueError(
                 f"Ya existe un turno de esta actividad el {dia_semana} a las {hora_str}."
             )
@@ -105,8 +111,9 @@ class TurnoService:
                 t for t in self._turnos_por_actividad_y_dia(turno.actividad_id, nuevo_dia)
                 if t.id != turno.id
             ]
-            if self._hay_superposicion(otros, nueva_hora):
-                hora_str = nueva_hora.strftime("%H:%M")
+            conflicto = self._turno_superpuesto(otros, nueva_hora)
+            if conflicto is not None:
+                hora_str = conflicto.hora.strftime("%H:%M")
                 raise ValueError(
                     f"Ya existe un turno de esta actividad el {nuevo_dia} a las {hora_str}."
                 )
