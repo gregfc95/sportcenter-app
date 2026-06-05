@@ -29,8 +29,9 @@ def register_commands(app):
 
         # --- Actividades ---
         deportes = [
-            {"nombre": "Fútbol", "precio": Decimal("1500.00")},
-            {"nombre": "Vóley", "precio": Decimal("1000.00")},
+            {"nombre": "Futbol", "precio": Decimal("1500.00")},
+            {"nombre": "Voley", "precio": Decimal("1000.00")},
+            {"nombre": "Basket", "precio": Decimal("50.00")},
         ]
 
         actividades = {}
@@ -43,15 +44,17 @@ def register_commands(app):
         print(f"✅ {len(actividades)} actividad(es) cargada(s).")
 
         # --- Turnos (algunos por actividad) ---
-        # Los dos últimos corresponden a las fechas que se reservan más abajo:
-        #   2026-06-05 (viernes) 20:00  -> Fútbol
-        #   2026-06-08 (lunes)   09:00  -> Vóley
+        # Los últimos corresponden a las fechas que se reservan más abajo:
+        #   2026-06-05 (viernes) 20:00  -> Futbol
+        #   2026-06-08 (lunes)   09:00  -> Voley
+        #   2026-06-06 (sábado)  16:00  -> Basket (cupo 1)
         turnos_data = [
-            ("Fútbol", DiaSemana.LUNES, time(18, 0), 10),
-            ("Fútbol", DiaSemana.MIERCOLES, time(20, 0), 10),
-            ("Vóley", DiaSemana.SABADO, time(10, 0), 12),
-            ("Fútbol", DiaSemana.VIERNES, time(20, 0), 10),
-            ("Vóley", DiaSemana.LUNES, time(9, 0), 12),
+            ("Futbol", DiaSemana.LUNES, time(18, 0), 10),
+            ("Futbol", DiaSemana.MIERCOLES, time(20, 0), 10),
+            ("Voley", DiaSemana.SABADO, time(10, 0), 12),
+            ("Futbol", DiaSemana.VIERNES, time(20, 0), 10),
+            ("Voley", DiaSemana.LUNES, time(9, 0), 12),
+            ("Basket", DiaSemana.SABADO, time(16, 0), 1),
         ]
 
         turnos = {}
@@ -90,6 +93,16 @@ def register_commands(app):
                 password_hash=generate_password_hash("Cliente1234!"),
                 role=UserRole.CLIENT,
             ),
+            "cliente3": User(
+                first_name="Cliente",
+                last_name="Tres",
+                dni="55555555",
+                email="cliente3@gmail.com",
+                phone="1166778899",
+                birth_date=date(2000, 1, 20),
+                password_hash=generate_password_hash("Cliente1234!"),
+                role=UserRole.CLIENT,
+            ),
             "empleado": User(
                 first_name="Empleado",
                 last_name="Demo",
@@ -97,7 +110,7 @@ def register_commands(app):
                 email="empleado@gmail.com",
                 phone="1133445566",
                 birth_date=date(1990, 3, 22),
-                password_hash=generate_password_hash("Empleado1234!"),
+                password_hash=generate_password_hash("Cliente1234!"),
                 role=UserRole.EMPLOYEE,
             ),
             "admin": User(
@@ -107,7 +120,7 @@ def register_commands(app):
                 email="admin@gmail.com",
                 phone="1144556677",
                 birth_date=date(1985, 11, 5),
-                password_hash=generate_password_hash("Admin1234!"),
+                password_hash=generate_password_hash("Cliente1234!"),
                 role=UserRole.ADMIN,
             ),
         }
@@ -117,11 +130,12 @@ def register_commands(app):
         print(f"✅ {len(users)} usuario(s) creado(s).")
 
         # --- Reservas (sobre los turnos de las fechas pedidas) ---
-        turno_viernes = turnos[("Fútbol", DiaSemana.VIERNES, time(20, 0))]  # 2026-06-05
-        turno_lunes = turnos[("Vóley", DiaSemana.LUNES, time(9, 0))]  # 2026-06-08
+        turno_viernes = turnos[("Futbol", DiaSemana.VIERNES, time(20, 0))]  # 2026-06-05
+        turno_lunes = turnos[("Voley", DiaSemana.LUNES, time(9, 0))]  # 2026-06-08
         turno_miercoles = turnos[
-            ("Fútbol", DiaSemana.MIERCOLES, time(20, 0))
+            ("Futbol", DiaSemana.MIERCOLES, time(20, 0))
         ]  # 2026-06-03
+        turno_basket = turnos[("Basket", DiaSemana.SABADO, time(16, 0))]  # 2026-06-06
 
         reservas_data = [
             # (key, user, turno, fecha)
@@ -129,6 +143,7 @@ def register_commands(app):
             ("r2", users["cliente2"], turno_lunes, date(2026, 6, 8)),
             ("r3", users["cliente"], turno_viernes, date(2026, 6, 5)),
             ("r4", users["cliente"], turno_miercoles, date(2026, 6, 3)),
+            ("r5", users["cliente3"], turno_basket, date(2026, 6, 6)),
         ]
 
         reservas = {}
@@ -146,7 +161,7 @@ def register_commands(app):
         print(f"✅ {len(reservas)} reserva(s) cargada(s).")
 
         # --- Pagos ---
-        # Precios por actividad: Fútbol 1500, Vóley 1000. La seña es el 50%.
+        # Precios por actividad: Futbol 1500, Voley 1000. La seña es el 50%.
         pagos_data = [
             # cliente2 señó en efectivo y lo registró el empleado
             {
