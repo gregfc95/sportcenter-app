@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { CalendarX2, CalendarDays, Users, ChevronRight } from "lucide-react";
 
@@ -8,6 +8,15 @@ import { getActividadIcon } from "@/components/actividades/actividadIcons";
 import { listSesionesReservadas } from "@/components/reservas/api";
 import { formatReservaFecha } from "@/lib/fecha";
 import { cn } from "@/lib/utils";
+
+// YYYY-MM-DD local para comparar contra `sesion.fecha` (que ya viene en ese
+// formato) sin desfase de zona horaria.
+function todayISO() {
+  const d = new Date();
+  const mes = String(d.getMonth() + 1).padStart(2, "0");
+  const dia = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${mes}-${dia}`;
+}
 
 function SesionCard({ sesion }) {
   const { cupo, ocupados } = sesion;
@@ -101,6 +110,19 @@ export default function TurnosReservadosPage() {
     };
   }, []);
 
+  // Separamos pasados (día anterior a hoy) de próximos para que el historial no
+  // se mezcle con lo que todavía está por jugarse. Cada grupo conserva el orden
+  // ascendente que ya trae el backend.
+  const { proximos, pasados } = useMemo(() => {
+    const hoy = todayISO();
+    const proximos = [];
+    const pasados = [];
+    for (const sesion of sesiones) {
+      (sesion.fecha < hoy ? pasados : proximos).push(sesion);
+    }
+    return { proximos, pasados };
+  }, [sesiones]);
+
   const hasSesiones = sesiones.length > 0;
 
   return (
@@ -113,13 +135,35 @@ export default function TurnosReservadosPage() {
       </header>
 
       {!loaded ? null : hasSesiones ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-gutter">
-          {sesiones.map((sesion) => (
-            <SesionCard
-              key={`${sesion.turno_id}-${sesion.fecha}`}
-              sesion={sesion}
-            />
-          ))}
+        <div className="flex flex-col gap-lg">
+          {proximos.length > 0 && (
+            <section className="flex flex-col gap-md">
+              <h2 className="text-headline-md text-on-surface">Próximos</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-gutter">
+                {proximos.map((sesion) => (
+                  <SesionCard
+                    key={`${sesion.turno_id}-${sesion.fecha}`}
+                    sesion={sesion}
+                  />
+                ))}
+              </div>
+            </section>
+          )}
+          {pasados.length > 0 && (
+            <section className="flex flex-col gap-md">
+              <h2 className="text-headline-md text-on-surface-variant">
+                Pasados
+              </h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-gutter opacity-60">
+                {pasados.map((sesion) => (
+                  <SesionCard
+                    key={`${sesion.turno_id}-${sesion.fecha}`}
+                    sesion={sesion}
+                  />
+                ))}
+              </div>
+            </section>
+          )}
         </div>
       ) : (
         <section className="bg-surface-container border border-outline-variant rounded-xl flex flex-col overflow-hidden">
