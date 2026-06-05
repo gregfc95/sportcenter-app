@@ -134,6 +134,17 @@ export default function TurnoReservadoDetailPage() {
 
   const { turno, reservas } = data;
   const Icon = getActividadIcon(turno.actividad);
+  // El cobro en mostrador puede registrarse el mismo día aunque la hora ya haya
+  // pasado (el saldo se paga al asistir). Solo se bloquea cuando el día entero
+  // quedó atrás. `turno.fecha` y la fecha de hoy son ambas YYYY-MM-DD locales,
+  // así que se comparan como texto sin riesgo de desfase horario.
+  const hoyISO = (() => {
+    const d = new Date();
+    const mes = String(d.getMonth() + 1).padStart(2, "0");
+    const dia = String(d.getDate()).padStart(2, "0");
+    return `${d.getFullYear()}-${mes}-${dia}`;
+  })();
+  const diaPasado = Boolean(turno.fecha) && turno.fecha < hoyISO;
   const ocupacion =
     turno.cupo > 0 ? Math.min(100, (turno.ocupados / turno.cupo) * 100) : 0;
   const lleno = turno.cupo > 0 && turno.ocupados >= turno.cupo;
@@ -328,29 +339,40 @@ export default function TurnoReservadoDetailPage() {
                         </td>
                         <td className="py-sm px-md text-right">
                           {(reserva.estado === "senado" ||
-                            reserva.estado === "pendiente") && (
-                            <RegistrarPagoDialog
-                              cliente={reserva.cliente?.nombre}
-                              actividad={turno.actividad}
-                              datetime={`${formatFechaLarga(
-                                turno.fecha,
-                                turno.dia_semana,
-                              )} ${turno.hora}`}
-                              precio={reserva.precio ?? turno.precio}
-                              pagado={reserva.monto_pagado}
-                              saldo={reserva.saldo}
-                              onConfirm={() => handleRegistrarPago(reserva.id)}
-                              trigger={
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  className="text-primary border-primary/40 hover:bg-primary/10 hover:text-primary"
-                                >
-                                  Registrar Pago
-                                </Button>
-                              }
-                            />
-                          )}
+                            reserva.estado === "pendiente") &&
+                            (diaPasado ? (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                disabled
+                                title="El turno ya pasó; no se puede registrar el pago."
+                                className="text-on-surface-variant"
+                              >
+                                Registrar Pago
+                              </Button>
+                            ) : (
+                              <RegistrarPagoDialog
+                                cliente={reserva.cliente?.nombre}
+                                actividad={turno.actividad}
+                                datetime={`${formatFechaLarga(
+                                  turno.fecha,
+                                  turno.dia_semana,
+                                )} ${turno.hora}`}
+                                precio={reserva.precio ?? turno.precio}
+                                pagado={reserva.monto_pagado}
+                                saldo={reserva.saldo}
+                                onConfirm={() => handleRegistrarPago(reserva.id)}
+                                trigger={
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="text-primary border-primary/40 hover:bg-primary/10 hover:text-primary"
+                                  >
+                                    Registrar Pago
+                                  </Button>
+                                }
+                              />
+                            ))}
                         </td>
                       </tr>
                     );

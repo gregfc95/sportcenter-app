@@ -82,19 +82,18 @@ class ReservaService:
         return db.session.execute(stmt).scalars().all()
 
     def listar_sesiones_reservadas(self) -> list[tuple[Turno, date]]:
-        """Sesiones (turno + fecha) con al menos una reserva activa, de hoy en adelante.
+        """Sesiones (turno + fecha) con al menos una reserva activa, sin recortar por fecha.
 
         Una "sesión" es la instancia de un turno semanal en una fecha concreta. Para
         la vista de administración de turnos reservados: agrupa las reservas activas
         por (turno, fecha) —el filtro de soft-delete descarta las canceladas— y
-        devuelve cada sesión, próximas primero y ordenadas por horario. No incluye
-        sesiones sin reservas.
+        devuelve cada sesión, incluidas las de días pasados (ahí "Registrar Pago"
+        queda deshabilitado), ordenadas por fecha y horario. No incluye sesiones
+        sin reservas.
         """
-        hoy = datetime.now(tz=AR_TZ).date()
         stmt = (
             select(Reserva.turno_id, Reserva.fecha)
             .join(Reserva.turno)
-            .where(Reserva.fecha >= hoy)
             .group_by(Reserva.turno_id, Reserva.fecha, Turno.hora)
             .order_by(Reserva.fecha.asc(), Turno.hora.asc())
         )
