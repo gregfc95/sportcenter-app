@@ -49,6 +49,7 @@ class ReservaService:
 
         if tipo == ReservaTipo.EVENTUAL:
             self._validar_dia_semana(turno, fecha)
+            self._validar_turno_no_pasado(turno, fecha)
             self._validar_sin_conflicto_horario(user_id, fecha, turno)
             self._validar_cupo_disponible(turno, fecha)
 
@@ -67,8 +68,12 @@ class ReservaService:
 
         Excluye turnos pasados (fecha anterior a hoy). Los de hoy se siguen
         mostrando aunque el horario ya haya pasado.
+
+        "Hoy" se ancla a la hora local de Argentina (no a la del servidor), igual
+        que el resto del servicio: si no, con el servidor adelantado respecto a AR
+        los turnos de hoy se filtran de más y la card desaparece antes de tiempo.
         """
-        hoy = date.today()
+        hoy = datetime.now(tz=AR_TZ).date()
         stmt = (
             select(Reserva)
             .where(Reserva.user_id == user_id, Reserva.fecha >= hoy)
@@ -85,7 +90,7 @@ class ReservaService:
         devuelve cada sesión, próximas primero y ordenadas por horario. No incluye
         sesiones sin reservas.
         """
-        hoy = date.today()
+        hoy = datetime.now(tz=AR_TZ).date()
         stmt = (
             select(Reserva.turno_id, Reserva.fecha)
             .join(Reserva.turno)
@@ -124,6 +129,17 @@ class ReservaService:
                 f"La fecha {fecha.isoformat()} cae en {esperado.value}, "
                 f"pero el turno es de {turno.dia_semana.value}."
             )
+
+    def _validar_turno_no_pasado(self, turno: Turno, fecha: date) -> None:
+        """Impide reservar un turno cuya hora de inicio ya pasó.
+
+        La `hora` del turno es hora de pared local (AR), así que el inicio se
+        interpreta en esa zona y se compara contra el ahora local. Cubre el caso
+        de hoy con un horario ya transcurrido, que el filtro por fecha no atrapa.
+        """
+        inicio = datetime.combine(fecha, turno.hora, tzinfo=AR_TZ)
+        if inicio <= datetime.now(tz=AR_TZ):
+            raise ValueError("El turno ya pasó y no puede reservarse.")
 
     def _validar_sin_conflicto_horario(
         self, user_id: int, fecha: date, turno: Turno

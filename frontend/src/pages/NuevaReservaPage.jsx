@@ -58,6 +58,23 @@ function formatHora(hora) {
   return typeof hora === "string" ? hora.slice(0, 5) : hora;
 }
 
+// True if a turno's start (its `hora` on `date`) is already in the past. The
+// calendar only blocks past *days*, so today's already-elapsed turnos still
+// need this guard to keep them from being selected.
+function isSlotPast(date, hora) {
+  if (!date || typeof hora !== "string") return false;
+  const [h, m, s] = hora.split(":").map(Number);
+  const slotStart = new Date(
+    date.getFullYear(),
+    date.getMonth(),
+    date.getDate(),
+    h || 0,
+    m || 0,
+    s || 0,
+  );
+  return slotStart <= new Date();
+}
+
 // Local YYYY-MM-DD (avoids the UTC shift that toISOString() introduces).
 function toISODate(date) {
   const year = date.getFullYear();
@@ -495,7 +512,7 @@ export default function NuevaReservaPage() {
                     ? ""
                     : loadingDayTurnos
                       ? ""
-                      : `${slotsForDay.filter((t) => t.disponibles !== 0).length} horarios disponibles`}
+                      : `${slotsForDay.filter((t) => t.disponibles !== 0 && !isSlotPast(selectedDate, t.hora)).length} horarios disponibles`}
               </p>
             </div>
 
@@ -513,7 +530,8 @@ export default function NuevaReservaPage() {
               ) : (
                 slotsForDay.map((slot) => {
                   const isFull = slot.disponibles === 0;
-                  if (isFull) {
+                  const past = isSlotPast(selectedDate, slot.hora);
+                  if (isFull || past) {
                     return (
                       <div
                         key={slot.id}
@@ -523,7 +541,7 @@ export default function NuevaReservaPage() {
                           {formatHora(slot.hora)}
                         </span>
                         <span className="text-label-sm text-error bg-error/10 px-2 py-1 rounded">
-                          Turno Lleno
+                          {isFull ? "Turno Lleno" : "Horario pasado"}
                         </span>
                       </div>
                     );
