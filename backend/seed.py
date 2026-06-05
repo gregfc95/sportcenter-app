@@ -12,11 +12,16 @@ def register_commands(app):
 
         from werkzeug.security import generate_password_hash
 
-        from app.models import Actividad, Turno, User
+        from app.models import Actividad, Pago, Reserva, Turno, User
+        from app.models.pago import PagoEstado, PagoMedio
+        from app.models.reserva import ReservaTipo
         from app.models.turno import DiaSemana
         from app.models.user import UserRole
 
-        # --- Limpieza (respetando las FKs: turnos -> actividades / users) ---
+        # --- Limpieza (respetando las FKs: pagos -> reservas -> turnos /
+        # actividades / users) ---
+        db.session.query(Pago).delete()
+        db.session.query(Reserva).delete()
         db.session.query(Turno).delete()
         db.session.query(Actividad).delete()
         db.session.query(User).delete()
@@ -38,13 +43,18 @@ def register_commands(app):
         print(f"✅ {len(actividades)} actividad(es) cargada(s).")
 
         # --- Turnos (algunos por actividad) ---
+        # Los dos últimos corresponden a las fechas que se reservan más abajo:
+        #   2026-06-05 (viernes) 20:00  -> Fútbol
+        #   2026-06-08 (lunes)   09:00  -> Vóley
         turnos_data = [
             ("Fútbol", DiaSemana.LUNES, time(18, 0), 10),
             ("Fútbol", DiaSemana.MIERCOLES, time(20, 0), 10),
             ("Vóley", DiaSemana.SABADO, time(10, 0), 12),
+            ("Fútbol", DiaSemana.VIERNES, time(20, 0), 10),
+            ("Vóley", DiaSemana.LUNES, time(9, 0), 12),
         ]
 
-        turnos = []
+        turnos = {}
         for nombre, dia, hora, cupo in turnos_data:
             turno = Turno(
                 actividad_id=actividades[nombre].id,
@@ -53,14 +63,14 @@ def register_commands(app):
                 cupo=cupo,
             )
             db.session.add(turno)
-            turnos.append(turno)
+            turnos[(nombre, dia, hora)] = turno
 
         db.session.commit()
         print(f"✅ {len(turnos)} turno(s) cargado(s).")
 
         # --- Usuarios ---
-        users = [
-            User(
+        users = {
+            "cliente": User(
                 first_name="Cliente",
                 last_name="Demo",
                 dni="11111111",
@@ -70,7 +80,17 @@ def register_commands(app):
                 password_hash=generate_password_hash("Cliente1234!"),
                 role=UserRole.CLIENT,
             ),
-            User(
+            "cliente2": User(
+                first_name="Cliente",
+                last_name="Dos",
+                dni="44444444",
+                email="cliente2@gmail.com",
+                phone="1155667788",
+                birth_date=date(1998, 9, 12),
+                password_hash=generate_password_hash("Cliente1234!"),
+                role=UserRole.CLIENT,
+            ),
+            "empleado": User(
                 first_name="Empleado",
                 last_name="Demo",
                 dni="22222222",
@@ -80,7 +100,7 @@ def register_commands(app):
                 password_hash=generate_password_hash("Empleado1234!"),
                 role=UserRole.EMPLOYEE,
             ),
-            User(
+            "admin": User(
                 first_name="Admin",
                 last_name="Demo",
                 dni="33333333",
@@ -90,10 +110,84 @@ def register_commands(app):
                 password_hash=generate_password_hash("Admin1234!"),
                 role=UserRole.ADMIN,
             ),
-        ]
+        }
 
-        db.session.add_all(users)
+        db.session.add_all(users.values())
         db.session.commit()
         print(f"✅ {len(users)} usuario(s) creado(s).")
+
+        # --- Reservas (sobre los turnos de las fechas pedidas) ---
+        turno_viernes = turnos[("Fútbol", DiaSemana.VIERNES, time(20, 0))]  # 2026-06-05
+        turno_lunes = turnos[("Vóley", DiaSemana.LUNES, time(9, 0))]        # 2026-06-08
+
+        reservas_data = [
+            # (key, user, turno, fecha)
+            ("r1", users["cliente2"], turno_viernes, date(2026, 6, 5)),
+            ("r2", users["cliente2"], turno_lunes, date(2026, 6, 8)),
+            ("r3", users["cliente"], turno_viernes, date(2026, 6, 5)),
+        ]
+
+        reservas = {}
+        for key, user, turno, fecha in reservas_data:
+            reserva = Reserva(
+                user_id=user.id,
+                turno_id=turno.id,
+                fecha=fecha,
+                tipo=ReservaTipo.EVENTUAL,
+            )
+            db.session.add(reserva)
+            reservas[key] = reserva
+
+        db.session.commit()
+        print(f"✅ {len(reservas)} reserva(s) cargada(s).")
+
+        # --- Pagos ---
+        # Precios por actividad: Fútbol 1500, Vóley 1000. La seña es el 50%.
+        pagos_data = [
+            # cliente2 señó en efectivo y lo registró el empleado
+            {
+                "reserva": reservas["r1"],
+                "user": users["cliente2"],
+                "monto": Decimal("750.00"),
+                "estado": PagoEstado.SENADO,
+                "metodo": PagoMedio.EFECTIVO,
+                "registrado_por": users["empleado"],
+            },
+            # cliente2 fue reembolsado; el reembolso lo registró el admin
+            {
+                "reserva": reservas["r2"],
+                "user": users["cliente2"],
+                "monto": Decimal("1000.00"),
+                "estado": PagoEstado.REEMBOLSADO,
+                "metodo": PagoMedio.EFECTIVO,
+                "registrado_por": users["admin"],
+            },
+            # cliente pagó online por Mercado Pago (cobro automático)
+            {
+                "reserva": reservas["r3"],
+                "user": users["cliente"],
+                "monto": Decimal("1500.00"),
+                "estado": PagoEstado.PAGADO,
+                "metodo": PagoMedio.MERCADO_PAGO,
+                "registrado_por": None,
+            },
+        ]
+
+        pagos = []
+        for p in pagos_data:
+            registrado_por = p["registrado_por"]
+            pago = Pago(
+                user_id=p["user"].id,
+                reserva_id=p["reserva"].id,
+                monto=p["monto"],
+                estado=p["estado"],
+                metodo=p["metodo"],
+                registrado_por_id=registrado_por.id if registrado_por else None,
+            )
+            db.session.add(pago)
+            pagos.append(pago)
+
+        db.session.commit()
+        print(f"✅ {len(pagos)} pago(s) cargado(s).")
 
         print("🌱 Seed completado.")
