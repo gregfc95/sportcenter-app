@@ -118,13 +118,17 @@ def register_commands(app):
 
         # --- Reservas (sobre los turnos de las fechas pedidas) ---
         turno_viernes = turnos[("Fútbol", DiaSemana.VIERNES, time(20, 0))]  # 2026-06-05
-        turno_lunes = turnos[("Vóley", DiaSemana.LUNES, time(9, 0))]        # 2026-06-08
+        turno_lunes = turnos[("Vóley", DiaSemana.LUNES, time(9, 0))]  # 2026-06-08
+        turno_miercoles = turnos[
+            ("Fútbol", DiaSemana.MIERCOLES, time(20, 0))
+        ]  # 2026-06-03
 
         reservas_data = [
             # (key, user, turno, fecha)
             ("r1", users["cliente2"], turno_viernes, date(2026, 6, 5)),
             ("r2", users["cliente2"], turno_lunes, date(2026, 6, 8)),
             ("r3", users["cliente"], turno_viernes, date(2026, 6, 5)),
+            ("r4", users["cliente"], turno_miercoles, date(2026, 6, 3)),
         ]
 
         reservas = {}
@@ -168,6 +172,14 @@ def register_commands(app):
                 "user": users["cliente"],
                 "monto": Decimal("1500.00"),
                 "estado": PagoEstado.PAGADO,
+                "metodo": PagoMedio.MERCADO_PAGO,
+                "registrado_por": None,
+            },
+            {
+                "reserva": reservas["r4"],
+                "user": users["cliente"],
+                "monto": Decimal("750.00"),
+                "estado": PagoEstado.SENADO,
                 "metodo": PagoMedio.MERCADO_PAGO,
                 "registrado_por": None,
             },
