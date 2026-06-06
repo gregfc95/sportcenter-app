@@ -1,121 +1,84 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
-import './App.css'
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import CrearTurnoPage from "./pages/CrearTurnoPage";
+import MisTurnosPage from "./pages/MisTurnosPage";
+import MisPagosPage from "./pages/MisPagosPage";
+import PagosPage from "./pages/PagosPage";
+import TurnosReservadosPage from "./pages/TurnosReservadosPage";
+import TurnoReservadoDetailPage from "./pages/TurnoReservadoDetailPage";
+import NuevaReservaPage from "./pages/NuevaReservaPage";
+import PagoResultadoPage from "./pages/PagoResultadoPage";
+import PagoCanceladoPage from "./pages/PagoCanceladoPage";
+import RegisterPage from "./pages/RegisterPage";
+import LoginPage from "./pages/LoginPage";
+import LandingPage from "./pages/LandingPage";
+import DashboardPage from "./pages/DashboardPage";
+import ProfilePage from "./pages/ProfilePage";
+import ActividadesPage from "./pages/ActividadesPage";
+import ActividadFormPage from "./pages/ActividadFormPage";
+import ActividadDetailPage from "./pages/ActividadDetailPage";
+import ClientesPage from "./pages/ClientesPage";
+import ClienteFormPage from "./pages/ClienteFormPage";
+import EmpleadosPage from "./pages/EmpleadosPage";
+import EmpleadoFormPage from "./pages/EmpleadoFormPage";
+import PublicLayout from "./components/layout/PublicLayout";
+import DashboardLayout from "./components/layout/DashboardLayout";
+import ProtectedRoute from "./components/layout/ProtectedRoute";
+import { ThemeProvider } from "./lib/ThemeContext";
+import { Toaster } from "./components/ui/sonner";
 
 function App() {
-  const [count, setCount] = useState(0)
-
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.jsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
-
-      <div className="ticks"></div>
-
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
-  )
+    <ThemeProvider>
+      <Toaster />
+      <BrowserRouter>
+        <Routes>
+          <Route element={<PublicLayout />}>
+            <Route path="/" element={<LandingPage />} />
+          </Route>
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/register" element={<RegisterPage />} />
+          <Route
+            element={
+              <ProtectedRoute>
+                <DashboardLayout />
+              </ProtectedRoute>
+            }
+          >
+            <Route path="/dashboard" element={<DashboardPage />} />
+            <Route path="/crear-turno" element={<CrearTurnoPage />} />
+            <Route path="/mis-turnos" element={<MisTurnosPage />} />
+            <Route path="/mis-pagos" element={<MisPagosPage />} />
+            <Route path="/pagos" element={<PagosPage />} />
+            <Route path="/turnos" element={<TurnosReservadosPage />} />
+            <Route
+              path="/turnos/:turnoId/:fecha"
+              element={<TurnoReservadoDetailPage />}
+            />
+            <Route path="/nueva-reserva" element={<NuevaReservaPage />} />
+            <Route path="/pago/exito" element={<PagoResultadoPage />} />
+            <Route path="/pago/error" element={<PagoResultadoPage />} />
+            <Route path="/pago/pendiente" element={<PagoResultadoPage />} />
+            <Route path="/pago/cancelado" element={<PagoCanceladoPage />} />
+            <Route path="/dashboard/client" element={<DashboardPage />} />
+            <Route path="/dashboard/client/perfil" element={<ProfilePage />} />
+            <Route path="/dashboard/employee" element={<DashboardPage />} />
+            <Route path="/dashboard/admin" element={<DashboardPage />} />
+            <Route path="/actividades" element={<ActividadesPage />} />
+            <Route path="/actividades/nueva" element={<ActividadFormPage />} />
+            <Route
+              path="/actividades/:id/editar"
+              element={<ActividadFormPage />}
+            />
+            <Route path="/actividades/:id" element={<ActividadDetailPage />} />
+            <Route path="/clientes" element={<ClientesPage />} />
+            <Route path="/clientes/nuevo" element={<ClienteFormPage />} />
+            <Route path="/empleados" element={<EmpleadosPage />} />
+            <Route path="/empleados/nuevo" element={<EmpleadoFormPage />} />
+          </Route>
+        </Routes>
+      </BrowserRouter>
+    </ThemeProvider>
+  );
 }
 
-export default App
+export default App;
