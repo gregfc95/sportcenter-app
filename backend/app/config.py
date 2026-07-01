@@ -29,7 +29,22 @@ class ProductionConfig(Config):
     DEBUG = False
 
 
+class TestingConfig(Config):
+    TESTING = True
+    # Base de datos de tests: PostgreSQL aparte para no tocar datos de dev y
+    # para reproducir los índices únicos parciales (postgresql_where) tal cual
+    # producción. Por defecto, el mismo servidor de dev con sufijo `_test`; en
+    # CI se inyecta TEST_DATABASE_URL apuntando al servicio de Postgres.
+    SQLALCHEMY_DATABASE_URI = os.getenv("TEST_DATABASE_URL") or (
+        f"postgresql://{os.getenv('DB_USER')}:{os.getenv('DB_PASSWORD')}"
+        f"@{os.getenv('DB_HOST')}:{os.getenv('DB_PORT')}/{os.getenv('DB_NAME')}_test"
+    )
+    # Nunca mandar mail de verdad en tests.
+    MAILTRAP_SANDBOX = True
+
+
 config_map = {
     "development": DevelopmentConfig,
     "production": ProductionConfig,
+    "testing": TestingConfig,
 }

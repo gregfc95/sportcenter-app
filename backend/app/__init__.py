@@ -8,11 +8,15 @@ db = SQLAlchemy()
 migrate = Migrate()
 
 
-def create_app():
+def create_app(config_object=None):
     app = Flask(__name__)
 
-    env = os.getenv("FLASK_ENV", "development")
-    app.config.from_object(config_map[env])
+    # Tests pasan una config explícita (TestingConfig) para no depender de
+    # FLASK_ENV. En ejecución normal se resuelve desde el entorno.
+    if config_object is None:
+        env = os.getenv("FLASK_ENV", "development")
+        config_object = config_map[env]
+    app.config.from_object(config_object)
 
     db.init_app(app)
     migrate.init_app(app, db)
