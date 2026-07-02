@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { CalendarDays, Check, MoveRight, Users } from "lucide-react";
+import { CalendarDays, Users } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { EstadoBadge } from "@/components/ui/estado-badge";
@@ -8,35 +8,9 @@ import PagarSaldoDialog from "@/components/reservas/PagarSaldoDialog";
 import PagarSenaDialog from "@/components/reservas/PagarSenaDialog";
 import PagarMensualidadDialog from "@/components/reservas/PagarMensualidadDialog";
 import CancelarReservaDialog from "@/components/reservas/CancelarReservaDialog";
-import { formatReservaFecha } from "@/lib/fecha";
-import { cn } from "@/lib/utils";
-
-const MESES = [
-  "Enero",
-  "Febrero",
-  "Marzo",
-  "Abril",
-  "Mayo",
-  "Junio",
-  "Julio",
-  "Agosto",
-  "Septiembre",
-  "Octubre",
-  "Noviembre",
-  "Diciembre",
-];
-
-// "01/07" a partir de una fecha ISO (YYYY-MM-DD).
-function ddmm(iso) {
-  const [, m, d] = iso.split("-");
-  return `${d}/${m}`;
-}
-
-// "Julio 2026" a partir de una fecha ISO (YYYY-MM-DD).
-function mesLabel(iso) {
-  const [y, m] = iso.split("-");
-  return `${MESES[Number(m) - 1]} ${y}`;
-}
+import CancelarAbonoDialog from "@/components/reservas/CancelarAbonoDialog";
+import ClasesMensuales from "@/components/reservas/ClasesMensuales";
+import { formatReservaFecha, mesLabel } from "@/lib/fecha";
 
 // Los triggers se montan vía `DialogTrigger asChild`: hay que reenviar las
 // props que inyecta Radix (onClick, ref, aria) al Button o el modal no abre.
@@ -128,67 +102,17 @@ function TipoChip({ tipo }) {
   );
 }
 
-/**
- * Fila de chips con las clases del abono mensual: las pasadas quedan marcadas
- * como completadas; entre las próximas se elige la clase sobre la que actúa
- * "Cancelar clase" (cada fecha se cancela individualmente, nunca en bloque).
- */
-function ClasesMensuales({ clases, selectedId, onSelect }) {
-  return (
-    <div className="flex gap-2 overflow-x-auto pb-1 snap-x">
-      {clases.map((clase) => {
-        const selected = clase.reserva_id === selectedId;
-        if (clase.pasada) {
-          return (
-            <div
-              key={clase.reserva_id}
-              title="Clase pasada"
-              className="snap-center shrink-0 relative flex items-center justify-center w-16 h-14 rounded-lg border border-outline-variant bg-surface-container-low opacity-60"
-            >
-              <span className="text-label-sm text-on-surface-variant">
-                {ddmm(clase.fecha)}
-              </span>
-              <Check
-                className="size-3.5 text-success-green absolute top-1 right-1"
-                aria-hidden="true"
-              />
-            </div>
-          );
-        }
-        return (
-          <button
-            key={clase.reserva_id}
-            type="button"
-            onClick={() => onSelect(clase.reserva_id)}
-            aria-pressed={selected}
-            className={cn(
-              "snap-center shrink-0 flex items-center justify-center w-16 h-14 rounded-lg border transition-colors cursor-pointer",
-              selected
-                ? "border-primary bg-primary/10 ring-1 ring-primary/50"
-                : "border-outline-variant bg-surface-container-high hover:border-primary/50",
-            )}
-          >
-            <span
-              className={cn(
-                "text-label-sm",
-                selected ? "text-primary" : "text-on-surface",
-              )}
-            >
-              {ddmm(clase.fecha)}
-            </span>
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
 function ReservaMensualCard({ reserva, onCancelled }) {
   const clases = reserva.mensualidad.clases;
   const proximas = clases.filter((c) => !c.pasada);
   const pasadas = clases.length - proximas.length;
+  const pagado = reserva.estado === "pagado";
+  const proximaDatetime = proximas[0]
+    ? formatReservaFecha(proximas[0].fecha, reserva.turno.hora)
+    : null;
 
-  // Clase del abono sobre la que actúa "Cancelar clase"; por defecto la próxima.
+  // Clase del abono pagado sobre la que actúa "Cancelar clase"; por defecto
+  // la próxima. Un abono pendiente se cancela completo, sin selección.
   const [claseSeleccionadaId, setClaseSeleccionadaId] = useState(null);
   const claseSeleccionada =
     proximas.find((c) => c.reserva_id === claseSeleccionadaId) ??
@@ -201,8 +125,8 @@ function ReservaMensualCard({ reserva, onCancelled }) {
       subtitle={`Todos los ${reserva.turno.dia_semana} · ${reserva.turno.hora}`}
       estado={reserva.estado}
       actions={
-        <>
-          {claseSeleccionada && (
+        pagado ? (
+          claseSeleccionada && (
             <CancelarReservaDialog
               reservaId={claseSeleccionada.reserva_id}
               actividad={reserva.actividad}
@@ -215,23 +139,29 @@ function ReservaMensualCard({ reserva, onCancelled }) {
               onCancelled={onCancelled}
               trigger={<CancelarTrigger />}
             />
-          )}
-          {reserva.estado !== "pagado" && (
-            // El abono pendiente se paga completo (todas las clases del mes).
+          )
+        ) : (
+          <>
+            {/* Sin pagos, el abono se cancela y se paga completo (todas las
+                clases del mes). */}
+            <CancelarAbonoDialog
+              reservaId={reserva.id}
+              actividad={reserva.actividad}
+              clases={clases.length}
+              datetime={proximaDatetime}
+              onCancelled={onCancelled}
+              trigger={<CancelarTrigger />}
+            />
             <PagarMensualidadDialog
               reservaId={reserva.id}
               actividad={reserva.actividad}
-              datetime={
-                proximas[0]
-                  ? formatReservaFecha(proximas[0].fecha, reserva.turno.hora)
-                  : null
-              }
+              datetime={proximaDatetime}
               clases={clases.length}
               total={reserva.mensualidad.total}
               trigger={<PagarTrigger />}
             />
-          )}
-        </>
+          </>
+        )
       }
     >
       <div className="flex items-center gap-3">
@@ -242,11 +172,11 @@ function ReservaMensualCard({ reserva, onCancelled }) {
       </div>
       <ClasesMensuales
         clases={clases}
+        selectable={pagado}
         selectedId={claseSeleccionada?.reserva_id ?? null}
         onSelect={setClaseSeleccionadaId}
       />
       <div className="flex items-center gap-2">
-        <MoveRight className="size-4 shrink-0" aria-hidden="true" />
         <span>
           {pasadas} de {clases.length}{" "}
           {clases.length === 1 ? "sesión" : "sesiones"}

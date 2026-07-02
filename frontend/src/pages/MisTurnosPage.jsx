@@ -40,11 +40,19 @@ export default function MisTurnosPage() {
     };
   }, []);
 
-  // Cancelación: una eventual saca su card; una clase de un abono sale de la
-  // fila de chips (y la card entera si no le quedan clases próximas).
+  // Cancelación: una eventual saca su card; un abono pendiente se cancela
+  // completo (sale la card, el id recibido es el de la card); en uno pagado
+  // sale la clase cancelada de la fila de chips (y la card entera si no le
+  // quedan clases próximas).
   const handleCancelled = (reservaId) => {
     setReservas((prev) =>
       prev
+        // La card sale entera salvo en un abono pagado, donde el id recibido
+        // es el de una clase (puede coincidir con el id de la card).
+        .filter(
+          (r) =>
+            (r.mensualidad && r.estado === "pagado") || r.id !== reservaId,
+        )
         .map((r) =>
           r.mensualidad
             ? {
@@ -59,9 +67,7 @@ export default function MisTurnosPage() {
             : r,
         )
         .filter((r) =>
-          r.mensualidad
-            ? r.mensualidad.clases.some((c) => !c.pasada)
-            : r.id !== reservaId,
+          r.mensualidad ? r.mensualidad.clases.some((c) => !c.pasada) : true,
         ),
     );
   };

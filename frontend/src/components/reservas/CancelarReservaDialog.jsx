@@ -185,8 +185,8 @@ export default function CancelarReservaDialog({
             {submitting
               ? "Cancelando…"
               : mensual
-                ? "Cancelar clase"
-                : "Cancelar reserva"}
+                ? "Cancelar"
+                : "Cancelar"}
           </Button>
         </DialogFooter>
       </DialogContent>

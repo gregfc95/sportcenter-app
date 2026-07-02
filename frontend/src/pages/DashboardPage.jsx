@@ -46,6 +46,7 @@ function toUpcomingBookings(reservas) {
       saldo: r.saldo,
       tipo: r.tipo,
       mensualidad: r.mensualidad ?? null,
+      turno: { dia_semana: r.turno.dia_semana, hora: r.turno.hora },
     }));
 }
 

@@ -1,67 +1,39 @@
+import { CalendarDays, Users } from "lucide-react";
+
 import { Button } from "@/components/ui/button";
 import { EstadoBadge } from "@/components/ui/estado-badge";
+import { TipoChip } from "@/components/ui/tipo-chip";
 import { getActividadIcon } from "@/components/actividades/actividadIcons";
 import PagarSaldoDialog from "@/components/reservas/PagarSaldoDialog";
 import PagarSenaDialog from "@/components/reservas/PagarSenaDialog";
-import PagarMensualidadDialog from "@/components/reservas/PagarMensualidadDialog";
 import CancelarReservaDialog from "@/components/reservas/CancelarReservaDialog";
+import { STATUS_META } from "./statusMeta";
 import { cn } from "@/lib/utils";
 
-// Presentación propia de la card por estado; el badge sale de EstadoBadge.
-const STATUS_META = {
-  pendiente: {
-    strip: "bg-accent",
-    icon: "text-accent",
-    title: "text-on-surface",
-  },
-  senado: {
-    strip: "bg-accent",
-    icon: "text-accent",
-    title: "text-on-surface",
-  },
-  pagado: {
-    strip: "bg-surface-container-high",
-    icon: "text-on-surface-variant",
-    title: "text-on-surface-variant",
-  },
-};
-
-export default function BookingCard({
+export default function BookingCardEventual({
   reservaId,
   sport,
-  court,
   datetime,
   status = "pendiente",
   capacity,
   precio,
   sena,
   saldo,
-  tipo,
-  mensualidad,
   onCancelled,
 }) {
   const meta = STATUS_META[status] ?? STATUS_META.pendiente;
   const Icon = getActividadIcon(sport);
-  const esMensual = tipo === "mensual" && Array.isArray(mensualidad?.clases);
-  // En un abono mensual, "Cancelar" actúa sobre la próxima clase (la de la
-  // card); la mensualidad pendiente se paga completa, sin seña.
-  const proximaClase = esMensual
-    ? mensualidad.clases.find((c) => !c.pasada)
-    : null;
   // "Ver QR" para pagados se implementará a futuro; por ahora solo el pago.
   // Pendiente paga la seña (reanuda el checkout); señada paga el saldo.
-  const showMensualidad = esMensual && status !== "pagado";
-  const showSena = !esMensual && status === "pendiente";
-  const showSaldo = !esMensual && status === "senado";
-  const showCapacity =
-    (status === "pendiente" || status === "senado") && capacity;
+  const showSena = status === "pendiente";
+  const showSaldo = status === "senado";
+  const showCapacity = Boolean(capacity);
 
-  const cancelButton = (!esMensual || proximaClase) && (
+  const cancelButton = (
     <CancelarReservaDialog
-      reservaId={esMensual ? proximaClase.reserva_id : reservaId}
+      reservaId={reservaId}
       actividad={sport}
       datetime={datetime}
-      mensual={esMensual}
       estado={status}
       onCancelled={onCancelled}
       trigger={
@@ -85,16 +57,7 @@ export default function BookingCard({
       Pagar
     </Button>
   );
-  const pagarButton = showMensualidad ? (
-    <PagarMensualidadDialog
-      reservaId={reservaId}
-      actividad={sport}
-      datetime={datetime}
-      clases={mensualidad.clases.length}
-      total={mensualidad.total}
-      trigger={pagarTrigger}
-    />
-  ) : showSena ? (
+  const pagarButton = showSena ? (
     <PagarSenaDialog
       reservaId={reservaId}
       actividad={sport}
@@ -143,19 +106,18 @@ export default function BookingCard({
           <div className="flex flex-col gap-xs">
             <div className="flex items-center gap-xs">
               <Icon className={cn("size-5", meta.icon)} strokeWidth={2} />
-              <h4
-                className={cn(
-                  "text-label-md uppercase tracking-wider",
-                  meta.title,
-                )}
-              >
-                {court ? `${sport} • ${court}` : sport}
+              <h4 className="text-label-md uppercase tracking-wider text-primary">
+                {sport}
               </h4>
             </div>
-            <span className="text-xs text-on-surface-variant">
-              Reserva #{reservaId}
-            </span>
-            <span className="text-[20px] leading-tight font-bold text-on-surface">
+            <div className="flex items-center gap-xs">
+              <span className="text-xs text-on-surface-variant">
+                Reserva #{reservaId}
+              </span>
+              <TipoChip tipo="eventual" />
+            </div>
+            <span className="flex items-center gap-xs text-[20px] leading-tight font-bold text-on-surface">
+              <CalendarDays className="size-5 text-on-surface-variant" strokeWidth={2} />
               {datetime}
             </span>
           </div>
@@ -164,7 +126,8 @@ export default function BookingCard({
         </div>
 
         {showCapacity && (
-          <span className="hidden md:inline-flex pl-xs text-label-sm text-on-surface-variant">
+          <span className="hidden md:inline-flex items-center gap-xs pl-xs text-label-sm text-on-surface-variant">
+            <Users className="size-4" strokeWidth={2} />
             Cupo: {capacity.taken} / {capacity.total}
           </span>
         )}
@@ -174,7 +137,8 @@ export default function BookingCard({
 
       <div className="flex items-center justify-between pt-sm border-t border-outline-variant pl-xs md:pt-0 md:border-t-0 md:border-l md:border-outline-variant md:pl-md md:justify-end md:shrink-0">
         {showCapacity && (
-          <span className="md:hidden text-label-sm text-on-surface-variant">
+          <span className="md:hidden inline-flex items-center gap-xs text-label-sm text-on-surface-variant">
+            <Users className="size-4" strokeWidth={2} />
             Cupo: {capacity.taken} / {capacity.total}
           </span>
         )}

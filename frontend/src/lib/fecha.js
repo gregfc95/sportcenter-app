@@ -8,6 +8,27 @@ const DIAS_LARGOS = [
   "Sábado",
 ];
 
+const MESES = [
+  "Enero",
+  "Febrero",
+  "Marzo",
+  "Abril",
+  "Mayo",
+  "Junio",
+  "Julio",
+  "Agosto",
+  "Septiembre",
+  "Octubre",
+  "Noviembre",
+  "Diciembre",
+];
+
+// "Julio 2026" a partir de una fecha ISO (YYYY-MM-DD).
+export function mesLabel(iso) {
+  const [y, m] = iso.split("-");
+  return `${MESES[Number(m) - 1]} ${y}`;
+}
+
 // "Hoy, 20:00" / "Jueves 12/06, 08:00" a partir de una fecha ISO
 // (YYYY-MM-DD) y una hora ya formateada (HH:MM).
 export function formatReservaFecha(iso, hora) {

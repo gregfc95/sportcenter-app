@@ -1,7 +1,8 @@
 import { CalendarX2 } from "lucide-react";
 import { Link } from "react-router-dom";
 
-import BookingCard from "./BookingCard";
+import BookingCardEventual from "./BookingCardEventual";
+import BookingCardMensual from "./BookingCardMensual";
 
 export default function UpcomingBookings({ bookings = [], onCancelled }) {
   return (
@@ -26,9 +27,24 @@ export default function UpcomingBookings({ bookings = [], onCancelled }) {
         </div>
       ) : (
         <div className="flex flex-col gap-gutter">
-          {bookings.map((booking) => (
-            <BookingCard key={booking.id} {...booking} onCancelled={onCancelled} />
-          ))}
+          {bookings.map(({ tipo, mensualidad, ...booking }) => {
+            const esMensual =
+              tipo === "mensual" && Array.isArray(mensualidad?.clases);
+            return esMensual ? (
+              <BookingCardMensual
+                key={booking.id}
+                mensualidad={mensualidad}
+                {...booking}
+                onCancelled={onCancelled}
+              />
+            ) : (
+              <BookingCardEventual
+                key={booking.id}
+                {...booking}
+                onCancelled={onCancelled}
+              />
+            );
+          })}
         </div>
       )}
     </section>
