@@ -75,8 +75,40 @@ export function completarPago(reservaId) {
 }
 
 /**
+ * Genera el link de Checkout Pro para pagar un abono mensual pendiente desde
+ * Mis Turnos. Sirve cualquier reserva del grupo; el monto cubre todas las
+ * clases del mes.
+ *
+ * @param {number} reservaId
+ * @returns {Promise<{ reserva_id: number, fechas: string[], clases: number, monto: number, preference_id: string, init_point: string, sandbox_init_point: string }>}
+ */
+export function crearCheckoutMensualidad(reservaId) {
+  return request("/api/pagos/mensualidad/checkout", {
+    method: "POST",
+    body: { reserva_id: reservaId },
+    fallback: "No se pudo iniciar el pago de la mensualidad.",
+  });
+}
+
+/**
+ * Registra el pago completo del abono mensual (al volver con éxito de Mercado
+ * Pago). Idempotente.
+ *
+ * @param {number} reservaId
+ * @returns {Promise<{ reserva_id: number, monto_total: number, pagos: Array<object> }>}
+ */
+export function confirmarMensualidad(reservaId) {
+  return request("/api/pagos/mensualidad", {
+    method: "POST",
+    body: { reserva_id: reservaId },
+    fallback: "No se pudo registrar la mensualidad.",
+  });
+}
+
+/**
  * Cancela (soft-delete) una reserva cuyo pago no se concretó (abandono/rechazo
  * en Mercado Pago). Idempotente; no cancela si ya tiene un pago registrado.
+ * Si la reserva es de un abono mensual, cancela el grupo completo.
  *
  * @param {number} reservaId
  */
@@ -92,11 +124,17 @@ export function cancelarCheckout(reservaId) {
  * Cancela (soft-delete) una reserva del usuario actual. No interactúa con
  * Mercado Pago: solo da de baja la reserva.
  *
+ * Para una clase de un abono mensual cancelada con más de 48 h se puede elegir
+ * `resolucion: "credito"` (crédito a favor) en lugar del reembolso.
+ *
  * @param {number} reservaId
+ * @param {{ resolucion?: "reembolso" | "credito" }} [opciones]
+ * @returns {Promise<{ ok: boolean, reembolsado: boolean, resolucion: string, monto: number|null }>}
  */
-export function cancelarReserva(reservaId) {
+export function cancelarReserva(reservaId, opciones = {}) {
   return request(`/api/reservas/${reservaId}/cancelar`, {
     method: "POST",
+    ...(opciones.resolucion ? { body: { resolucion: opciones.resolucion } } : {}),
     fallback: "No se pudo cancelar la reserva.",
   });
 }
