@@ -10,10 +10,10 @@ function ddmm(iso) {
 
 /**
  * Fila de chips con las clases del abono mensual: las pasadas quedan marcadas
- * como completadas. Con `selectable`, entre las próximas se elige la clase
- * sobre la que actúa "Cancelar clase" (cada fecha se cancela individualmente,
- * nunca en bloque); sin `selectable` —abono pendiente, que se cancela
- * completo— los chips son solo informativos.
+ * como completadas y las canceladas tachadas. Con `selectable`, entre las
+ * próximas se elige la clase sobre la que actúa "Cancelar clase" (cada fecha
+ * se cancela individualmente, nunca en bloque); sin `selectable` —abono
+ * pendiente, que se cancela completo— los chips son solo informativos.
  */
 export default function ClasesMensuales({
   clases,
@@ -25,6 +25,21 @@ export default function ClasesMensuales({
     <div className="flex gap-2 overflow-x-auto pb-1 snap-x">
       {clases.map((clase) => {
         const selected = selectable && clase.reserva_id === selectedId;
+        // Antes que `pasada`: una clase puede ser ambas y acá no hubo sesión.
+        if (clase.cancelada) {
+          return (
+            <div
+              key={clase.reserva_id}
+              title="Clase cancelada"
+              className="snap-center shrink-0 flex items-center justify-center w-16 h-14 rounded-lg border border-outline-variant bg-surface-container-low opacity-60"
+            >
+              <span className="text-label-sm text-on-surface-variant line-through">
+                {ddmm(clase.fecha)}
+              </span>
+              <span className="sr-only">(cancelada)</span>
+            </div>
+          );
+        }
         if (clase.pasada) {
           return (
             <div

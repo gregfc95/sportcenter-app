@@ -48,6 +48,11 @@ class Reserva(SoftDeleteMixin, db.Model):
         ),
         nullable=True,
     )
+    # Identidad del abono mensual: todas las clases de una misma compra
+    # comparten `grupo_id`. Reservar de nuevo el mismo mes (tras cancelar) crea
+    # otro grupo, así las generaciones canceladas no se mezclan. Null en las
+    # eventuales (grupo de una) y hasta el backfill de filas viejas.
+    grupo_id = db.Column(db.String(32), nullable=True, index=True)
 
     created_at = db.Column(
         db.DateTime(timezone=True),
@@ -81,11 +86,14 @@ class Reserva(SoftDeleteMixin, db.Model):
         ),
     )
 
-    def __init__(self, user_id, turno_id, fecha, tipo=ReservaTipo.EVENTUAL):
+    def __init__(
+        self, user_id, turno_id, fecha, tipo=ReservaTipo.EVENTUAL, grupo_id=None
+    ):
         self.user_id = user_id
         self.turno_id = turno_id
         self.fecha = fecha
         self.tipo = tipo
+        self.grupo_id = grupo_id
 
     def __repr__(self):
         tipo = self.tipo.value if self.tipo else None

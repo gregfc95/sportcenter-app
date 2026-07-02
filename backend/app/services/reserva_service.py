@@ -1,4 +1,5 @@
 from datetime import date, datetime, timedelta
+from uuid import uuid4
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import func, select
@@ -104,12 +105,16 @@ class ReservaService:
             self._validar_sin_conflicto_horario(user_id, fecha, turno)
             self._validar_cupo_disponible(turno, fecha)
 
+        # Un grupo_id por compra: identifica al abono sin depender de inferir
+        # (usuario, turno, mes), que colisiona con generaciones ya canceladas.
+        grupo_id = uuid4().hex
         reservas = [
             Reserva(
                 user_id=user_id,
                 turno_id=turno_id,
                 fecha=fecha,
                 tipo=ReservaTipo.MENSUAL,
+                grupo_id=grupo_id,
             )
             for fecha in fechas
         ]
@@ -123,29 +128,39 @@ class ReservaService:
             )
         return reservas
 
-    def grupo_mensual(self, reserva: Reserva) -> list[Reserva]:
-        """Reservas mensuales activas del mismo abono, ordenadas por fecha.
+    def grupo_mensual(
+        self, reserva: Reserva, include_canceladas: bool = False
+    ) -> list[Reserva]:
+        """Reservas mensuales del mismo abono, ordenadas por fecha.
 
-        El grupo se infiere: mismo usuario, mismo turno y mismo mes. No pueden
-        existir dos abonos del mismo (usuario, turno, mes) porque todo abono
-        llega a fin de mes y compartirían la última fecha, bloqueada por el
-        índice único y la validación de superposición.
+        El abono se identifica por `grupo_id`: todas las clases de una compra lo
+        comparten, así una generación cancelada del mismo mes (con otro
+        grupo_id) no se mezcla. Para filas sin grupo_id (eventuales no llegan
+        acá; solo abonos viejos previos al backfill) se cae al criterio
+        histórico inferido por (usuario, turno, mes).
+
+        Con `include_canceladas` también trae las clases canceladas
+        (soft-deleted, distinguibles por `is_deleted`), para que la card pueda
+        mostrarlas tachadas.
         """
         if reserva.tipo != ReservaTipo.MENSUAL:
             return [reserva]
-        primero = reserva.fecha.replace(day=1)
-        siguiente_mes = (primero + timedelta(days=32)).replace(day=1)
-        stmt = (
-            select(Reserva)
-            .where(
+        stmt = select(Reserva).order_by(Reserva.fecha.asc())
+        if reserva.grupo_id:
+            stmt = stmt.where(Reserva.grupo_id == reserva.grupo_id)
+        else:
+            # Fallback histórico: sin grupo_id, se infiere por mes.
+            primero = reserva.fecha.replace(day=1)
+            siguiente_mes = (primero + timedelta(days=32)).replace(day=1)
+            stmt = stmt.where(
                 Reserva.user_id == reserva.user_id,
                 Reserva.turno_id == reserva.turno_id,
                 Reserva.tipo == ReservaTipo.MENSUAL,
                 Reserva.fecha >= primero,
                 Reserva.fecha < siguiente_mes,
             )
-            .order_by(Reserva.fecha.asc())
-        )
+        if include_canceladas:
+            stmt = stmt.execution_options(include_deleted=True)
         return db.session.execute(stmt).scalars().all()
 
     def listar_por_usuario(self, user_id: int) -> list[Reserva]:

@@ -87,6 +87,19 @@ class TestCrearReservaMensual:
         assert all(r.id is not None for r in reservas)
         assert 1 <= len(reservas) <= 5
 
+    def test_comparten_grupo_id(
+        self, make_user, make_actividad, make_turno, next_date_for
+    ):
+        user = make_user()
+        turno = make_turno(make_actividad(), dia_semana=DiaSemana.LUNES)
+        fecha = next_date_for(DiaSemana.LUNES)
+
+        reservas = svc.crear_reserva_mensual(user.id, turno.id, fecha)
+
+        gids = {r.grupo_id for r in reservas}
+        assert len(gids) == 1
+        assert reservas[0].grupo_id is not None
+
     def test_turno_inexistente(self, make_user, next_date_for):
         user = make_user()
         with pytest.raises(ValueError):
@@ -173,6 +186,44 @@ class TestGrupoMensual:
         svc.cancelar_reserva(reservas[0].id)
         grupo = svc.grupo_mensual(reservas[-1])
         assert [r.id for r in grupo] == [r.id for r in reservas[1:]]
+
+    def test_incluye_canceladas_con_flag(
+        self, make_user, make_actividad, make_turno, next_date_for
+    ):
+        user = make_user()
+        turno = make_turno(make_actividad(), dia_semana=DiaSemana.LUNES)
+        fecha = next_date_for(DiaSemana.LUNES)
+        reservas = svc.crear_reserva_mensual(user.id, turno.id, fecha)
+
+        svc.cancelar_reserva(reservas[0].id)
+        grupo = svc.grupo_mensual(reservas[-1], include_canceladas=True)
+        assert [r.id for r in grupo] == [r.id for r in reservas]
+        assert grupo[0].is_deleted
+        assert not any(r.is_deleted for r in grupo[1:])
+
+    def test_aisla_generaciones_del_mismo_mes(
+        self, make_user, make_actividad, make_turno, next_date_for
+    ):
+        # Regresión del bug de chips duplicados: reservar el mismo mes tras
+        # cancelar arma otro grupo, y el grupo del abono vigente no arrastra las
+        # clases canceladas de la generación anterior.
+        user = make_user()
+        turno = make_turno(make_actividad(), dia_semana=DiaSemana.LUNES)
+        fecha = next_date_for(DiaSemana.LUNES)
+
+        gen1 = svc.crear_reserva_mensual(user.id, turno.id, fecha)
+        for r in gen1:
+            svc.cancelar_reserva(r.id)
+        gen2 = svc.crear_reserva_mensual(user.id, turno.id, fecha)
+        svc.cancelar_reserva(gen2[0].id)
+
+        assert gen1[0].grupo_id != gen2[0].grupo_id
+
+        grupo = svc.grupo_mensual(gen2[-1], include_canceladas=True)
+        assert {r.grupo_id for r in grupo} == {gen2[0].grupo_id}
+        fechas = [r.fecha for r in grupo]
+        assert len(fechas) == len(set(fechas))
+        assert len(grupo) == len(gen2)
 
     def test_una_eventual_es_su_propio_grupo(
         self, make_user, make_actividad, make_turno, next_date_for

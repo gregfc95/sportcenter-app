@@ -66,7 +66,7 @@ def list_mis_reservas() -> Response:
 
     Las eventuales salen una por fila. Las mensuales se colapsan en una entrada
     por abono (una card por mes de un turno) con el detalle de todas sus clases
-    —incluidas las ya pasadas, que la card muestra como completadas— en el
+    —incluidas las pasadas (completadas) y las canceladas (tachadas)— en el
     bloque `mensualidad`. Cada clase lleva su `reserva_id` para poder
     cancelarla individualmente.
     """
@@ -87,13 +87,18 @@ def list_mis_reservas() -> Response:
                 continue
             grupos_vistos.add(clave)
 
-            grupo = reserva_service.grupo_mensual(reserva)
-            resumenes = [pago_service.resumen_pago(r) for r in grupo]
+            # Las canceladas viajan tachadas en `clases`; la plata (total,
+            # saldo, id de la card) se calcula solo sobre las vivas. Al agrupar
+            # por grupo_id cada fecha aparece una sola vez (rereservar crea otro
+            # grupo), así que no hace falta deduplicar.
+            grupo = reserva_service.grupo_mensual(reserva, include_canceladas=True)
+            vivas = [r for r in grupo if not r.is_deleted]
+            resumenes = [pago_service.resumen_pago(r) for r in vivas]
             total_grupo = sum(r["total"] for r in resumenes)
             cobrado_grupo = sum(r["cobrado"] for r in resumenes)
             payload.append(
                 {
-                    "id": grupo[0].id,
+                    "id": vivas[0].id,
                     # La fecha de la card es la próxima clase (esta iteración
                     # trae la más temprana no pasada, por el orden asc).
                     "fecha": reserva.fecha.isoformat(),
@@ -109,6 +114,7 @@ def list_mis_reservas() -> Response:
                                 "reserva_id": r.id,
                                 "fecha": r.fecha.isoformat(),
                                 "pasada": r.fecha < hoy,
+                                "cancelada": r.is_deleted,
                             }
                             for r in grupo
                         ],

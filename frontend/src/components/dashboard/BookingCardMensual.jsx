@@ -66,8 +66,11 @@ export default function BookingCardMensual({
   const showCapacity = Boolean(capacity);
 
   const clases = mensualidad.clases;
-  const proximas = clases.filter((c) => !c.pasada);
-  const pasadas = clases.length - proximas.length;
+  // Las canceladas se muestran tachadas pero no cuentan para selección,
+  // sesiones ni pago.
+  const vivas = clases.filter((c) => !c.cancelada);
+  const proximas = vivas.filter((c) => !c.pasada);
+  const pasadas = vivas.length - proximas.length;
   const proximaDatetime = proximas[0]
     ? formatReservaFecha(proximas[0].fecha, turno.hora)
     : null;
@@ -140,8 +143,8 @@ export default function BookingCardMensual({
 
       <div className="pl-xs flex items-center gap-2 text-label-sm text-on-surface-variant">
         <span>
-          {pasadas} de {clases.length}{" "}
-          {clases.length === 1 ? "sesión" : "sesiones"}
+          {pasadas} de {vivas.length}{" "}
+          {vivas.length === 1 ? "sesión" : "sesiones"}
           {proximaDatetime ? ` · próxima: ${proximaDatetime}` : ""}
         </span>
       </div>
@@ -174,7 +177,7 @@ export default function BookingCardMensual({
               <CancelarAbonoDialog
                 reservaId={reservaId}
                 actividad={sport}
-                clases={clases.length}
+                clases={vivas.length}
                 datetime={proximaDatetime}
                 onCancelled={onCancelled}
                 trigger={<CancelarTrigger label="Cancelar" />}
@@ -183,7 +186,7 @@ export default function BookingCardMensual({
                 reservaId={reservaId}
                 actividad={sport}
                 datetime={proximaDatetime}
-                clases={clases.length}
+                clases={vivas.length}
                 total={mensualidad.total}
                 trigger={<PagarTrigger />}
               />

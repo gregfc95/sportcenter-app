@@ -42,8 +42,8 @@ export default function MisTurnosPage() {
 
   // Cancelación: una eventual saca su card; un abono pendiente se cancela
   // completo (sale la card, el id recibido es el de la card); en uno pagado
-  // sale la clase cancelada de la fila de chips (y la card entera si no le
-  // quedan clases próximas).
+  // la clase cancelada queda tachada en la fila de chips (y la card entera
+  // sale si no le quedan clases próximas sin cancelar).
   const handleCancelled = (reservaId) => {
     setReservas((prev) =>
       prev
@@ -59,15 +59,17 @@ export default function MisTurnosPage() {
                 ...r,
                 mensualidad: {
                   ...r.mensualidad,
-                  clases: r.mensualidad.clases.filter(
-                    (c) => c.reserva_id !== reservaId,
+                  clases: r.mensualidad.clases.map((c) =>
+                    c.reserva_id === reservaId ? { ...c, cancelada: true } : c,
                   ),
                 },
               }
             : r,
         )
         .filter((r) =>
-          r.mensualidad ? r.mensualidad.clases.some((c) => !c.pasada) : true,
+          r.mensualidad
+            ? r.mensualidad.clases.some((c) => !c.pasada && !c.cancelada)
+            : true,
         ),
     );
   };

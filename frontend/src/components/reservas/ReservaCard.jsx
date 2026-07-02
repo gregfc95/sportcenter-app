@@ -3,6 +3,7 @@ import { CalendarDays, Users } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { EstadoBadge } from "@/components/ui/estado-badge";
+import { TipoChip } from "@/components/ui/tipo-chip";
 import { getActividadIcon } from "@/components/actividades/actividadIcons";
 import PagarSaldoDialog from "@/components/reservas/PagarSaldoDialog";
 import PagarSenaDialog from "@/components/reservas/PagarSenaDialog";
@@ -74,8 +75,10 @@ function ReservaCardShell({ actividad, subtitle, estado, children, actions }) {
         {children}
       </div>
 
-      {/* Actions — cancelar (por clase en los abonos) y pago si falta. */}
-      <div className="relative z-10 flex items-center gap-sm pt-sm border-t border-outline-variant">
+      {/* Actions — cancelar (por clase en los abonos) y pago si falta.
+          `mt-auto` los ancla abajo: en la grilla las cards se estiran a la
+          fila y una eventual corta dejaría el footer flotando al medio. */}
+      <div className="relative z-10 mt-auto flex items-center gap-sm pt-sm border-t border-outline-variant">
         {actions}
       </div>
       {/* TODO (a futuro): mostrar el QR del turno pagado. Reimportar `QrCode`
@@ -93,23 +96,20 @@ function ReservaCardShell({ actividad, subtitle, estado, children, actions }) {
   );
 }
 
-// Chip de tipo ("mensual" / "eventual") alineado a la derecha en los detalles.
-function TipoChip({ tipo }) {
-  return (
-    <span className="ml-auto px-2 py-0.5 bg-surface-container-high rounded text-xs capitalize">
-      {tipo}
-    </span>
-  );
-}
-
 function ReservaMensualCard({ reserva, onCancelled }) {
   const clases = reserva.mensualidad.clases;
-  const proximas = clases.filter((c) => !c.pasada);
-  const pasadas = clases.length - proximas.length;
+  // Las canceladas se muestran tachadas pero no cuentan para selección,
+  // sesiones ni pago.
+  const vivas = clases.filter((c) => !c.cancelada);
+  const proximas = vivas.filter((c) => !c.pasada);
+  const pasadas = vivas.length - proximas.length;
   const pagado = reserva.estado === "pagado";
   const proximaDatetime = proximas[0]
     ? formatReservaFecha(proximas[0].fecha, reserva.turno.hora)
     : null;
+  // Cupo del turno semanal (mismo dato que la eventual: el grupo comparte cupo).
+  const { cupo, ocupados } = reserva.turno;
+  const ocupacion = cupo > 0 ? Math.min(100, (ocupados / cupo) * 100) : 0;
 
   // Clase del abono pagado sobre la que actúa "Cancelar clase"; por defecto
   // la próxima. Un abono pendiente se cancela completo, sin selección.
@@ -147,7 +147,7 @@ function ReservaMensualCard({ reserva, onCancelled }) {
             <CancelarAbonoDialog
               reservaId={reserva.id}
               actividad={reserva.actividad}
-              clases={clases.length}
+              clases={vivas.length}
               datetime={proximaDatetime}
               onCancelled={onCancelled}
               trigger={<CancelarTrigger />}
@@ -156,7 +156,7 @@ function ReservaMensualCard({ reserva, onCancelled }) {
               reservaId={reserva.id}
               actividad={reserva.actividad}
               datetime={proximaDatetime}
-              clases={clases.length}
+              clases={vivas.length}
               total={reserva.mensualidad.total}
               trigger={<PagarTrigger />}
             />
@@ -165,10 +165,11 @@ function ReservaMensualCard({ reserva, onCancelled }) {
       }
     >
       <div className="flex items-center gap-3">
-        <span className="text-label-sm text-primary">
+        <CalendarDays className="size-4 shrink-0" aria-hidden="true" />
+        <span className="text-primary">
           {clases.length > 0 ? mesLabel(clases[0].fecha) : ""}
         </span>
-        <TipoChip tipo={reserva.tipo} />
+        <TipoChip tipo={reserva.tipo} className="ml-auto" />
       </div>
       <ClasesMensuales
         clases={clases}
@@ -178,12 +179,24 @@ function ReservaMensualCard({ reserva, onCancelled }) {
       />
       <div className="flex items-center gap-2">
         <span>
-          {pasadas} de {clases.length}{" "}
-          {clases.length === 1 ? "sesión" : "sesiones"}
+          {pasadas} de {vivas.length}{" "}
+          {vivas.length === 1 ? "sesión" : "sesiones"}
           {proximas[0]
             ? ` · próxima: ${formatReservaFecha(proximas[0].fecha, reserva.turno.hora)}`
             : ""}
         </span>
+      </div>
+      <div className="flex items-center gap-3">
+        <Users className="size-4 shrink-0" aria-hidden="true" />
+        <span>
+          Cupo: {ocupados} / {cupo}
+        </span>
+        <div className="ml-auto w-16 h-1.5 bg-outline-variant rounded-full overflow-hidden">
+          <div
+            className="h-full bg-primary rounded-full"
+            style={{ width: `${ocupacion}%` }}
+          />
+        </div>
       </div>
     </ReservaCardShell>
   );
@@ -229,8 +242,8 @@ function ReservaEventualCard({ reserva, onCancelled }) {
     >
       <div className="flex items-center gap-3">
         <CalendarDays className="size-4 shrink-0" aria-hidden="true" />
-        <span>{datetime}</span>
-        <TipoChip tipo={reserva.tipo} />
+        <span className="text-primary">{datetime}</span>
+        <TipoChip tipo={reserva.tipo} className="ml-auto" />
       </div>
       <div className="flex items-center gap-3">
         <Users className="size-4 shrink-0" aria-hidden="true" />
