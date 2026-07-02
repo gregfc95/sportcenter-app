@@ -44,11 +44,14 @@ function toUpcomingBookings(reservas) {
       precio: r.precio,
       sena: r.sena,
       saldo: r.saldo,
+      tipo: r.tipo,
+      mensualidad: r.mensualidad ?? null,
     }));
 }
 
 function ClientDashboard({ user }) {
   const [bookings, setBookings] = useState([]);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
     let active = true;
@@ -62,11 +65,11 @@ function ClientDashboard({ user }) {
     return () => {
       active = false;
     };
-  }, []);
+  }, [refreshKey]);
 
-  const handleCancelled = (reservaId) => {
-    setBookings((prev) => prev.filter((b) => b.reservaId !== reservaId));
-  };
+  // Tras cancelar se refresca la lista: una eventual saca su card, pero en un
+  // abono mensual solo sale la clase cancelada (el id no coincide con la card).
+  const handleCancelled = () => setRefreshKey((k) => k + 1);
 
   return (
     <div className="flex flex-col gap-lg px-margin-mobile md:px-lg mt-md md:mt-lg max-w-4xl mx-auto w-full">

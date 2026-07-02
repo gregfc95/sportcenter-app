@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { PageHeading } from "@/components/ui/page-heading";
 import {
   confirmarSena,
+  confirmarMensualidad,
   cancelarCheckout,
   completarPago,
 } from "@/components/reservas/api";
@@ -68,8 +69,10 @@ export default function PagoResultadoPage() {
   // dependemos de sessionStorage (ni del origin desde el que se inició el pago).
   const reservaId = Number(searchParams.get("external_reference"));
   // `accion=completar` lo agrega el back_url del checkout de saldo: distingue el
-  // pago del saldo (segunda mitad) del de la seña inicial.
+  // pago del saldo (segunda mitad) del de la seña inicial. `accion=mensualidad`
+  // lo agrega el checkout del abono mensual (pago completo, sin seña).
   const isCompletar = searchParams.get("accion") === "completar";
+  const isMensualidad = searchParams.get("accion") === "mensualidad";
 
   // Éxito: registramos el pago (seña o saldo según `accion`), toast con el monto
   // del backend y vamos a Mis Turnos. Error: en el flujo de seña cancelamos la
@@ -83,15 +86,23 @@ export default function PagoResultadoPage() {
     const tieneReserva = Number.isInteger(reservaId) && reservaId > 0;
 
     if (isSuccess) {
-      const registrar = isCompletar ? completarPago : confirmarSena;
+      const registrar = isCompletar
+        ? completarPago
+        : isMensualidad
+          ? confirmarMensualidad
+          : confirmarSena;
       const mensaje = (formatted) =>
         isCompletar
           ? formatted
             ? `Pago completado. Saldo de ${formatted} abonado.`
             : "Pago completado."
-          : formatted
-            ? `Reserva confirmada. Seña de ${formatted} abonada.`
-            : "Reserva confirmada.";
+          : isMensualidad
+            ? formatted
+              ? `Reserva mensual creada con éxito. Mensualidad de ${formatted} abonada.`
+              : "Reserva confirmada. Mensualidad abonada."
+            : formatted
+              ? `Reserva confirmada. Seña de ${formatted} abonada.`
+              : "Reserva confirmada.";
 
       const finish = (monto) => {
         toast.success(mensaje(formatSena(monto)));
@@ -99,7 +110,9 @@ export default function PagoResultadoPage() {
       };
       if (tieneReserva) {
         registrar(reservaId)
-          .then((pago) => finish(pago?.monto))
+          .then((pago) =>
+            finish(isMensualidad ? pago?.monto_total : pago?.monto),
+          )
           .catch(() => finish(null));
       } else {
         finish(null);
@@ -107,10 +120,11 @@ export default function PagoResultadoPage() {
       return;
     }
 
-    // isError en el flujo de seña: cancelamos la reserva abandonada (sin pago).
-    // En el flujo de saldo no cancelamos: la reserva sigue señada y válida.
+    // isError en el flujo de seña o mensualidad: cancelamos la reserva (o el
+    // abono completo) abandonada sin pago. En el de saldo no cancelamos: la
+    // reserva sigue señada y válida.
     if (!isCompletar && tieneReserva) cancelarCheckout(reservaId).catch(() => {});
-  }, [isSuccess, isError, isCompletar, reservaId, navigate]);
+  }, [isSuccess, isError, isCompletar, isMensualidad, reservaId, navigate]);
 
   if (isSuccess) return null;
 
