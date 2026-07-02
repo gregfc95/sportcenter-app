@@ -102,6 +102,8 @@
 
   --color-success-green: var(--success-green);
   --color-error: var(--error);
+  --color-info-blue: var(--info-blue);
+  --color-credit-violet: var(--credit-violet);
 }
 
 /* Brand palette. Dark mode adjusts luminance rather than inverting,
@@ -146,6 +148,8 @@
 
   --success-green: #16A34A;
   --error: #DC2626;
+  --info-blue: #0284C7;
+  --credit-violet: #7C3AED;
 
   --radius: 0.5rem;
 }
@@ -190,6 +194,8 @@
 
   --success-green: #22C55E;
   --error: #EF4444;
+  --info-blue: #38BDF8;
+  --credit-violet: #A78BFA;
 }
 
 @layer base {
