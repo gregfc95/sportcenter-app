@@ -2,6 +2,7 @@ from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import joinedload
 
 from .. import db
@@ -10,6 +11,10 @@ from ..models.turno import Turno, DiaSemana
 
 
 CANCELACION_VENTANA = timedelta(hours=24)
+
+# Una clase de un abono mensual se cancela con beneficio (reembolso o crédito a
+# favor, a elección del cliente) solo con más de 48 h de anticipación.
+CANCELACION_VENTANA_MENSUAL = timedelta(hours=48)
 
 # Cada turno ocupa un bloque fijo de 1 h. Dos turnos se solapan (y por lo tanto
 # el usuario no puede tener ambos) cuando sus horas de inicio distan menos de
@@ -34,6 +39,20 @@ WEEKDAY_TO_DIA_SEMANA = {
 }
 
 
+def fechas_mensuales(fecha_inicio: date) -> list[date]:
+    """Ocurrencias del mismo día de semana desde `fecha_inicio` hasta fin de mes.
+
+    Un día de semana ocurre a lo sumo 5 veces en un mes, así que el abono
+    mensual nunca supera las 5 clases.
+    """
+    fechas = []
+    f = fecha_inicio
+    while f.month == fecha_inicio.month and f.year == fecha_inicio.year:
+        fechas.append(f)
+        f += timedelta(days=7)
+    return fechas
+
+
 class ReservaService:
 
     def crear_reserva(
@@ -47,11 +66,10 @@ class ReservaService:
         if turno is None:
             raise ValueError("El turno indicado no existe.")
 
-        if tipo == ReservaTipo.EVENTUAL:
-            self._validar_dia_semana(turno, fecha)
-            self._validar_turno_no_pasado(turno, fecha)
-            self._validar_sin_conflicto_horario(user_id, fecha, turno)
-            self._validar_cupo_disponible(turno, fecha)
+        self._validar_dia_semana(turno, fecha)
+        self._validar_turno_no_pasado(turno, fecha)
+        self._validar_sin_conflicto_horario(user_id, fecha, turno)
+        self._validar_cupo_disponible(turno, fecha)
 
         reserva = Reserva(
             user_id=user_id,
@@ -62,6 +80,73 @@ class ReservaService:
         db.session.add(reserva)
         db.session.commit()
         return reserva
+
+    def crear_reserva_mensual(
+        self, user_id: int, turno_id: int, fecha_inicio: date
+    ) -> list[Reserva]:
+        """Abona al usuario a todas las clases restantes del mes de ese turno.
+
+        Crea una reserva MENSUAL por cada ocurrencia del turno desde
+        `fecha_inicio` hasta fin de mes. Es todo-o-nada: si alguna fecha falla
+        una validación (superposición o cupo), no se crea ninguna.
+        """
+        turno = db.session.get(Turno, turno_id)
+        if turno is None:
+            raise ValueError("El turno indicado no existe.")
+
+        # Las fechas siguientes son la misma semana +7d: comparten día de
+        # semana, y al ser posteriores nunca están en el pasado.
+        self._validar_dia_semana(turno, fecha_inicio)
+        self._validar_turno_no_pasado(turno, fecha_inicio)
+
+        fechas = fechas_mensuales(fecha_inicio)
+        for fecha in fechas:
+            self._validar_sin_conflicto_horario(user_id, fecha, turno)
+            self._validar_cupo_disponible(turno, fecha)
+
+        reservas = [
+            Reserva(
+                user_id=user_id,
+                turno_id=turno_id,
+                fecha=fecha,
+                tipo=ReservaTipo.MENSUAL,
+            )
+            for fecha in fechas
+        ]
+        db.session.add_all(reservas)
+        try:
+            db.session.commit()
+        except IntegrityError:
+            db.session.rollback()
+            raise ValueError(
+                "Ya tienes una reserva para alguna de las fechas del mes."
+            )
+        return reservas
+
+    def grupo_mensual(self, reserva: Reserva) -> list[Reserva]:
+        """Reservas mensuales activas del mismo abono, ordenadas por fecha.
+
+        El grupo se infiere: mismo usuario, mismo turno y mismo mes. No pueden
+        existir dos abonos del mismo (usuario, turno, mes) porque todo abono
+        llega a fin de mes y compartirían la última fecha, bloqueada por el
+        índice único y la validación de superposición.
+        """
+        if reserva.tipo != ReservaTipo.MENSUAL:
+            return [reserva]
+        primero = reserva.fecha.replace(day=1)
+        siguiente_mes = (primero + timedelta(days=32)).replace(day=1)
+        stmt = (
+            select(Reserva)
+            .where(
+                Reserva.user_id == reserva.user_id,
+                Reserva.turno_id == reserva.turno_id,
+                Reserva.tipo == ReservaTipo.MENSUAL,
+                Reserva.fecha >= primero,
+                Reserva.fecha < siguiente_mes,
+            )
+            .order_by(Reserva.fecha.asc())
+        )
+        return db.session.execute(stmt).scalars().all()
 
     def listar_por_usuario(self, user_id: int) -> list[Reserva]:
         """Reservas activas del usuario de hoy en adelante, próximas primero.
@@ -157,7 +242,6 @@ class ReservaService:
             .where(
                 Reserva.user_id == user_id,
                 Reserva.fecha == fecha,
-                Reserva.tipo == ReservaTipo.EVENTUAL,
             )
         )
         nuevo_inicio = datetime.combine(fecha, turno.hora)
@@ -173,32 +257,40 @@ class ReservaService:
         """Cancela (soft-delete) una reserva.
 
         Si se pasa `motivo` se usa tal cual (p. ej. una baja forzada por el centro
-        al eliminar la actividad, que siempre reembolsa). Si no, se deduce de la
-        antelación: reembolsable con más de 24 h, retenido dentro de las 24 h.
+        al eliminar la actividad, que siempre reembolsa, o el crédito a favor
+        elegido por el cliente al cancelar una clase mensual). Si no, se deduce
+        de la antelación: reembolsable fuera de la ventana del tipo (24 h
+        eventual, 48 h mensual), retenido dentro de ella.
         """
         reserva = db.session.get(Reserva, reserva_id)
         if reserva is None:
             raise ValueError("La reserva indicada no existe.")
 
-        if reserva.tipo == ReservaTipo.EVENTUAL:
-            reserva.motivo_cancelacion = (
-                motivo or self._motivo_segun_anticipacion(reserva)
-            )
+        reserva.motivo_cancelacion = (
+            motivo or self._motivo_segun_anticipacion(reserva)
+        )
 
         reserva.soft_delete()
         db.session.commit()
         return reserva
 
     def es_reembolsable(self, reserva: Reserva) -> bool:
-        """True si la reserva se cancela con más de 24 h de anticipación.
+        """True si la cancelación llega con la anticipación que exige el tipo.
 
-        Determina si la cancelación da derecho a reembolso de lo abonado.
+        Eventual: más de 24 h da derecho a reembolso. Mensual: más de 48 h da
+        derecho al beneficio que elija el cliente (reembolso o crédito a favor).
+        Dentro de la ventana, lo abonado se retiene.
         """
+        ventana = (
+            CANCELACION_VENTANA_MENSUAL
+            if reserva.tipo == ReservaTipo.MENSUAL
+            else CANCELACION_VENTANA
+        )
         inicio_reserva = datetime.combine(
             reserva.fecha, reserva.turno.hora, tzinfo=AR_TZ
         )
         anticipacion = inicio_reserva - datetime.now(tz=AR_TZ)
-        return anticipacion > CANCELACION_VENTANA
+        return anticipacion > ventana
 
     def _motivo_segun_anticipacion(self, reserva: Reserva) -> MotivoCancelacion:
         if self.es_reembolsable(reserva):
@@ -213,7 +305,6 @@ class ReservaService:
             .where(
                 Reserva.turno_id == turno.id,
                 Reserva.fecha == fecha,
-                Reserva.tipo == ReservaTipo.EVENTUAL,
             )
         )
         ocupados = db.session.execute(stmt).scalar()

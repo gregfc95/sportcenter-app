@@ -1,13 +1,14 @@
-from datetime import date
+from datetime import date, datetime
 
-from flask import Blueprint, Response, jsonify
+from flask import Blueprint, Response, jsonify, request
 
 from .. import db
 from ..auth import current_user_id, require_role
 from ..models.pago import PagoEstado
-from ..models.reserva import Reserva
+from ..models.reserva import MotivoCancelacion, Reserva, ReservaTipo
 from ..models.user import UserRole
 from ..services import PagoService, ReservaService, TurnoService
+from ..services.reserva_service import AR_TZ
 
 
 reserva_bp = Blueprint("reservas", __name__, url_prefix="/api/reservas")
@@ -61,14 +62,69 @@ def _reserva_sesion_dict(reserva) -> dict:
 
 @reserva_bp.route("", methods=["GET"])
 def list_mis_reservas() -> Response:
+    """Reservas del usuario para las cards de Mis Turnos.
+
+    Las eventuales salen una por fila. Las mensuales se colapsan en una entrada
+    por abono (una card por mes de un turno) con el detalle de todas sus clases
+    —incluidas las ya pasadas, que la card muestra como completadas— en el
+    bloque `mensualidad`. Cada clase lleva su `reserva_id` para poder
+    cancelarla individualmente.
+    """
     user_id = current_user_id()
     reservas = reserva_service.listar_por_usuario(user_id)
+    hoy = datetime.now(tz=AR_TZ).date()
 
     payload = []
+    grupos_vistos = set()
     for reserva in reservas:
         turno = reserva.turno
         actividad = turno.actividad
         disponibles = turno_service.lugares_disponibles(turno, reserva.fecha)
+
+        if reserva.tipo == ReservaTipo.MENSUAL:
+            clave = (turno.id, reserva.fecha.year, reserva.fecha.month)
+            if clave in grupos_vistos:
+                continue
+            grupos_vistos.add(clave)
+
+            grupo = reserva_service.grupo_mensual(reserva)
+            resumenes = [pago_service.resumen_pago(r) for r in grupo]
+            total_grupo = sum(r["total"] for r in resumenes)
+            cobrado_grupo = sum(r["cobrado"] for r in resumenes)
+            payload.append(
+                {
+                    "id": grupo[0].id,
+                    # La fecha de la card es la próxima clase (esta iteración
+                    # trae la más temprana no pasada, por el orden asc).
+                    "fecha": reserva.fecha.isoformat(),
+                    "tipo": reserva.tipo.value,
+                    "estado": _estado_pago(reserva),
+                    "actividad": actividad.nombre,
+                    "precio": float(total_grupo),
+                    "sena": 0.0,
+                    "saldo": float(max(total_grupo - cobrado_grupo, 0)),
+                    "mensualidad": {
+                        "clases": [
+                            {
+                                "reserva_id": r.id,
+                                "fecha": r.fecha.isoformat(),
+                                "pasada": r.fecha < hoy,
+                            }
+                            for r in grupo
+                        ],
+                        "total": float(total_grupo),
+                    },
+                    "turno": {
+                        "id": turno.id,
+                        "dia_semana": turno.dia_semana.value,
+                        "hora": turno.hora.strftime("%H:%M"),
+                        "cupo": turno.cupo,
+                        "ocupados": turno.cupo - disponibles,
+                    },
+                }
+            )
+            continue
+
         # Precio bloqueado al momento de la seña (ver PagoService.resumen_pago):
         # un cambio posterior del precio no altera lo que el cliente debe.
         resumen = pago_service.resumen_pago(reserva)
@@ -171,11 +227,19 @@ def cancelar_mi_reserva(reserva_id: int) -> Response:
     """Cancela (soft-delete) una reserva del usuario actual.
 
     No interactúa con Mercado Pago: registra el cierre en el historial de pagos
-    y da de baja la reserva. Con más de 24 h de anticipación la cancelación es
-    reembolsable (se devuelve lo abonado: la seña o el precio completo) y queda
-    como REEMBOLSADO; dentro de las 24 h no hay reembolso y queda como CANCELADO.
+    y da de baja la reserva.
+
+    Eventual: con más de 24 h de anticipación la cancelación es reembolsable
+    (se devuelve lo abonado) y queda como REEMBOLSADO; dentro de las 24 h no
+    hay reembolso y queda como CANCELADO.
+
+    Mensual (una clase del abono): con más de 48 h el cliente elige la
+    `resolucion` en el body — "reembolso" (default) o "credito" (crédito a
+    favor para esa actividad; por ahora solo se asienta, el canje llega
+    después). Dentro de las 48 h se retiene lo abonado (CANCELADO).
     """
     user_id = current_user_id()
+    data = request.get_json(silent=True) or {}
 
     reserva = db.session.get(Reserva, reserva_id)
     if reserva is None:
@@ -183,10 +247,23 @@ def cancelar_mi_reserva(reserva_id: int) -> Response:
     if reserva.user_id != user_id:
         return jsonify({"error": "La reserva no pertenece al usuario."}), 403
 
-    reembolsar = reserva_service.es_reembolsable(reserva)
+    con_beneficio = reserva_service.es_reembolsable(reserva)
+
+    if not con_beneficio:
+        resolucion = PagoEstado.CANCELADO
+        motivo = None  # el servicio deduce CANCELADO por la anticipación
+    elif reserva.tipo == ReservaTipo.MENSUAL and data.get("resolucion") == "credito":
+        resolucion = PagoEstado.CREDITO
+        motivo = MotivoCancelacion.CREDITO
+    else:
+        resolucion = PagoEstado.REEMBOLSADO
+        motivo = None  # el servicio deduce REEMBOLSADO por la anticipación
+
     try:
-        registro = pago_service.registrar_cancelacion(reserva_id, reembolsar=reembolsar)
-        reserva_service.cancelar_reserva(reserva_id)
+        registro = pago_service.registrar_cancelacion(
+            reserva_id, resolucion=resolucion
+        )
+        reserva_service.cancelar_reserva(reserva_id, motivo=motivo)
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
 
@@ -194,7 +271,8 @@ def cancelar_mi_reserva(reserva_id: int) -> Response:
         jsonify(
             {
                 "ok": True,
-                "reembolsado": reembolsar,
+                "reembolsado": resolucion == PagoEstado.REEMBOLSADO,
+                "resolucion": resolucion.value,
                 "monto": float(registro.monto) if registro is not None else None,
             }
         ),

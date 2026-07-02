@@ -1,12 +1,12 @@
 """Tests de `ReservaService` contra la base de datos de tests."""
 
-from datetime import date, timedelta
+from datetime import date, time, timedelta
 
 import pytest
 
 from app.models.reserva import MotivoCancelacion, ReservaTipo
 from app.models.turno import DiaSemana
-from app.services.reserva_service import ReservaService
+from app.services.reserva_service import ReservaService, fechas_mensuales
 
 svc = ReservaService()
 
@@ -42,8 +42,6 @@ class TestCrearReserva:
             svc.crear_reserva(user.id, turno.id, past_date_for(DiaSemana.LUNES))
 
     def test_conflicto_de_horario(self, make_user, make_actividad, make_turno, next_date_for):
-        from datetime import time
-
         user = make_user()
         turno_a = make_turno(make_actividad(), dia_semana=DiaSemana.LUNES, hora=time(16, 0))
         turno_b = make_turno(make_actividad(), dia_semana=DiaSemana.LUNES, hora=time(16, 30))
@@ -62,16 +60,127 @@ class TestCrearReserva:
         with pytest.raises(ValueError, match="cupo"):
             svc.crear_reserva(user2.id, turno.id, fecha)
 
-    def test_mensual_saltea_validaciones(self, make_user, make_actividad, make_turno, next_date_for):
-        # Una MENSUAL no valida día de semana ni cupo: la fecha cae martes pero
-        # el turno es lunes y aun así se crea.
+    def test_eventual_no_puede_pisar_una_mensual(self, make_user, make_actividad, make_turno, next_date_for):
+        # Los abonados mensuales consumen cupo: con cupo=1 y un abono creado,
+        # otra persona no puede reservar eventual en una fecha del abono.
+        abonado, otro = make_user(), make_user()
+        turno = make_turno(make_actividad(), dia_semana=DiaSemana.LUNES, cupo=1)
+        fecha = next_date_for(DiaSemana.LUNES)
+
+        svc.crear_reserva_mensual(abonado.id, turno.id, fecha)
+        with pytest.raises(ValueError, match="cupo"):
+            svc.crear_reserva(otro.id, turno.id, fecha)
+
+
+class TestCrearReservaMensual:
+    def test_abona_todas_las_fechas_restantes_del_mes(
+        self, make_user, make_actividad, make_turno, next_date_for
+    ):
         user = make_user()
         turno = make_turno(make_actividad(), dia_semana=DiaSemana.LUNES)
-        fecha_martes = next_date_for(DiaSemana.MARTES)
+        fecha = next_date_for(DiaSemana.LUNES)
 
-        reserva = svc.crear_reserva(user.id, turno.id, fecha_martes, tipo=ReservaTipo.MENSUAL)
-        assert reserva.id is not None
-        assert reserva.tipo == ReservaTipo.MENSUAL
+        reservas = svc.crear_reserva_mensual(user.id, turno.id, fecha)
+
+        assert [r.fecha for r in reservas] == fechas_mensuales(fecha)
+        assert all(r.tipo == ReservaTipo.MENSUAL for r in reservas)
+        assert all(r.id is not None for r in reservas)
+        assert 1 <= len(reservas) <= 5
+
+    def test_turno_inexistente(self, make_user, next_date_for):
+        user = make_user()
+        with pytest.raises(ValueError):
+            svc.crear_reserva_mensual(user.id, 9999, next_date_for(DiaSemana.LUNES))
+
+    def test_dia_de_semana_incorrecto(self, make_user, make_actividad, make_turno, next_date_for):
+        user = make_user()
+        turno = make_turno(make_actividad(), dia_semana=DiaSemana.LUNES)
+        with pytest.raises(ValueError, match="martes"):
+            svc.crear_reserva_mensual(user.id, turno.id, next_date_for(DiaSemana.MARTES))
+
+    def test_fecha_pasada(self, make_user, make_actividad, make_turno, past_date_for):
+        user = make_user()
+        turno = make_turno(make_actividad(), dia_semana=DiaSemana.LUNES)
+        with pytest.raises(ValueError, match="pasó"):
+            svc.crear_reserva_mensual(user.id, turno.id, past_date_for(DiaSemana.LUNES))
+
+    def test_conflicto_en_una_fecha_no_crea_nada(
+        self, make_user, make_actividad, make_turno, next_date_for
+    ):
+        # Todo-o-nada: una eventual en la ÚLTIMA fecha del abono (mismo horario,
+        # otra actividad) rechaza el abono entero y no persiste ninguna clase.
+        user = make_user()
+        turno_a = make_turno(make_actividad(), dia_semana=DiaSemana.LUNES, hora=time(16, 0))
+        turno_b = make_turno(make_actividad(), dia_semana=DiaSemana.LUNES, hora=time(16, 30))
+        fecha = next_date_for(DiaSemana.LUNES)
+        ultima = fechas_mensuales(fecha)[-1]
+
+        svc.crear_reserva(user.id, turno_a.id, ultima)
+        with pytest.raises(ValueError, match="mismo horario"):
+            svc.crear_reserva_mensual(user.id, turno_b.id, fecha)
+
+        reservas = svc.listar_por_usuario(user.id)
+        assert [r.tipo for r in reservas] == [ReservaTipo.EVENTUAL]
+
+    def test_cupo_lleno_en_una_fecha_no_crea_nada(
+        self, make_user, make_actividad, make_turno, next_date_for
+    ):
+        # Todo-o-nada también por cupo: el turno está lleno solo en la última
+        # fecha del mes (por otra persona) y el abono completo se rechaza.
+        abonado, otro = make_user(), make_user()
+        turno = make_turno(make_actividad(), dia_semana=DiaSemana.LUNES, cupo=1)
+        fecha = next_date_for(DiaSemana.LUNES)
+        ultima = fechas_mensuales(fecha)[-1]
+
+        svc.crear_reserva(otro.id, turno.id, ultima)
+        with pytest.raises(ValueError, match="cupo"):
+            svc.crear_reserva_mensual(abonado.id, turno.id, fecha)
+
+        assert svc.listar_por_usuario(abonado.id) == []
+
+    def test_no_permite_dos_abonos_del_mismo_mes(
+        self, make_user, make_actividad, make_turno, next_date_for
+    ):
+        user = make_user()
+        turno = make_turno(make_actividad(), dia_semana=DiaSemana.LUNES)
+        fecha = next_date_for(DiaSemana.LUNES)
+
+        svc.crear_reserva_mensual(user.id, turno.id, fecha)
+        with pytest.raises(ValueError):
+            svc.crear_reserva_mensual(user.id, turno.id, fecha)
+
+
+class TestGrupoMensual:
+    def test_devuelve_el_abono_completo_ordenado(
+        self, make_user, make_actividad, make_turno, next_date_for
+    ):
+        user = make_user()
+        turno = make_turno(make_actividad(), dia_semana=DiaSemana.LUNES)
+        fecha = next_date_for(DiaSemana.LUNES)
+        reservas = svc.crear_reserva_mensual(user.id, turno.id, fecha)
+
+        grupo = svc.grupo_mensual(reservas[-1])
+        assert [r.id for r in grupo] == [r.id for r in reservas]
+
+    def test_excluye_clases_canceladas(
+        self, make_user, make_actividad, make_turno, next_date_for
+    ):
+        user = make_user()
+        turno = make_turno(make_actividad(), dia_semana=DiaSemana.LUNES)
+        fecha = next_date_for(DiaSemana.LUNES)
+        reservas = svc.crear_reserva_mensual(user.id, turno.id, fecha)
+
+        svc.cancelar_reserva(reservas[0].id)
+        grupo = svc.grupo_mensual(reservas[-1])
+        assert [r.id for r in grupo] == [r.id for r in reservas[1:]]
+
+    def test_una_eventual_es_su_propio_grupo(
+        self, make_user, make_actividad, make_turno, next_date_for
+    ):
+        user = make_user()
+        turno = make_turno(make_actividad(), dia_semana=DiaSemana.LUNES)
+        reserva = svc.crear_reserva(user.id, turno.id, next_date_for(DiaSemana.LUNES))
+        assert svc.grupo_mensual(reserva) == [reserva]
 
 
 class TestCancelarReserva:
