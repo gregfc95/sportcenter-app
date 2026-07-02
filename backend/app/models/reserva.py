@@ -13,6 +13,7 @@ class ReservaTipo(str, Enum):
 class MotivoCancelacion(str, Enum):
     REEMBOLSADO = "reembolsado"
     CANCELADO = "cancelado"
+    CREDITO = "credito"
 
 
 class Reserva(SoftDeleteMixin, db.Model):
