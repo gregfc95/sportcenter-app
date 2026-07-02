@@ -5,6 +5,7 @@ import { formatPrice } from "@/lib/utils";
 import { formatReservaFecha } from "@/lib/fecha";
 import { getActividadIcon } from "@/components/actividades/actividadIcons";
 import { listMisPagos } from "@/components/reservas/api";
+import { EstadoBadge } from "@/components/ui/estado-badge";
 import { PageHeading } from "@/components/ui/page-heading";
 
 const DATE_FORMATTER = new Intl.DateTimeFormat("es-AR", {
@@ -23,30 +24,6 @@ function formatDate(value) {
 function formatTurno(turno) {
   if (!turno?.fecha) return "—";
   return formatReservaFecha(turno.fecha, turno.hora ?? "");
-}
-
-const ESTADO_BADGES = {
-  pagado: "bg-emerald-500/10 text-emerald-400 border-emerald-500/30",
-  senado: "bg-accent/10 text-accent border-accent/30",
-  cancelado: "bg-red-500/10 text-red-400 border-red-500/30",
-  reembolsado: "bg-sky-500/10 text-sky-400 border-sky-500/30",
-};
-
-const ESTADO_LABELS = {
-  pagado: "Pagado",
-  senado: "Señado",
-  cancelado: "Cancelado",
-  reembolsado: "Reembolsado",
-};
-
-function Badge({ className, children }) {
-  return (
-    <span
-      className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full border text-label-sm uppercase ${className}`}
-    >
-      {children}
-    </span>
-  );
 }
 
 export default function MisPagosPage() {
@@ -157,10 +134,7 @@ export default function MisPagosPage() {
                         {formatPrice(pago.monto)}
                       </td>
                       <td className="py-sm px-md text-center">
-                        <Badge className={ESTADO_BADGES[pago.estado]}>
-                          <span className="size-1.5 rounded-full bg-current" />
-                          {ESTADO_LABELS[pago.estado] ?? pago.estado}
-                        </Badge>
+                        <EstadoBadge estado={pago.estado} />
                       </td>
                       <td className="py-sm px-md text-on-surface-variant">
                         {pago.metodo === "efectivo" ? "Efectivo" : "Mercado Pago"}

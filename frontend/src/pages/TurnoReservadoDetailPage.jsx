@@ -6,32 +6,11 @@ import { toast } from "sonner";
 import { usePageTitle } from "@/lib/usePageTitle";
 import { cn, formatPrice } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { EstadoBadge } from "@/components/ui/estado-badge";
 import { Input } from "@/components/ui/input";
 import { getActividadIcon } from "@/components/actividades/actividadIcons";
 import { getSesionReservada, registrarPagoManual } from "@/components/reservas/api";
 import RegistrarPagoDialog from "@/components/reservas/RegistrarPagoDialog";
-
-// Mismo criterio de estados de pago que en Mis Turnos: pagado > señado > pendiente.
-const ESTADOS = {
-  pagado: {
-    label: "Pagado",
-    dot: "bg-success-green",
-    text: "text-success-green",
-    chip: "bg-success-green/10 border-success-green/30",
-  },
-  senado: {
-    label: "Señado",
-    dot: "bg-accent",
-    text: "text-accent",
-    chip: "bg-accent/10 border-accent/30",
-  },
-  pendiente: {
-    label: "Pendiente",
-    dot: "bg-error",
-    text: "text-error",
-    chip: "bg-error/10 border-error/30",
-  },
-};
 
 // Una reserva mensual es de un cliente abonado; una eventual, de paso.
 const TIPO_LABELS = { eventual: "Eventual", mensual: "Abonado" };
@@ -53,28 +32,6 @@ function Field({ label, children }) {
       </span>
       <div className="mt-1">{children}</div>
     </div>
-  );
-}
-
-function EstadoBadge({ estado }) {
-  const info = ESTADOS[estado] ?? ESTADOS.pendiente;
-  return (
-    <span
-      className={cn(
-        "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border",
-        info.chip,
-      )}
-    >
-      <span className={cn("w-1.5 h-1.5 rounded-full", info.dot)} />
-      <span
-        className={cn(
-          "text-[10px] font-bold uppercase tracking-widest",
-          info.text,
-        )}
-      >
-        {info.label}
-      </span>
-    </span>
   );
 }
 

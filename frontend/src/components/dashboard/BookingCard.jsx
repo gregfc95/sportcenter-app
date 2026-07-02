@@ -1,32 +1,26 @@
 import { Button } from "@/components/ui/button";
+import { EstadoBadge } from "@/components/ui/estado-badge";
 import { getActividadIcon } from "@/components/actividades/actividadIcons";
 import PagarSaldoDialog from "@/components/reservas/PagarSaldoDialog";
 import PagarSenaDialog from "@/components/reservas/PagarSenaDialog";
+import PagarMensualidadDialog from "@/components/reservas/PagarMensualidadDialog";
 import CancelarReservaDialog from "@/components/reservas/CancelarReservaDialog";
 import { cn } from "@/lib/utils";
 
+// Presentación propia de la card por estado; el badge sale de EstadoBadge.
 const STATUS_META = {
   pendiente: {
-    label: "Pendiente",
     strip: "bg-accent",
-    badgeWrap: "bg-error/10 border-error/30 text-error",
-    dot: "bg-error",
     icon: "text-accent",
     title: "text-on-surface",
   },
   senado: {
-    label: "Señado",
     strip: "bg-accent",
-    badgeWrap: "bg-accent/10 border-accent/30 text-accent",
-    dot: "bg-accent",
     icon: "text-accent",
     title: "text-on-surface",
   },
   pagado: {
-    label: "Pagado",
     strip: "bg-surface-container-high",
-    badgeWrap: "bg-success-green/10 border-success-green/30 text-success-green",
-    dot: "bg-success-green",
     icon: "text-on-surface-variant",
     title: "text-on-surface-variant",
   },
@@ -42,33 +36,33 @@ export default function BookingCard({
   precio,
   sena,
   saldo,
+  tipo,
+  mensualidad,
   onCancelled,
 }) {
   const meta = STATUS_META[status] ?? STATUS_META.pendiente;
   const Icon = getActividadIcon(sport);
+  const esMensual = tipo === "mensual" && Array.isArray(mensualidad?.clases);
+  // En un abono mensual, "Cancelar" actúa sobre la próxima clase (la de la
+  // card); la mensualidad pendiente se paga completa, sin seña.
+  const proximaClase = esMensual
+    ? mensualidad.clases.find((c) => !c.pasada)
+    : null;
   // "Ver QR" para pagados se implementará a futuro; por ahora solo el pago.
   // Pendiente paga la seña (reanuda el checkout); señada paga el saldo.
-  const showSena = status === "pendiente";
-  const showSaldo = status === "senado";
+  const showMensualidad = esMensual && status !== "pagado";
+  const showSena = !esMensual && status === "pendiente";
+  const showSaldo = !esMensual && status === "senado";
   const showCapacity =
     (status === "pendiente" || status === "senado") && capacity;
 
-  const badgeBase = cn(
-    "shrink-0 border px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest flex items-center gap-1.5",
-    meta.badgeWrap,
-  );
-  const badgeInner = (
-    <>
-      <span className={cn("w-2 h-2 rounded-full", meta.dot)} />
-      {meta.label}
-    </>
-  );
-
-  const cancelButton = (
+  const cancelButton = (!esMensual || proximaClase) && (
     <CancelarReservaDialog
-      reservaId={reservaId}
+      reservaId={esMensual ? proximaClase.reserva_id : reservaId}
       actividad={sport}
       datetime={datetime}
+      mensual={esMensual}
+      estado={status}
       onCancelled={onCancelled}
       trigger={
         <Button
@@ -91,7 +85,16 @@ export default function BookingCard({
       Pagar
     </Button>
   );
-  const pagarButton = showSena ? (
+  const pagarButton = showMensualidad ? (
+    <PagarMensualidadDialog
+      reservaId={reservaId}
+      actividad={sport}
+      datetime={datetime}
+      clases={mensualidad.clases.length}
+      total={mensualidad.total}
+      trigger={pagarTrigger}
+    />
+  ) : showSena ? (
     <PagarSenaDialog
       reservaId={reservaId}
       actividad={sport}
@@ -157,7 +160,7 @@ export default function BookingCard({
             </span>
           </div>
 
-          <span className={cn(badgeBase, "md:hidden")}>{badgeInner}</span>
+          <EstadoBadge estado={status} className="md:hidden" />
         </div>
 
         {showCapacity && (
@@ -167,7 +170,7 @@ export default function BookingCard({
         )}
       </div>
 
-      <span className={cn(badgeBase, "hidden md:flex")}>{badgeInner}</span>
+      <EstadoBadge estado={status} className="hidden md:inline-flex" />
 
       <div className="flex items-center justify-between pt-sm border-t border-outline-variant pl-xs md:pt-0 md:border-t-0 md:border-l md:border-outline-variant md:pl-md md:justify-end md:shrink-0">
         {showCapacity && (
