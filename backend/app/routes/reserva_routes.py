@@ -82,7 +82,15 @@ def list_mis_reservas() -> Response:
         disponibles = turno_service.lugares_disponibles(turno, reserva.fecha)
 
         if reserva.tipo == ReservaTipo.MENSUAL:
-            clave = (turno.id, reserva.fecha.year, reserva.fecha.month)
+            # Una card por abono, identificado por grupo_id. Dos abonos del mismo
+            # turno y mes (p. ej. cancelar el final y rereservar) son grupos
+            # distintos y salen como cards separadas. El (turno, año, mes) queda
+            # solo de fallback para filas viejas sin grupo_id.
+            clave = reserva.grupo_id or (
+                turno.id,
+                reserva.fecha.year,
+                reserva.fecha.month,
+            )
             if clave in grupos_vistos:
                 continue
             grupos_vistos.add(clave)
