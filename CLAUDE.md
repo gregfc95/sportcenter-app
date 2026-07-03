@@ -39,5 +39,6 @@ docker compose -f docker-compose.dev.yml exec backend pytest
 - Locale `es-AR` para fechas y moneda (ARS).
 - Commits con Conventional Commits; ramas `feat/HU-XX-descripcion-corta`. `main` es estable, **`dev` es la rama de integración** (los PRs van contra `dev`).
 - Reglas de estilo detalladas en `.claude/rules/` (comentarios, Python, JavaScript, anti-slop).
+- **Reglas de negocio** de reservas, lista de espera y suscripción mensual (cupos, penalizaciones, suspensión, descuento, renovación, notificaciones): ver `.claude/reglas-negocio.md`.
 - Setup completo y problemas frecuentes: ver `README.md`.
 - Deploy y variables de entorno (qué necesita la app fuera de local, MercadoPago, DB): ver `.claude/deployment.md`.
