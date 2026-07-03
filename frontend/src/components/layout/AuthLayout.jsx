@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { Sun, Moon } from "lucide-react";
-import { useTheme } from "@/lib/ThemeContext";
+import { useTheme } from "@/lib/useTheme";
 import defaultMarketingImageLight from "@/assets/image-instalaciones-light.jpg";
 import defaultMarketingImageDark from "@/assets/image-instalaciones-dark.png";
 

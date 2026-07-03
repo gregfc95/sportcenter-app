@@ -3,7 +3,7 @@ import { CalendarDays, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { EstadoBadge } from "@/components/ui/estado-badge";
 import { TipoChip } from "@/components/ui/tipo-chip";
-import { getActividadIcon } from "@/components/actividades/actividadIcons";
+import { ActividadIcon } from "@/components/actividades/ActividadIcon";
 import PagarSaldoDialog from "@/components/reservas/PagarSaldoDialog";
 import PagarSenaDialog from "@/components/reservas/PagarSenaDialog";
 import CancelarReservaDialog from "@/components/reservas/CancelarReservaDialog";
@@ -23,9 +23,9 @@ export default function BookingCardEventual({
   saldo,
   asistencia,
   onCancelled,
+  onPagado,
 }) {
   const meta = STATUS_META[status] ?? STATUS_META.pendiente;
-  const Icon = getActividadIcon(sport);
   // Pendiente paga la seña (reanuda el checkout); señada paga el saldo.
   const showSena = status === "pendiente";
   const showSaldo = status === "senado";
@@ -66,6 +66,7 @@ export default function BookingCardEventual({
       datetime={datetime}
       precio={precio}
       sena={sena}
+      onPagado={onPagado}
       trigger={pagarTrigger}
     />
   ) : showSaldo ? (
@@ -76,6 +77,7 @@ export default function BookingCardEventual({
       precio={precio}
       sena={sena}
       saldo={saldo}
+      onPagado={onPagado}
       trigger={pagarTrigger}
     />
   ) : null;
@@ -106,7 +108,11 @@ export default function BookingCardEventual({
         <div className="flex justify-between items-start gap-sm pl-xs">
           <div className="flex flex-col gap-xs">
             <div className="flex items-center gap-xs">
-              <Icon className={cn("size-5", meta.icon)} strokeWidth={2} />
+              <ActividadIcon
+                actividad={sport}
+                className={cn("size-5", meta.icon)}
+                strokeWidth={2}
+              />
               <h4 className="text-label-md uppercase tracking-wider text-primary">
                 {sport}
               </h4>

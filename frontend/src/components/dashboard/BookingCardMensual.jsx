@@ -4,7 +4,7 @@ import { CalendarDays, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { EstadoBadge } from "@/components/ui/estado-badge";
 import { TipoChip } from "@/components/ui/tipo-chip";
-import { getActividadIcon } from "@/components/actividades/actividadIcons";
+import { ActividadIcon } from "@/components/actividades/ActividadIcon";
 import ClasesMensuales from "@/components/reservas/ClasesMensuales";
 import PagarMensualidadDialog from "@/components/reservas/PagarMensualidadDialog";
 import CancelarReservaDialog from "@/components/reservas/CancelarReservaDialog";
@@ -59,9 +59,9 @@ export default function BookingCardMensual({
   mensualidad,
   turno,
   onCancelled,
+  onPagado,
 }) {
   const meta = STATUS_META[status] ?? STATUS_META.pendiente;
-  const Icon = getActividadIcon(sport);
   const pagado = status === "pagado";
   // Mismo criterio que la card eventual; el cupo es el de la próxima clase.
   const showCapacity = Boolean(capacity);
@@ -99,7 +99,11 @@ export default function BookingCardMensual({
       <div className="flex justify-between items-start gap-sm pl-xs">
         <div className="flex flex-col gap-xs">
           <div className="flex items-center gap-xs">
-            <Icon className={cn("size-5", meta.icon)} strokeWidth={2} />
+            <ActividadIcon
+              actividad={sport}
+              className={cn("size-5", meta.icon)}
+              strokeWidth={2}
+            />
             <h4 className="text-label-md uppercase tracking-wider text-primary">
               {sport}
             </h4>
@@ -202,6 +206,7 @@ export default function BookingCardMensual({
                 datetime={proximaDatetime}
                 clases={vivas.length}
                 total={mensualidad.total}
+                onPagado={onPagado}
                 trigger={<PagarTrigger />}
               />
             </>

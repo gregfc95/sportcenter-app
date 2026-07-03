@@ -10,7 +10,7 @@ import {
 
 import { usePageTitle } from "@/lib/usePageTitle";
 import { PageHeading } from "@/components/ui/page-heading";
-import { getActividadIcon } from "@/components/actividades/actividadIcons";
+import { ActividadIcon } from "@/components/actividades/ActividadIcon";
 import { listSesionesReservadas } from "@/components/reservas/api";
 import { formatReservaFecha, todayISO } from "@/lib/fecha";
 import { cn } from "@/lib/utils";
@@ -21,7 +21,6 @@ function SesionCard({ sesion }) {
   const lleno = cupo > 0 && ocupados >= cupo;
   const asistenciaPct =
     reservas > 0 ? Math.min(100, (asistencias / reservas) * 100) : 0;
-  const Icon = getActividadIcon(sesion.actividad);
 
   return (
     <Link
@@ -37,7 +36,11 @@ function SesionCard({ sesion }) {
       <div className="relative z-10 flex justify-between items-start gap-2">
         <div className="flex items-center gap-sm">
           <div className="w-12 h-12 rounded-lg bg-surface-container-high border border-outline-variant flex items-center justify-center shrink-0">
-            <Icon className="size-6 text-primary" aria-hidden="true" />
+            <ActividadIcon
+              actividad={sesion.actividad}
+              className="size-6 text-primary"
+              aria-hidden="true"
+            />
           </div>
           <div className="flex flex-col">
             <h3 className="text-label-md text-on-surface">{sesion.actividad}</h3>
