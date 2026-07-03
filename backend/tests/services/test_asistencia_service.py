@@ -124,28 +124,40 @@ class TestRegistrarAsistencia:
 
 
 class TestHistorial:
-    def test_estados_y_orden(self, escenario):
+    def test_estados_y_orden_sin_pendientes(self, escenario):
+        # Mi Historial muestra solo estados resueltos: la futura activa (que sería
+        # "pendiente") se excluye; queda escaneada (asistió) y pasada (ausente).
         pasada = escenario.reserva_pagada(hoy_ar() - timedelta(days=14))
         escaneada = escenario.reserva_pagada(hoy_ar())
-        futura = escenario.reserva_pagada(hoy_ar() + timedelta(days=7))
+        escenario.reserva_pagada(hoy_ar() + timedelta(days=7))
         svc.obtener_qr(escaneada)
         svc.registrar_asistencia(
             QR_PREFIX + escaneada.qr_token, escenario.empleado.id
         )
 
         historial = svc.historial_usuario(escenario.user.id)
-        assert [r.id for r in historial] == [futura.id, escaneada.id, pasada.id]
+        assert [r.id for r in historial] == [escaneada.id, pasada.id]
 
-        hoy = hoy_ar()
-        assert estado_asistencia(futura, hoy) == "pendiente"
-        assert estado_asistencia(escaneada, hoy) == "asistio"
-        assert estado_asistencia(pasada, hoy) == "ausente"
+        assert estado_asistencia(escaneada) == "asistio"
+        assert estado_asistencia(pasada) == "ausente"
 
-    def test_excluye_canceladas(self, escenario):
+    def test_incluye_canceladas_como_cancelado(self, escenario):
+        # Cancelar libera el lugar: la reserva reaparece en el historial como
+        # "Cancelado" (nunca "Ausente"), ya pasada o futura.
         activa = escenario.reserva_pagada(hoy_ar() - timedelta(days=7))
-        cancelada = escenario.reserva_pagada(hoy_ar() - timedelta(days=14))
-        cancelada.soft_delete()
+        cancelada_pasada = escenario.reserva_pagada(hoy_ar() - timedelta(days=14))
+        cancelada_futura = escenario.reserva_pagada(hoy_ar() + timedelta(days=7))
+        cancelada_pasada.soft_delete()
+        cancelada_futura.soft_delete()
         db.session.commit()
 
         historial = svc.historial_usuario(escenario.user.id)
-        assert [r.id for r in historial] == [activa.id]
+        assert [r.id for r in historial] == [
+            cancelada_futura.id,
+            activa.id,
+            cancelada_pasada.id,
+        ]
+
+        assert estado_asistencia(cancelada_pasada) == "cancelado"
+        assert estado_asistencia(cancelada_futura) == "cancelado"
+        assert estado_asistencia(activa) == "ausente"

@@ -151,7 +151,11 @@ class TestCrearPreferenciaSaldoGuards:
 
 @pytest.fixture
 def abono(make_user, make_actividad, make_turno, next_date_for):
-    """Abono mensual creado por el servicio real (una reserva por clase)."""
+    """Abono mensual creado por el servicio real (una reserva por clase).
+
+    El usuario no tiene penalizaciones ni suspensiones, así que le corresponde
+    el descuento de fidelidad del 20%: cada clase se cobra a 800 (precio 1000).
+    """
     user = make_user()
     actividad = make_actividad(precio="1000.00")
     turno = make_turno(actividad, dia_semana=DiaSemana.LUNES)
@@ -166,7 +170,7 @@ class TestRegistrarMensualidad:
 
         assert len(pagos) == len(abono.reservas)
         assert all(p.estado == PagoEstado.PAGADO for p in pagos)
-        assert all(p.monto == Decimal("1000") for p in pagos)
+        assert all(p.monto == Decimal("800") for p in pagos)  # 1000 − 20% de fidelidad
         assert {p.reserva_id for p in pagos} == {r.id for r in abono.reservas}
 
     def test_idempotente(self, abono):
@@ -215,7 +219,7 @@ class TestResumenPagoMensual:
         svc.registrar_mensualidad(abono.reservas[0].id)
         resumen = svc.resumen_pago(abono.reservas[0])
         assert resumen["sena"] == Decimal("0")
-        assert resumen["cobrado"] == Decimal("1000")
+        assert resumen["cobrado"] == Decimal("800")  # 1000 − 20% de fidelidad
         assert resumen["saldo"] == Decimal("0")
 
 
@@ -234,12 +238,12 @@ class TestCancelacionCreaCredito:
 
         cierre = svc.registrar_cancelacion(clase.id, resolucion=PagoEstado.CREDITO)
         assert cierre.estado == PagoEstado.CREDITO
-        assert cierre.monto == Decimal("1000")
+        assert cierre.monto == Decimal("800")  # clase con descuento de fidelidad
 
         credito = db_session.execute(
             select(Credito).where(Credito.reserva_id == clase.id)
         ).scalar_one()
-        assert credito.saldo == Decimal("1000")
+        assert credito.saldo == Decimal("800")
         assert credito.actividad_id == abono.actividad.id
         assert credito.expira_at > datetime.now(timezone.utc) + timedelta(days=29)
 
@@ -371,12 +375,12 @@ class TestCancelacionRestauraCredito:
         origen = make_reserva(abono.user, abono.turno, date.today() + timedelta(days=60))
         credito = make_credito(abono.user, abono.actividad, origen, monto="400")
 
-        svc.registrar_mensualidad(abono.reservas[0].id)  # clase 1: 400 crédito + 600 MP
+        svc.registrar_mensualidad(abono.reservas[0].id)  # clase 1 (800): 400 crédito + 400 MP
         clase = abono.reservas[0]
 
         cierre = svc.registrar_cancelacion(clase.id, resolucion=PagoEstado.CREDITO)
-        # Solo la parte en dinero (600) forma el cierre y el crédito nuevo.
-        assert cierre.monto == Decimal("600")
+        # Solo la parte en dinero (400) forma el cierre y el crédito nuevo.
+        assert cierre.monto == Decimal("400")
         # La parte en crédito volvió a su crédito de origen.
         assert credito.saldo == Decimal("400")
 
@@ -384,9 +388,10 @@ class TestCancelacionRestauraCredito:
         self, abono, make_credito, make_reserva, db_session
     ):
         origen = make_reserva(abono.user, abono.turno, date.today() + timedelta(days=60))
-        credito = make_credito(abono.user, abono.actividad, origen, monto="1000")
+        # 800 = una clase con descuento, para que el crédito la cubra 100%.
+        credito = make_credito(abono.user, abono.actividad, origen, monto="800")
 
-        svc.registrar_mensualidad(abono.reservas[0].id)  # clase 1: 100% crédito
+        svc.registrar_mensualidad(abono.reservas[0].id)  # clase 1 (800): 100% crédito
         clase = abono.reservas[0]
 
         cierre = svc.registrar_cancelacion(clase.id, resolucion=PagoEstado.CREDITO)
@@ -394,4 +399,4 @@ class TestCancelacionRestauraCredito:
 
         creditos = db_session.execute(select(Credito)).scalars().all()
         assert len(creditos) == 1  # no se creó uno nuevo
-        assert credito.saldo == Decimal("1000")  # el original recuperó su saldo
+        assert credito.saldo == Decimal("800")  # el original recuperó su saldo
