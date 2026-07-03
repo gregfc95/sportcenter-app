@@ -11,12 +11,13 @@ import {
 import { usePageTitle } from "@/lib/usePageTitle";
 import { PageHeading } from "@/components/ui/page-heading";
 import { ActividadIcon } from "@/components/actividades/ActividadIcon";
+import { TipoChip } from "@/components/ui/tipo-chip";
 import { listSesionesReservadas } from "@/components/reservas/api";
 import { formatReservaFecha, todayISO } from "@/lib/fecha";
 import { cn } from "@/lib/utils";
 
 function SesionCard({ sesion }) {
-  const { cupo, ocupados, reservas, asistencias = 0 } = sesion;
+  const { cupo, ocupados, reservas, asistencias = 0, tipos = [] } = sesion;
   const ocupacion = cupo > 0 ? Math.min(100, (ocupados / cupo) * 100) : 0;
   const lleno = cupo > 0 && ocupados >= cupo;
   const asistenciaPct =
@@ -49,12 +50,13 @@ function SesionCard({ sesion }) {
             </span>
           </div>
         </div>
-        <div className="flex items-center gap-1.5 px-2 py-1 rounded-full border border-primary/30 bg-primary/10 shrink-0">
-          <Users className="size-3 text-primary" aria-hidden="true" />
-          <span className="text-[10px] font-bold uppercase tracking-widest text-primary">
-            {sesion.reservas} {sesion.reservas === 1 ? "reserva" : "reservas"}
-          </span>
-        </div>
+        {tipos.length > 0 && (
+          <div className="flex items-center gap-1.5 shrink-0">
+            {tipos.map((tipo) => (
+              <TipoChip key={tipo} tipo={tipo} />
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Details */}
