@@ -16,6 +16,7 @@ class PagoEstado(str, Enum):
 class PagoMedio(str, Enum):
     MERCADO_PAGO = "mercado_pago"
     EFECTIVO = "efectivo"
+    CREDITO_A_FAVOR = "credito_a_favor"
 
 
 class Pago(SoftDeleteMixin, db.Model):
@@ -74,6 +75,8 @@ class Pago(SoftDeleteMixin, db.Model):
     user = db.relationship("User", back_populates="pagos", foreign_keys=[user_id])
     registrado_por = db.relationship("User", foreign_keys=[registrado_por_id])
     reserva = db.relationship("Reserva", back_populates="pagos")
+    # Créditos a favor que financiaron este pago (total o parcialmente).
+    consumos = db.relationship("CreditoConsumo", back_populates="pago")
 
     def __repr__(self):
         return f"<Pago id={self.id} user={self.user_id} reserva={self.reserva_id} {self.estado}>"

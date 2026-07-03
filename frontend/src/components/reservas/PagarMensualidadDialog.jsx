@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { CalendarDays, Handshake } from "lucide-react";
+import { useEffect, useState } from "react";
+import { CalendarDays, Handshake, Wallet } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -13,7 +13,10 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { crearCheckoutMensualidad } from "@/components/reservas/api";
+import {
+  crearCheckoutMensualidad,
+  getCreditoAplicable,
+} from "@/components/reservas/api";
 import { formatPrice } from "@/lib/utils";
 
 /**
@@ -31,6 +34,7 @@ import { formatPrice } from "@/lib/utils";
  * @param {string}          props.datetime   - Próxima clase ya formateada (fecha y hora).
  * @param {number}          props.clases     - Cantidad de clases del mes.
  * @param {number}          props.total      - Total de la mensualidad.
+ * @param {() => void}      [props.onPagado] - Se llama tras pagar 100% con crédito (sin MP), para refrescar la vista.
  */
 export default function PagarMensualidadDialog({
   trigger,
@@ -39,19 +43,47 @@ export default function PagarMensualidadDialog({
   datetime,
   clases,
   total,
+  onPagado,
 }) {
   const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [creditoDisponible, setCreditoDisponible] = useState(0);
 
   const precioClase = clases > 0 ? Number(total) / Number(clases) : null;
+  const descuentoCredito = Math.min(creditoDisponible, Number(total));
+  const totalFinal = Number(total) - descuentoCredito;
+  const cubiertoConCredito = totalFinal === 0 && descuentoCredito > 0;
+
+  // Crédito a favor de la actividad, para descontarlo en la vista previa.
+  useEffect(() => {
+    if (!open) return;
+    let active = true;
+    getCreditoAplicable({ reservaId })
+      .then((data) => {
+        if (active) setCreditoDisponible(data?.saldo_disponible ?? 0);
+      })
+      .catch(() => {
+        if (active) setCreditoDisponible(0);
+      });
+    return () => {
+      active = false;
+    };
+  }, [open, reservaId]);
 
   const handlePagar = async () => {
     if (submitting) return;
     setSubmitting(true);
     try {
-      const { init_point } = await crearCheckoutMensualidad(reservaId);
+      const resp = await crearCheckoutMensualidad(reservaId);
+      // Crédito cubrió el total: el abono ya quedó pagado, sin pasar por MP.
+      if (resp.pagado_con_credito) {
+        toast.success("Abono pagado con tu crédito a favor.");
+        setOpen(false);
+        onPagado?.();
+        return;
+      }
       // Redirige al Checkout Pro; el pago se registra al volver a /pago/exito.
-      window.location.href = init_point;
+      window.location.href = resp.init_point;
     } catch (err) {
       toast.error(err?.message ?? "No se pudo iniciar el pago.");
       setSubmitting(false);
@@ -90,6 +122,12 @@ export default function PagarMensualidadDialog({
               <span>Clases del mes</span>
               <span className="text-on-surface">{clases}</span>
             </div>
+            {descuentoCredito > 0 && (
+              <div className="flex justify-between text-credit-violet">
+                <span>Crédito a favor</span>
+                <span>−{formatPrice(descuentoCredito)}</span>
+              </div>
+            )}
           </div>
 
           <div className="flex items-end justify-between border-t border-outline-variant pt-3">
@@ -98,15 +136,24 @@ export default function PagarMensualidadDialog({
                 Total mensualidad
               </span>
               <span className="text-headline-md text-primary leading-none">
-                {formatPrice(total)}
+                {formatPrice(totalFinal)}
               </span>
             </div>
-            <div className="flex items-center gap-1 bg-[#009EE3]/10 px-3 py-1.5 rounded-full border border-[#009EE3]/30">
-              <Handshake className="size-4 text-[#009EE3]" />
-              <span className="text-label-sm font-bold text-[#009EE3]">
-                MercadoPago
-              </span>
-            </div>
+            {cubiertoConCredito ? (
+              <div className="flex items-center gap-1 bg-credit-violet/10 px-3 py-1.5 rounded-full border border-credit-violet/30">
+                <Wallet className="size-4 text-credit-violet" />
+                <span className="text-label-sm font-bold text-credit-violet">
+                  Crédito a favor
+                </span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-1 bg-[#009EE3]/10 px-3 py-1.5 rounded-full border border-[#009EE3]/30">
+                <Handshake className="size-4 text-[#009EE3]" />
+                <span className="text-label-sm font-bold text-[#009EE3]">
+                  MercadoPago
+                </span>
+              </div>
+            )}
           </div>
         </div>
 
@@ -117,7 +164,11 @@ export default function PagarMensualidadDialog({
             </Button>
           </DialogClose>
           <Button onClick={handlePagar} disabled={submitting}>
-            {submitting ? "Redirigiendo…" : "Pagar"}
+            {submitting
+              ? cubiertoConCredito
+                ? "Confirmando…"
+                : "Redirigiendo…"
+              : "Pagar"}
           </Button>
         </DialogFooter>
       </DialogContent>

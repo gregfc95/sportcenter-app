@@ -26,6 +26,23 @@ function formatTurno(turno) {
   return formatReservaFecha(turno.fecha, turno.hora ?? "");
 }
 
+// Medio de pago legible. Un pago 100% con crédito lleva medio "credito_a_favor";
+// uno mixto (parte crédito, parte Mercado Pago) se anota con el sufijo.
+function medioLabel(pago) {
+  if (pago.metodo === "credito_a_favor") return "Crédito a favor";
+  const base = pago.metodo === "efectivo" ? "Efectivo" : "Mercado Pago";
+  return pago.monto_credito > 0 ? `${base} + Crédito` : base;
+}
+
+// Un crédito a favor vencido sigue apareciendo en el historial, pero marcado
+// como vencido (el saldo se perdió).
+function estadoLabel(pago) {
+  if (pago.estado === "credito" && pago.credito?.vencido) {
+    return "credito_vencido";
+  }
+  return pago.estado;
+}
+
 export default function MisPagosPage() {
   usePageTitle("Mis Pagos");
 
@@ -134,10 +151,10 @@ export default function MisPagosPage() {
                         {formatPrice(pago.monto)}
                       </td>
                       <td className="py-sm px-md text-center">
-                        <EstadoBadge estado={pago.estado} />
+                        <EstadoBadge estado={estadoLabel(pago)} />
                       </td>
                       <td className="py-sm px-md text-on-surface-variant">
-                        {pago.metodo === "efectivo" ? "Efectivo" : "Mercado Pago"}
+                        {medioLabel(pago)}
                       </td>
                       <td className="py-sm px-md text-right text-on-surface-variant font-mono text-sm">
                         #{pago.reserva_id}

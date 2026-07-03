@@ -30,6 +30,10 @@ const ESTADOS = {
     label: "Crédito a Favor",
     color: "text-credit-violet bg-credit-violet/10 border-credit-violet/30",
   },
+  credito_vencido: {
+    label: "Crédito Vencido",
+    color: "text-error bg-error/10 border-error/30",
+  },
   asistio: {
     label: "Asistió",
     color: "text-success-green bg-success-green/10 border-success-green/30",

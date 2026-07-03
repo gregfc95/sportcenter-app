@@ -4,7 +4,7 @@ import { CalendarDays, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { EstadoBadge } from "@/components/ui/estado-badge";
 import { TipoChip } from "@/components/ui/tipo-chip";
-import { getActividadIcon } from "@/components/actividades/actividadIcons";
+import { ActividadIcon } from "@/components/actividades/ActividadIcon";
 import PagarSaldoDialog from "@/components/reservas/PagarSaldoDialog";
 import PagarSenaDialog from "@/components/reservas/PagarSenaDialog";
 import PagarMensualidadDialog from "@/components/reservas/PagarMensualidadDialog";
@@ -55,7 +55,6 @@ function ReservaCardShell({
   actions,
   qrAction,
 }) {
-  const Icon = getActividadIcon(actividad);
 
   return (
     <div className="relative overflow-hidden bg-surface-container border border-outline-variant rounded-xl p-md flex flex-col gap-md hover:border-primary/50 transition-colors">
@@ -68,7 +67,11 @@ function ReservaCardShell({
       <div className="relative z-10 flex justify-between items-start gap-2">
         <div className="flex items-center gap-sm">
           <div className="w-12 h-12 rounded-lg bg-surface-container-high border border-outline-variant flex items-center justify-center shrink-0">
-            <Icon className="size-6 text-primary" aria-hidden="true" />
+            <ActividadIcon
+              actividad={actividad}
+              className="size-6 text-primary"
+              aria-hidden="true"
+            />
           </div>
           <div className="flex flex-col">
             <h3 className="text-label-md text-on-surface">{actividad}</h3>
@@ -96,7 +99,7 @@ function ReservaCardShell({
   );
 }
 
-function ReservaMensualCard({ reserva, onCancelled }) {
+function ReservaMensualCard({ reserva, onCancelled, onPagado }) {
   const clases = reserva.mensualidad.clases;
   // Las canceladas se muestran tachadas pero no cuentan para selección,
   // sesiones ni pago.
@@ -173,6 +176,7 @@ function ReservaMensualCard({ reserva, onCancelled }) {
               datetime={proximaDatetime}
               clases={vivas.length}
               total={reserva.mensualidad.total}
+              onPagado={onPagado}
               trigger={<PagarTrigger />}
             />
           </>
@@ -217,7 +221,7 @@ function ReservaMensualCard({ reserva, onCancelled }) {
   );
 }
 
-function ReservaEventualCard({ reserva, onCancelled }) {
+function ReservaEventualCard({ reserva, onCancelled, onPagado }) {
   const { cupo, ocupados } = reserva.turno;
   const ocupacion = cupo > 0 ? Math.min(100, (ocupados / cupo) * 100) : 0;
   const datetime = formatReservaFecha(reserva.fecha, reserva.turno.hora);
@@ -261,6 +265,7 @@ function ReservaEventualCard({ reserva, onCancelled }) {
               precio={reserva.precio}
               sena={reserva.sena}
               saldo={reserva.saldo}
+              onPagado={onPagado}
               trigger={<PagarTrigger />}
             />
           )}
@@ -288,12 +293,20 @@ function ReservaEventualCard({ reserva, onCancelled }) {
   );
 }
 
-export default function ReservaCard({ reserva, onCancelled }) {
+export default function ReservaCard({ reserva, onCancelled, onPagado }) {
   const esMensual =
     reserva.tipo === "mensual" && Array.isArray(reserva.mensualidad?.clases);
   return esMensual ? (
-    <ReservaMensualCard reserva={reserva} onCancelled={onCancelled} />
+    <ReservaMensualCard
+      reserva={reserva}
+      onCancelled={onCancelled}
+      onPagado={onPagado}
+    />
   ) : (
-    <ReservaEventualCard reserva={reserva} onCancelled={onCancelled} />
+    <ReservaEventualCard
+      reserva={reserva}
+      onCancelled={onCancelled}
+      onPagado={onPagado}
+    />
   );
 }

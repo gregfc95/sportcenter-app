@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { CalendarDays, Handshake } from "lucide-react";
+import { useEffect, useState } from "react";
+import { CalendarDays, Handshake, Wallet } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -13,7 +13,10 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { crearCheckoutSaldo } from "@/components/reservas/api";
+import {
+  crearCheckoutSaldo,
+  getCreditoAplicable,
+} from "@/components/reservas/api";
 import { formatPrice } from "@/lib/utils";
 
 /**
@@ -29,6 +32,7 @@ import { formatPrice } from "@/lib/utils";
  * @param {number}      props.precio       - Precio total de la clase (bloqueado al momento de la seña).
  * @param {number}      props.sena         - Seña ya abonada.
  * @param {number}      props.saldo        - Saldo restante a pagar (lo calcula el backend).
+ * @param {() => void}  [props.onPagado]   - Se llama tras pagar 100% con crédito (sin MP), para refrescar la vista.
  */
 export default function PagarSaldoDialog({
   trigger,
@@ -38,20 +42,49 @@ export default function PagarSaldoDialog({
   precio,
   sena,
   saldo,
+  onPagado,
 }) {
   // El saldo lo calcula el backend sobre el precio bloqueado y lo ya cobrado;
   // si no llegara, se reconstruye como precio − seña por compatibilidad.
   const restante = saldo != null ? Number(saldo) : Number(precio) - Number(sena);
   const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [creditoDisponible, setCreditoDisponible] = useState(0);
+
+  const descuentoCredito = Math.min(creditoDisponible, restante);
+  const totalFinal = restante - descuentoCredito;
+  const cubiertoConCredito = totalFinal === 0 && descuentoCredito > 0;
+
+  // Crédito a favor de la actividad, para descontarlo en la vista previa.
+  useEffect(() => {
+    if (!open) return;
+    let active = true;
+    getCreditoAplicable({ reservaId })
+      .then((data) => {
+        if (active) setCreditoDisponible(data?.saldo_disponible ?? 0);
+      })
+      .catch(() => {
+        if (active) setCreditoDisponible(0);
+      });
+    return () => {
+      active = false;
+    };
+  }, [open, reservaId]);
 
   const handlePagarSaldo = async () => {
     if (submitting) return;
     setSubmitting(true);
     try {
-      const { init_point } = await crearCheckoutSaldo(reservaId);
+      const resp = await crearCheckoutSaldo(reservaId);
+      // Crédito cubrió el saldo: ya quedó registrado, sin pasar por MP.
+      if (resp.pagado_con_credito) {
+        toast.success("Pago completado con tu crédito a favor.");
+        setOpen(false);
+        onPagado?.();
+        return;
+      }
       // Redirige al Checkout Pro; el saldo se registra al volver a /pago/exito.
-      window.location.href = init_point;
+      window.location.href = resp.init_point;
     } catch (err) {
       toast.error(err?.message ?? "No se pudo iniciar el pago.");
       setSubmitting(false);
@@ -86,6 +119,12 @@ export default function PagarSaldoDialog({
               <span>Seña abonada</span>
               <span className="text-on-surface">{formatPrice(sena)}</span>
             </div>
+            {descuentoCredito > 0 && (
+              <div className="flex justify-between text-credit-violet">
+                <span>Crédito a favor</span>
+                <span>−{formatPrice(descuentoCredito)}</span>
+              </div>
+            )}
           </div>
 
           <div className="flex items-end justify-between border-t border-outline-variant pt-3">
@@ -94,15 +133,24 @@ export default function PagarSaldoDialog({
                 Saldo a pagar
               </span>
               <span className="text-headline-md text-primary leading-none">
-                {formatPrice(restante)}
+                {formatPrice(totalFinal)}
               </span>
             </div>
-            <div className="flex items-center gap-1 bg-[#009EE3]/10 px-3 py-1.5 rounded-full border border-[#009EE3]/30">
-              <Handshake className="size-4 text-[#009EE3]" />
-              <span className="text-label-sm font-bold text-[#009EE3]">
-                MercadoPago
-              </span>
-            </div>
+            {cubiertoConCredito ? (
+              <div className="flex items-center gap-1 bg-credit-violet/10 px-3 py-1.5 rounded-full border border-credit-violet/30">
+                <Wallet className="size-4 text-credit-violet" />
+                <span className="text-label-sm font-bold text-credit-violet">
+                  Crédito a favor
+                </span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-1 bg-[#009EE3]/10 px-3 py-1.5 rounded-full border border-[#009EE3]/30">
+                <Handshake className="size-4 text-[#009EE3]" />
+                <span className="text-label-sm font-bold text-[#009EE3]">
+                  MercadoPago
+                </span>
+              </div>
+            )}
           </div>
         </div>
 
@@ -113,7 +161,11 @@ export default function PagarSaldoDialog({
             </Button>
           </DialogClose>
           <Button onClick={handlePagarSaldo} disabled={submitting}>
-            {submitting ? "Redirigiendo…" : "Pagar"}
+            {submitting
+              ? cubiertoConCredito
+                ? "Confirmando…"
+                : "Redirigiendo…"
+              : "Pagar"}
           </Button>
         </DialogFooter>
       </DialogContent>

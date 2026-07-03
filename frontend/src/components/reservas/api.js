@@ -5,8 +5,12 @@ export { ApiError } from "@/lib/apiClient";
 /**
  * Crea la reserva del turno elegido y devuelve el link de Checkout Pro.
  *
+ * Si el crédito a favor de la actividad cubre el total, la respuesta trae
+ * `pagado_con_credito: true` (sin `init_point`) y el pago ya quedó registrado;
+ * si lo cubre en parte, `monto_a_pagar` es el remanente que cobra Mercado Pago.
+ *
  * @param {{ turno_id: number, fecha: string, tipo?: string }} payload
- * @returns {Promise<{ reserva_id: number, preference_id: string, init_point: string, sandbox_init_point: string }>}
+ * @returns {Promise<{ reserva_id: number, pagado_con_credito: boolean, monto_credito: number, monto_a_pagar: number, preference_id?: string, init_point?: string, sandbox_init_point?: string, pagos?: Array<object> }>}
  */
 export function crearCheckout(payload) {
   return request("/api/pagos/checkout", {
@@ -34,8 +38,11 @@ export function confirmarSena(reservaId) {
  * Genera el link de Checkout Pro para señar una reserva pendiente ya existente
  * (reanuda el pago cuando no volvió la respuesta de Mercado Pago).
  *
+ * Si el crédito a favor cubre la seña, la respuesta trae `pagado_con_credito:
+ * true` (sin `init_point`) y la seña ya quedó registrada.
+ *
  * @param {number} reservaId
- * @returns {Promise<{ reserva_id: number, preference_id: string, init_point: string, sandbox_init_point: string }>}
+ * @returns {Promise<{ reserva_id: number, pagado_con_credito: boolean, monto_credito: number, monto_a_pagar: number, preference_id?: string, init_point?: string, sandbox_init_point?: string, pagos?: Array<object> }>}
  */
 export function crearCheckoutSena(reservaId) {
   return request("/api/pagos/sena/checkout", {
@@ -49,8 +56,11 @@ export function crearCheckoutSena(reservaId) {
  * Genera el link de Checkout Pro para abonar el saldo restante de una reserva
  * ya señada.
  *
+ * Si el crédito a favor cubre el saldo, la respuesta trae `pagado_con_credito:
+ * true` (sin `init_point`) y el saldo ya quedó registrado.
+ *
  * @param {number} reservaId
- * @returns {Promise<{ reserva_id: number, preference_id: string, init_point: string, sandbox_init_point: string }>}
+ * @returns {Promise<{ reserva_id: number, pagado_con_credito: boolean, monto_credito: number, monto_a_pagar: number, preference_id?: string, init_point?: string, sandbox_init_point?: string, pagos?: Array<object> }>}
  */
 export function crearCheckoutSaldo(reservaId) {
   return request("/api/pagos/saldo/checkout", {
@@ -79,8 +89,11 @@ export function completarPago(reservaId) {
  * Mis Turnos. Sirve cualquier reserva del grupo; el monto cubre todas las
  * clases del mes.
  *
+ * Si el crédito a favor cubre el total del abono, la respuesta trae
+ * `pagado_con_credito: true` (sin `init_point`) y el abono ya quedó pagado.
+ *
  * @param {number} reservaId
- * @returns {Promise<{ reserva_id: number, fechas: string[], clases: number, monto: number, preference_id: string, init_point: string, sandbox_init_point: string }>}
+ * @returns {Promise<{ reserva_id: number, fechas: string[], clases: number, monto: number, pagado_con_credito: boolean, monto_credito: number, monto_a_pagar: number, preference_id?: string, init_point?: string, sandbox_init_point?: string, pagos?: Array<object> }>}
  */
 export function crearCheckoutMensualidad(reservaId) {
   return request("/api/pagos/mensualidad/checkout", {
@@ -153,11 +166,42 @@ export function listMisReservas() {
 /**
  * Historial de pagos del usuario actual (registro transaccional inmutable).
  *
- * @returns {Promise<Array<{ id: number, fecha_pago: string, monto: number, estado: string, reserva_id: number, actividad: string|null, turno: { fecha: string, hora: string, dia_semana: string }|null }>>}
+ * `monto_credito` es la parte del pago cubierta con crédito a favor; en los
+ * asientos de cierre con estado "credito", `credito` trae el saldo y vigencia
+ * del crédito que originó esa cancelación (para marcarlo vencido si corresponde).
+ *
+ * @returns {Promise<Array<{ id: number, fecha_pago: string, monto: number, estado: string, metodo: string, monto_credito: number, credito: { saldo: number, expira_at: string, vencido: boolean }|null, reserva_id: number, actividad: string|null, turno: { fecha: string, hora: string, dia_semana: string }|null }>>}
  */
 export function listMisPagos() {
   return request("/api/pagos", {
     fallback: "No pudimos cargar tu historial de pagos.",
+  });
+}
+
+/**
+ * Créditos a favor vigentes del usuario actual (para el dashboard).
+ *
+ * @returns {Promise<Array<{ id: number, actividad: { id: number, nombre: string }, monto_inicial: number, saldo: number, expira_at: string, created_at: string }>>}
+ */
+export function listMisCreditos() {
+  return request("/api/creditos", {
+    fallback: "No pudimos cargar tus créditos a favor.",
+  });
+}
+
+/**
+ * Saldo de crédito a favor canjeable para una actividad, para la vista previa
+ * del checkout. Se pasa `actividadId` (nueva reserva) o `reservaId` (diálogos de
+ * pago pendiente, que solo conocen la reserva).
+ *
+ * @param {{ actividadId?: number, reservaId?: number }} params
+ * @returns {Promise<{ actividad_id: number, saldo_disponible: number }>}
+ */
+export function getCreditoAplicable({ actividadId, reservaId } = {}) {
+  const query =
+    reservaId != null ? `reserva_id=${reservaId}` : `actividad_id=${actividadId}`;
+  return request(`/api/creditos/aplicables?${query}`, {
+    fallback: "No pudimos calcular tu crédito a favor.",
   });
 }
 

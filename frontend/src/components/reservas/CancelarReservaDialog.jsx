@@ -28,7 +28,7 @@ const RESOLUCIONES = [
   {
     value: "credito",
     label: "Crédito a Favor",
-    detail: "Queda como crédito para esta actividad.",
+    detail: "Queda como crédito para esta actividad; vence a los 30 días.",
   },
 ];
 

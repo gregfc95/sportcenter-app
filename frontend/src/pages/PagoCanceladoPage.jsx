@@ -18,10 +18,10 @@ function resolveVariant({ reembolsado, resolucion, monto }) {
       heading: "Crédito a Favor",
       title: "La clase quedó como crédito a favor",
       message:
-        "Se canceló la clase y lo abonado quedó como crédito a favor para esta actividad.",
+        "Se canceló la clase y lo abonado quedó como crédito a favor para esta actividad. Se aplica solo al reservar esta misma actividad y vence a los 30 días.",
       amount: monto,
       Icon: CheckCircle2,
-      iconClass: "text-sky-500",
+      iconClass: "text-credit-violet",
       to: "/mis-pagos",
       cta: "Ir a Mis Pagos",
     };
@@ -90,7 +90,7 @@ export default function PagoCanceladoPage() {
           <h2 className="text-headline-md text-on-surface">{variant.title}</h2>
 
           {variant.amount != null && (
-            <p className="text-headline-md text-sky-500 leading-none">
+            <p className={`text-headline-md leading-none ${variant.iconClass}`}>
               {formatPrice(variant.amount)}
             </p>
           )}

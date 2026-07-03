@@ -4,15 +4,42 @@ from flask import Blueprint, Response, jsonify, request
 
 from .. import db
 from ..auth import current_user_id, require_role
+from ..models.pago import PagoEstado
 from ..models.reserva import MotivoCancelacion, Reserva, ReservaTipo
 from ..models.user import UserRole
-from ..services import PagoService, ReservaService
+from ..services import CreditoService, PagoService, ReservaService
 
 
 pago_bp = Blueprint("pagos", __name__, url_prefix="/api/pagos")
 
 reserva_service = ReservaService()
 pago_service = PagoService()
+credito_service = CreditoService()
+
+
+def _monto_credito(pago) -> float:
+    """Cuánto de este pago se cubrió con crédito a favor (consumos no restaurados)."""
+    return sum(
+        (float(c.monto) for c in pago.consumos if c.restaurado_at is None), 0.0
+    )
+
+
+def _credito_de_cierre(pago, creditos_por_reserva) -> dict | None:
+    """Datos del crédito que originó una fila de cierre CREDITO (saldo/vigencia).
+
+    Solo aplica a los asientos con estado CREDITO: es el crédito que nació de esa
+    cancelación. Permite a Mis Pagos mostrar su saldo y si ya venció.
+    """
+    if pago.estado != PagoEstado.CREDITO:
+        return None
+    credito = creditos_por_reserva.get(pago.reserva_id)
+    if credito is None:
+        return None
+    return {
+        "saldo": float(credito.saldo),
+        "expira_at": credito.expira_at.isoformat() if credito.expira_at else None,
+        "vencido": credito.vencido,
+    }
 
 
 def _registrado_por(pago) -> dict | None:
@@ -37,6 +64,11 @@ def list_mis_pagos() -> Response:
     user_id = current_user_id()
     pagos = pago_service.listar_por_usuario(user_id)
 
+    reserva_ids_cierre = [
+        p.reserva_id for p in pagos if p.estado == PagoEstado.CREDITO
+    ]
+    creditos_por_reserva = credito_service.por_reserva_origen(reserva_ids_cierre)
+
     payload = []
     for pago in pagos:
         reserva = pago.reserva
@@ -49,6 +81,8 @@ def list_mis_pagos() -> Response:
                 "monto": float(pago.monto) if pago.monto is not None else None,
                 "estado": pago.estado.value if pago.estado else None,
                 "metodo": pago.metodo.value if pago.metodo else None,
+                "monto_credito": _monto_credito(pago),
+                "credito": _credito_de_cierre(pago, creditos_por_reserva),
                 "registrado_por": _registrado_por(pago),
                 "reserva_id": pago.reserva_id,
                 "actividad": actividad.nombre if actividad else None,
@@ -78,6 +112,11 @@ def list_todos_pagos() -> Response:
     require_role(UserRole.ADMIN)
     pagos = pago_service.listar_todos()
 
+    reserva_ids_cierre = [
+        p.reserva_id for p in pagos if p.estado == PagoEstado.CREDITO
+    ]
+    creditos_por_reserva = credito_service.por_reserva_origen(reserva_ids_cierre)
+
     payload = []
     for pago in pagos:
         reserva = pago.reserva
@@ -91,6 +130,8 @@ def list_todos_pagos() -> Response:
                 "monto": float(pago.monto) if pago.monto is not None else None,
                 "estado": pago.estado.value if pago.estado else None,
                 "metodo": pago.metodo.value if pago.metodo else None,
+                "monto_credito": _monto_credito(pago),
+                "credito": _credito_de_cierre(pago, creditos_por_reserva),
                 "registrado_por": _registrado_por(pago),
                 "reserva_id": pago.reserva_id,
                 "cliente": (

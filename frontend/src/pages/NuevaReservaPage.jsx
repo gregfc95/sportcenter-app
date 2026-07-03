@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
   ChevronRight,
   ChevronLeft,
   CheckCircle2,
   ArrowRight,
   Handshake,
+  Wallet,
 } from "lucide-react";
 
 import { toast } from "sonner";
@@ -17,7 +18,7 @@ import {
   listActividades,
   listTurnosByActividad,
 } from "@/components/actividades/api";
-import { crearCheckout } from "@/components/reservas/api";
+import { crearCheckout, getCreditoAplicable } from "@/components/reservas/api";
 import { cn, formatPrice } from "@/lib/utils";
 import {
   MESES,
@@ -73,6 +74,7 @@ function buildMonthCells(year, month) {
 
 export default function NuevaReservaPage() {
   usePageTitle("Nueva Reserva");
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const actividadParam = searchParams.get("actividad");
 
@@ -98,6 +100,8 @@ export default function NuevaReservaPage() {
   // so it's already correct on the render where the selection changes — no
   // flash of "no turnos" before the fetch effect gets a chance to run.
   const [loadedDayTurnosKey, setLoadedDayTurnosKey] = useState(null);
+  // Crédito a favor disponible para la actividad elegida (saldo canjeable).
+  const [creditoDisponible, setCreditoDisponible] = useState(0);
 
   useEffect(() => {
     let active = true;
@@ -126,6 +130,23 @@ export default function NuevaReservaPage() {
       })
       .catch(() => {
         if (active) setTurnos([]);
+      });
+    return () => {
+      active = false;
+    };
+  }, [actividadId]);
+
+  // Crédito a favor de la actividad: se auto-aplica como descuento en el
+  // checkout. Es una vista previa; el backend lo recomputa al confirmar.
+  useEffect(() => {
+    if (!actividadId) return;
+    let active = true;
+    getCreditoAplicable({ actividadId })
+      .then((data) => {
+        if (active) setCreditoDisponible(data?.saldo_disponible ?? 0);
+      })
+      .catch(() => {
+        if (active) setCreditoDisponible(0);
       });
     return () => {
       active = false;
@@ -253,7 +274,13 @@ export default function NuevaReservaPage() {
       ? precioClase * fechasMes.length
       : null;
   const montoAPagar = esMensual ? totalMensualidad : sena;
-  const total = montoAPagar != null ? formatPrice(montoAPagar) : "—";
+  // Crédito a favor aplicado: nunca más que el monto a pagar. Si lo cubre todo,
+  // el checkout saltea Mercado Pago.
+  const descuentoCredito =
+    montoAPagar != null ? Math.min(creditoDisponible, montoAPagar) : 0;
+  const totalFinal = montoAPagar != null ? montoAPagar - descuentoCredito : null;
+  const cubiertoConCredito = totalFinal === 0 && descuentoCredito > 0;
+  const total = totalFinal != null ? formatPrice(totalFinal) : "—";
 
   const [submitting, setSubmitting] = useState(false);
 
@@ -261,19 +288,29 @@ export default function NuevaReservaPage() {
     if (!selectedTurno || submitting) return;
     setSubmitting(true);
     try {
-      const { init_point, reserva_id } = await crearCheckout({
+      const resp = await crearCheckout({
         turno_id: selectedTurno.id,
         fecha: toISODate(selectedDate),
         tipo,
       });
+      // Crédito cubrió el total: el pago ya quedó registrado, no hay redirección.
+      if (resp.pagado_con_credito) {
+        toast.success(
+          esMensual
+            ? "Reserva confirmada. Abono pagado con tu crédito a favor."
+            : "Reserva confirmada. Seña pagada con tu crédito a favor.",
+        );
+        navigate("/mis-turnos");
+        return;
+      }
       // Guardamos la seña y la reserva para confirmarla y mostrar el toast al
       // volver de Mercado Pago; sessionStorage sobrevive la ida y vuelta en la
       // misma pestaña.
       if (!esMensual && sena != null)
         sessionStorage.setItem("pago_sena", String(sena));
-      sessionStorage.setItem("pago_reserva_id", String(reserva_id));
+      sessionStorage.setItem("pago_reserva_id", String(resp.reserva_id));
       // Redirige al Checkout Pro de Mercado Pago.
-      window.location.href = init_point;
+      window.location.href = resp.init_point;
     } catch (err) {
       toast.error(err?.message ?? "No se pudo iniciar el pago.");
       setSubmitting(false);
@@ -715,6 +752,14 @@ export default function NuevaReservaPage() {
                 </span>
               </div>
             )}
+            {selectedTurno && descuentoCredito > 0 && (
+              <div className="flex justify-between items-center text-credit-violet">
+                <span>Crédito a favor:</span>
+                <span className="text-label-md">
+                  −{formatPrice(descuentoCredito)}
+                </span>
+              </div>
+            )}
           </div>
 
           <div className="flex justify-between items-end pt-2">
@@ -730,12 +775,21 @@ export default function NuevaReservaPage() {
                 {selectedTurno ? total : "—"}
               </span>
             </div>
-            <div className="flex items-center gap-1 bg-[#009EE3]/10 px-3 py-1.5 rounded-full border border-[#009EE3]/30">
-              <Handshake className="size-4 text-[#009EE3]" />
-              <span className="text-label-sm font-bold text-[#009EE3]">
-                MercadoPago
-              </span>
-            </div>
+            {cubiertoConCredito ? (
+              <div className="flex items-center gap-1 bg-credit-violet/10 px-3 py-1.5 rounded-full border border-credit-violet/30">
+                <Wallet className="size-4 text-credit-violet" />
+                <span className="text-label-sm font-bold text-credit-violet">
+                  Crédito a favor
+                </span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-1 bg-[#009EE3]/10 px-3 py-1.5 rounded-full border border-[#009EE3]/30">
+                <Handshake className="size-4 text-[#009EE3]" />
+                <span className="text-label-sm font-bold text-[#009EE3]">
+                  MercadoPago
+                </span>
+              </div>
+            )}
           </div>
 
           <Button
@@ -745,7 +799,11 @@ export default function NuevaReservaPage() {
             disabled={!selectedTurno || submitting}
             className="w-full mt-4"
           >
-            {submitting ? "Redirigiendo…" : "Confirmar Reserva"}
+            {submitting
+              ? cubiertoConCredito
+                ? "Confirmando…"
+                : "Redirigiendo…"
+              : "Confirmar Reserva"}
             <ArrowRight className="size-5" />
           </Button>
         </section>

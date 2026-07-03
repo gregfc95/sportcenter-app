@@ -5,15 +5,19 @@ nunca se invoca: de `crear_preferencia_saldo` sólo se prueban las validaciones
 previas, que lanzan antes de llamar al SDK.
 """
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from types import SimpleNamespace
 
 import pytest
+from freezegun import freeze_time
+from sqlalchemy import select
 
-from app.models.pago import PagoEstado, PagoMedio
+from app.models.credito import Credito, CreditoConsumo
+from app.models.pago import Pago, PagoEstado, PagoMedio
 from app.models.turno import DiaSemana
 from app.models.user import UserRole
+from app.services.credito_service import CreditoService
 from app.services.pago_service import PagoService
 from app.services.reserva_service import ReservaService
 
@@ -213,3 +217,181 @@ class TestResumenPagoMensual:
         assert resumen["sena"] == Decimal("0")
         assert resumen["cobrado"] == Decimal("1000")
         assert resumen["saldo"] == Decimal("0")
+
+
+def _sena_pago(db_session, reserva_id):
+    return db_session.execute(
+        select(Pago).where(
+            Pago.reserva_id == reserva_id, Pago.estado == PagoEstado.SENADO
+        )
+    ).scalar_one()
+
+
+class TestCancelacionCreaCredito:
+    def test_credito_crea_credito_de_la_actividad(self, abono, db_session):
+        svc.registrar_mensualidad(abono.reservas[0].id)
+        clase = abono.reservas[0]
+
+        cierre = svc.registrar_cancelacion(clase.id, resolucion=PagoEstado.CREDITO)
+        assert cierre.estado == PagoEstado.CREDITO
+        assert cierre.monto == Decimal("1000")
+
+        credito = db_session.execute(
+            select(Credito).where(Credito.reserva_id == clase.id)
+        ).scalar_one()
+        assert credito.saldo == Decimal("1000")
+        assert credito.actividad_id == abono.actividad.id
+        assert credito.expira_at > datetime.now(timezone.utc) + timedelta(days=29)
+
+    def test_credito_es_idempotente(self, abono, db_session):
+        svc.registrar_mensualidad(abono.reservas[0].id)
+        clase = abono.reservas[0]
+        svc.registrar_cancelacion(clase.id, resolucion=PagoEstado.CREDITO)
+        svc.registrar_cancelacion(clase.id, resolucion=PagoEstado.CREDITO)
+
+        creditos = db_session.execute(
+            select(Credito).where(Credito.reserva_id == clase.id)
+        ).scalars().all()
+        assert len(creditos) == 1
+
+
+class TestCheckoutCubiertoPorCredito:
+    """Cobertura total: no se pasa por Mercado Pago (no se mockea el SDK)."""
+
+    def test_sena_cubierta_saltea_mp(self, escenario, make_credito, make_reserva, db_session):
+        actividad = escenario.reserva.turno.actividad
+        origen = make_reserva(
+            escenario.user, escenario.reserva.turno, date.today() + timedelta(days=30)
+        )
+        make_credito(escenario.user, actividad, origen, monto="500")
+
+        resultado = svc.crear_preferencia(escenario.reserva.id)
+        assert resultado["pagado_con_credito"] is True
+        assert resultado["monto_credito"] == 500.0
+
+        pago = _sena_pago(db_session, escenario.reserva.id)
+        assert pago.metodo == PagoMedio.CREDITO_A_FAVOR
+        # El crédito quedó consumido por completo.
+        assert CreditoService().saldo_disponible(
+            escenario.user.id, actividad.id
+        ) == Decimal("0")
+
+    def test_mensualidad_cubierta_saltea_mp(self, abono, make_credito, make_reserva, db_session):
+        # Crédito suficiente para todas las clases del abono.
+        origen = make_reserva(abono.user, abono.turno, date.today() + timedelta(days=60))
+        total = Decimal("1000") * len(abono.reservas)
+        make_credito(abono.user, abono.actividad, origen, monto=str(total + 500))
+
+        resultado = svc.crear_preferencia_mensualidad(abono.reservas[0].id)
+        assert resultado["pagado_con_credito"] is True
+
+        pagos = db_session.execute(
+            select(Pago).where(Pago.estado == PagoEstado.PAGADO)
+        ).scalars().all()
+        assert len(pagos) == len(abono.reservas)
+        assert all(p.metodo == PagoMedio.CREDITO_A_FAVOR for p in pagos)
+
+
+class TestCheckoutParcialConCredito:
+    def test_sena_parcial_manda_resto_a_mp(self, escenario, make_credito, make_reserva, monkeypatch):
+        actividad = escenario.reserva.turno.actividad
+        origen = make_reserva(
+            escenario.user, escenario.reserva.turno, date.today() + timedelta(days=30)
+        )
+        make_credito(escenario.user, actividad, origen, monto="200")
+
+        capturado = {}
+
+        def fake_pref(self, reserva_id, *, title, monto, success_path):
+            capturado["monto"] = monto
+            return {
+                "preference_id": "x",
+                "init_point": "http://mp",
+                "sandbox_init_point": None,
+            }
+
+        monkeypatch.setattr(PagoService, "_crear_preferencia", fake_pref)
+
+        resultado = svc.crear_preferencia(escenario.reserva.id)
+        assert resultado["pagado_con_credito"] is False
+        assert capturado["monto"] == Decimal("300")  # seña 500 − crédito 200
+        assert resultado["monto_credito"] == 200.0
+        assert resultado["monto_a_pagar"] == 300.0
+
+
+class TestConsumoEnMensualidad:
+    def test_reparte_credito_por_clase(self, abono, make_credito, make_reserva, db_session):
+        origen = make_reserva(abono.user, abono.turno, date.today() + timedelta(days=60))
+        make_credito(abono.user, abono.actividad, origen, monto="1500")
+
+        pagos = svc.registrar_mensualidad(abono.reservas[0].id)
+        db_session.commit()
+
+        total = Decimal("1000") * len(pagos)
+        consumos = db_session.execute(select(CreditoConsumo)).scalars().all()
+        assert sum((c.monto for c in consumos), Decimal("0")) == min(
+            Decimal("1500"), total
+        )
+        # La primera clase (crédito ≥ 1000) queda 100% en crédito.
+        primera = next(p for p in pagos if p.reserva_id == abono.reservas[0].id)
+        assert primera.metodo == PagoMedio.CREDITO_A_FAVOR
+
+    def test_no_gasta_credito_dos_veces(self, abono, make_credito, make_reserva, db_session):
+        origen = make_reserva(abono.user, abono.turno, date.today() + timedelta(days=60))
+        credito = make_credito(abono.user, abono.actividad, origen, monto="1000")
+
+        svc.registrar_mensualidad(abono.reservas[0].id)
+        db_session.commit()
+        saldo_tras_pagar = credito.saldo
+
+        svc.registrar_mensualidad(abono.reservas[0].id)  # doble retorno
+        db_session.commit()
+        assert credito.saldo == saldo_tras_pagar
+
+    def test_credito_vencido_no_se_consume(self, abono, make_credito, make_reserva, db_session):
+        ahora = datetime.now(timezone.utc)
+        origen = make_reserva(abono.user, abono.turno, date.today() + timedelta(days=60))
+        make_credito(
+            abono.user, abono.actividad, origen, monto="1000",
+            expira_at=ahora + timedelta(hours=1),
+        )
+
+        with freeze_time(ahora + timedelta(days=2)):
+            pagos = svc.registrar_mensualidad(abono.reservas[0].id)
+            assert all(p.metodo == PagoMedio.MERCADO_PAGO for p in pagos)
+
+        db_session.commit()
+        assert db_session.execute(select(CreditoConsumo)).scalars().all() == []
+
+
+class TestCancelacionRestauraCredito:
+    def test_parcial_restaura_y_cierra_solo_efectivo(
+        self, abono, make_credito, make_reserva, db_session
+    ):
+        origen = make_reserva(abono.user, abono.turno, date.today() + timedelta(days=60))
+        credito = make_credito(abono.user, abono.actividad, origen, monto="400")
+
+        svc.registrar_mensualidad(abono.reservas[0].id)  # clase 1: 400 crédito + 600 MP
+        clase = abono.reservas[0]
+
+        cierre = svc.registrar_cancelacion(clase.id, resolucion=PagoEstado.CREDITO)
+        # Solo la parte en dinero (600) forma el cierre y el crédito nuevo.
+        assert cierre.monto == Decimal("600")
+        # La parte en crédito volvió a su crédito de origen.
+        assert credito.saldo == Decimal("400")
+
+    def test_100pct_credito_no_crea_cierre_ni_credito_nuevo(
+        self, abono, make_credito, make_reserva, db_session
+    ):
+        origen = make_reserva(abono.user, abono.turno, date.today() + timedelta(days=60))
+        credito = make_credito(abono.user, abono.actividad, origen, monto="1000")
+
+        svc.registrar_mensualidad(abono.reservas[0].id)  # clase 1: 100% crédito
+        clase = abono.reservas[0]
+
+        cierre = svc.registrar_cancelacion(clase.id, resolucion=PagoEstado.CREDITO)
+        assert cierre is None
+
+        creditos = db_session.execute(select(Credito)).scalars().all()
+        assert len(creditos) == 1  # no se creó uno nuevo
+        assert credito.saldo == Decimal("1000")  # el original recuperó su saldo

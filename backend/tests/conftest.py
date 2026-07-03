@@ -196,6 +196,33 @@ def make_pago(db_session):
     return _make
 
 
+@pytest.fixture
+def make_credito(db_session):
+    from datetime import datetime, timezone
+
+    from app import db
+    from app.models.credito import Credito
+
+    def _make(
+        user, actividad, reserva, monto="1000.00", saldo=None, expira_at=None, dias=30
+    ):
+        monto = Decimal(monto)
+        credito = Credito(
+            user_id=user.id,
+            actividad_id=actividad.id,
+            reserva_id=reserva.id,
+            monto_inicial=monto,
+            saldo=Decimal(saldo) if saldo is not None else monto,
+            expira_at=expira_at
+            or (datetime.now(timezone.utc) + timedelta(days=dias)),
+        )
+        db.session.add(credito)
+        db.session.commit()
+        return credito
+
+    return _make
+
+
 # --- Helpers de fechas -------------------------------------------------------
 
 

@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { CalendarDays, Handshake } from "lucide-react";
+import { useEffect, useState } from "react";
+import { CalendarDays, Handshake, Wallet } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -13,7 +13,10 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { crearCheckoutSena } from "@/components/reservas/api";
+import {
+  crearCheckoutSena,
+  getCreditoAplicable,
+} from "@/components/reservas/api";
 import { formatPrice } from "@/lib/utils";
 
 /**
@@ -30,6 +33,7 @@ import { formatPrice } from "@/lib/utils";
  * @param {string}      props.datetime     - Fecha y hora ya formateadas del turno.
  * @param {number}      props.precio       - Precio total de la clase.
  * @param {number}      props.sena         - Seña a abonar (50% del precio).
+ * @param {() => void}  [props.onPagado]   - Se llama tras pagar 100% con crédito (sin MP), para refrescar la vista.
  */
 export default function PagarSenaDialog({
   trigger,
@@ -38,17 +42,46 @@ export default function PagarSenaDialog({
   datetime,
   precio,
   sena,
+  onPagado,
 }) {
   const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [creditoDisponible, setCreditoDisponible] = useState(0);
+
+  const descuentoCredito = Math.min(creditoDisponible, Number(sena));
+  const totalFinal = Number(sena) - descuentoCredito;
+  const cubiertoConCredito = totalFinal === 0 && descuentoCredito > 0;
+
+  // Crédito a favor de la actividad, para descontarlo en la vista previa.
+  useEffect(() => {
+    if (!open) return;
+    let active = true;
+    getCreditoAplicable({ reservaId })
+      .then((data) => {
+        if (active) setCreditoDisponible(data?.saldo_disponible ?? 0);
+      })
+      .catch(() => {
+        if (active) setCreditoDisponible(0);
+      });
+    return () => {
+      active = false;
+    };
+  }, [open, reservaId]);
 
   const handlePagarSena = async () => {
     if (submitting) return;
     setSubmitting(true);
     try {
-      const { init_point } = await crearCheckoutSena(reservaId);
+      const resp = await crearCheckoutSena(reservaId);
+      // Crédito cubrió la seña: ya quedó registrada, sin pasar por MP.
+      if (resp.pagado_con_credito) {
+        toast.success("Seña pagada con tu crédito a favor.");
+        setOpen(false);
+        onPagado?.();
+        return;
+      }
       // Redirige al Checkout Pro; la seña se registra al volver a /pago/exito.
-      window.location.href = init_point;
+      window.location.href = resp.init_point;
     } catch (err) {
       toast.error(err?.message ?? "No se pudo iniciar el pago.");
       setSubmitting(false);
@@ -85,6 +118,12 @@ export default function PagarSenaDialog({
                 {formatPrice(Number(precio) - Number(sena))}
               </span>
             </div>
+            {descuentoCredito > 0 && (
+              <div className="flex justify-between text-credit-violet">
+                <span>Crédito a favor</span>
+                <span>−{formatPrice(descuentoCredito)}</span>
+              </div>
+            )}
           </div>
 
           <div className="flex items-end justify-between border-t border-outline-variant pt-3">
@@ -93,15 +132,24 @@ export default function PagarSenaDialog({
                 Seña a pagar
               </span>
               <span className="text-headline-md text-primary leading-none">
-                {formatPrice(sena)}
+                {formatPrice(totalFinal)}
               </span>
             </div>
-            <div className="flex items-center gap-1 bg-[#009EE3]/10 px-3 py-1.5 rounded-full border border-[#009EE3]/30">
-              <Handshake className="size-4 text-[#009EE3]" />
-              <span className="text-label-sm font-bold text-[#009EE3]">
-                MercadoPago
-              </span>
-            </div>
+            {cubiertoConCredito ? (
+              <div className="flex items-center gap-1 bg-credit-violet/10 px-3 py-1.5 rounded-full border border-credit-violet/30">
+                <Wallet className="size-4 text-credit-violet" />
+                <span className="text-label-sm font-bold text-credit-violet">
+                  Crédito a favor
+                </span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-1 bg-[#009EE3]/10 px-3 py-1.5 rounded-full border border-[#009EE3]/30">
+                <Handshake className="size-4 text-[#009EE3]" />
+                <span className="text-label-sm font-bold text-[#009EE3]">
+                  MercadoPago
+                </span>
+              </div>
+            )}
           </div>
         </div>
 
@@ -112,7 +160,11 @@ export default function PagarSenaDialog({
             </Button>
           </DialogClose>
           <Button onClick={handlePagarSena} disabled={submitting}>
-            {submitting ? "Redirigiendo…" : "Pagar seña"}
+            {submitting
+              ? cubiertoConCredito
+                ? "Confirmando…"
+                : "Redirigiendo…"
+              : "Pagar seña"}
           </Button>
         </DialogFooter>
       </DialogContent>

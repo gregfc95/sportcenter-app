@@ -22,6 +22,7 @@ export default function MisTurnosPage() {
   const [reservas, setReservas] = useState([]);
   const [loaded, setLoaded] = useState(false);
   const [filtro, setFiltro] = useState("todos");
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
     let active = true;
@@ -38,7 +39,12 @@ export default function MisTurnosPage() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [refreshKey]);
+
+  // Un pago 100% con crédito no pasa por Mercado Pago (no hay redirección que
+  // recargue la vista), así que refrescamos la lista para reflejar el nuevo
+  // estado de la reserva.
+  const handlePagado = () => setRefreshKey((k) => k + 1);
 
   // Cancelación: una eventual saca su card; un abono pendiente se cancela
   // completo (sale la card, el id recibido es el de la card); en uno pagado
@@ -127,6 +133,7 @@ export default function MisTurnosPage() {
                   key={reserva.id}
                   reserva={reserva}
                   onCancelled={handleCancelled}
+                  onPagado={handlePagado}
                 />
               ))}
             </div>

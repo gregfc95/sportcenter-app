@@ -1,14 +1,17 @@
-import { CalendarX2 } from "lucide-react";
+import { CalendarClock, CalendarX2 } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import BookingCardEventual from "./BookingCardEventual";
 import BookingCardMensual from "./BookingCardMensual";
 
-export default function UpcomingBookings({ bookings = [], onCancelled }) {
+export default function UpcomingBookings({ bookings = [], onCancelled, onPagado }) {
   return (
     <section className="flex flex-col gap-md pb-lg">
       <div className="flex items-center justify-between">
-        <h3 className="text-headline-md text-on-surface">Próximos Turnos</h3>
+        <h3 className="flex items-center gap-sm text-headline-md text-on-surface">
+          <CalendarClock className="size-5 text-accent" />
+          Próximos Turnos
+        </h3>
         <Link
           to="/mis-turnos"
           className="text-label-sm text-accent hover:underline font-semibold"
@@ -36,12 +39,14 @@ export default function UpcomingBookings({ bookings = [], onCancelled }) {
                 mensualidad={mensualidad}
                 {...booking}
                 onCancelled={onCancelled}
+                onPagado={onPagado}
               />
             ) : (
               <BookingCardEventual
                 key={booking.id}
                 {...booking}
                 onCancelled={onCancelled}
+                onPagado={onPagado}
               />
             );
           })}

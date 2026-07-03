@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import WelcomeSection from "@/components/dashboard/WelcomeSection";
 import QuickAccessGrid from "@/components/dashboard/QuickAccessGrid";
 import UpcomingBookings from "@/components/dashboard/UpcomingBookings";
+import CreditosActivos from "@/components/dashboard/CreditosActivos";
 import { listMisReservas } from "@/components/reservas/api";
 import { formatReservaFecha } from "@/lib/fecha";
 import { DASHBOARD_NAV_LINKS_BY_ROLE } from "@/components/layout/constants";
@@ -73,9 +74,10 @@ function ClientDashboard({ user }) {
     };
   }, [refreshKey]);
 
-  // Tras cancelar se refresca la lista: una eventual saca su card, pero en un
-  // abono mensual solo sale la clase cancelada (el id no coincide con la card).
-  const handleCancelled = () => setRefreshKey((k) => k + 1);
+  // Tras cancelar (o pagar 100% con crédito, que no pasa por MP) se refresca la
+  // lista: una eventual saca su card, pero en un abono mensual solo sale la
+  // clase cancelada (el id no coincide con la card).
+  const handleRefresh = () => setRefreshKey((k) => k + 1);
 
   return (
     <div className="flex flex-col gap-lg px-margin-mobile md:px-lg mt-md md:mt-lg max-w-4xl mx-auto w-full">
@@ -88,7 +90,12 @@ function ClientDashboard({ user }) {
         </Button>
       </div>
       <QuickAccessGrid />
-      <UpcomingBookings bookings={bookings} onCancelled={handleCancelled} />
+      <CreditosActivos />
+      <UpcomingBookings
+        bookings={bookings}
+        onCancelled={handleRefresh}
+        onPagado={handleRefresh}
+      />
     </div>
   );
 }
