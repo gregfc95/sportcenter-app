@@ -40,3 +40,4 @@ docker compose -f docker-compose.dev.yml exec backend pytest
 - Commits con Conventional Commits; ramas `feat/HU-XX-descripcion-corta`. `main` es estable, **`dev` es la rama de integración** (los PRs van contra `dev`).
 - Reglas de estilo detalladas en `.claude/rules/` (comentarios, Python, JavaScript, anti-slop).
 - Setup completo y problemas frecuentes: ver `README.md`.
+- Deploy y variables de entorno (qué necesita la app fuera de local, MercadoPago, DB): ver `.claude/deployment.md`.
