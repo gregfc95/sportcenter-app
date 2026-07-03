@@ -35,9 +35,21 @@ def list_turnos_por_actividad(actividad_id: int) -> Response:
     turnos = turno_service.obtener_por_actividad(actividad_id)
     dumped = turnos_schema.dump(turnos)
 
+    # Fechas dadas de baja por el centro: el front las usa para marcar el
+    # calendario y para excluirlas del preview del abono mensual.
+    bloqueos = turno_service.fechas_bloqueadas_futuras([t.id for t in turnos])
+    for turno_dict, turno in zip(dumped, turnos):
+        turno_dict["fechas_bloqueadas"] = [
+            f.isoformat() for f in bloqueos.get(turno.id, [])
+        ]
+
     if fecha is not None:
         for turno_dict, turno in zip(dumped, turnos):
-            turno_dict["disponibles"] = turno_service.lugares_disponibles(turno, fecha)
+            bloqueado = fecha in bloqueos.get(turno.id, [])
+            turno_dict["bloqueado"] = bloqueado
+            turno_dict["disponibles"] = (
+                0 if bloqueado else turno_service.lugares_disponibles(turno, fecha)
+            )
 
     return jsonify(dumped), 200
 
@@ -95,10 +107,25 @@ def update_turno(turno_id: int) -> Response:
 
 @turno_bp.route("/api/turnos/<int:turno_id>", methods=["DELETE"])
 def delete_turno(turno_id: int) -> Response:
-    require_role(UserRole.ADMIN)
+    """Elimina el turno completo o, con `?fecha=YYYY-MM-DD`, solo esa fecha.
+
+    En ambos casos las reservas afectadas se cancelan con reembolso.
+    """
+    admin = require_role(UserRole.ADMIN)
+
+    fecha_param = request.args.get("fecha")
+    fecha: date | None = None
+    if fecha_param is not None:
+        try:
+            fecha = date.fromisoformat(fecha_param)
+        except ValueError:
+            return jsonify({"error": "fecha debe tener formato YYYY-MM-DD"}), 400
 
     try:
-        eliminado = turno_service.eliminar(turno_id)
+        if fecha is not None:
+            eliminado = turno_service.eliminar_fecha(turno_id, fecha, admin.id)
+        else:
+            eliminado = turno_service.eliminar(turno_id)
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
 

@@ -9,6 +9,7 @@ from sqlalchemy.orm import joinedload
 from .. import db
 from ..models.reserva import MotivoCancelacion, Reserva, ReservaTipo
 from ..models.turno import Turno, DiaSemana
+from ..models.turno_fecha_bloqueada import TurnoFechaBloqueada
 
 
 CANCELACION_VENTANA = timedelta(hours=24)
@@ -69,6 +70,7 @@ class ReservaService:
 
         self._validar_dia_semana(turno, fecha)
         self._validar_turno_no_pasado(turno, fecha)
+        self._validar_fecha_no_bloqueada(turno, fecha)
         self._validar_sin_conflicto_horario(user_id, fecha, turno)
         self._validar_cupo_disponible(turno, fecha)
 
@@ -100,7 +102,13 @@ class ReservaService:
         self._validar_dia_semana(turno, fecha_inicio)
         self._validar_turno_no_pasado(turno, fecha_inicio)
 
-        fechas = fechas_mensuales(fecha_inicio)
+        # Las fechas dadas de baja por el centro se saltean: el abono cubre
+        # las clases que sí se dictan (y el precio se calcula por clase).
+        fechas = self._sin_fechas_bloqueadas(turno, fechas_mensuales(fecha_inicio))
+        if not fechas:
+            raise ValueError(
+                "El turno no tiene clases disponibles en lo que queda del mes."
+            )
         for fecha in fechas:
             self._validar_sin_conflicto_horario(user_id, fecha, turno)
             self._validar_cupo_disponible(turno, fecha)
@@ -228,6 +236,29 @@ class ReservaService:
                 f"La fecha {fecha.isoformat()} cae en {esperado.value}, "
                 f"pero el turno es de {turno.dia_semana.value}."
             )
+
+    def _validar_fecha_no_bloqueada(self, turno: Turno, fecha: date) -> None:
+        """Impide reservar una fecha que el centro dio de baja para ese turno.
+
+        El filtro global de soft-delete descarta los bloqueos restaurados.
+        """
+        if self._fechas_bloqueadas(turno, [fecha]):
+            raise ValueError(
+                f"El turno no está disponible para el {fecha.isoformat()}."
+            )
+
+    def _sin_fechas_bloqueadas(
+        self, turno: Turno, fechas: list[date]
+    ) -> list[date]:
+        bloqueadas = self._fechas_bloqueadas(turno, fechas)
+        return [f for f in fechas if f not in bloqueadas]
+
+    def _fechas_bloqueadas(self, turno: Turno, fechas: list[date]) -> set[date]:
+        stmt = select(TurnoFechaBloqueada.fecha).where(
+            TurnoFechaBloqueada.turno_id == turno.id,
+            TurnoFechaBloqueada.fecha.in_(fechas),
+        )
+        return set(db.session.execute(stmt).scalars().all())
 
     def _validar_turno_no_pasado(self, turno: Turno, fecha: date) -> None:
         """Impide reservar un turno cuya hora de inicio ya pasó.

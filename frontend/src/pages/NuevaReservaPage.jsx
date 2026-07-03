@@ -226,11 +226,16 @@ export default function NuevaReservaPage() {
   // El calendario recién se habilita cuando hay actividad Y tipo elegidos.
   const configReady = Boolean(actividadId) && Boolean(tipo);
 
-  // Fechas del abono (mensual): desde la fecha elegida hasta fin de mes.
-  const fechasMes = useMemo(
-    () => (esMensual && selectedDate ? fechasMensuales(selectedDate) : []),
-    [esMensual, selectedDate],
-  );
+  // Fechas del abono (mensual): desde la fecha elegida hasta fin de mes, sin
+  // las fechas que el centro dio de baja para el turno elegido (el backend
+  // también las saltea al crear el abono, así el preview coincide con el cobro).
+  const fechasMes = useMemo(() => {
+    if (!esMensual || !selectedDate) return [];
+    const bloqueadas = new Set(selectedTurno?.fechas_bloqueadas ?? []);
+    return fechasMensuales(selectedDate).filter(
+      (fecha) => !bloqueadas.has(toISODate(fecha)),
+    );
+  }, [esMensual, selectedDate, selectedTurno]);
 
   // ISO de todas las fechas del abono, para marcarlas en el calendario.
   const fechasAbonoISO = useMemo(
@@ -532,7 +537,7 @@ export default function NuevaReservaPage() {
                       ? ""
                       : loadingDayTurnos
                         ? ""
-                        : `${slotsForDay.filter((t) => t.disponibles !== 0 && !isSlotPast(selectedDate, t.hora)).length} horarios disponibles`}
+                        : `${slotsForDay.filter((t) => t.disponibles !== 0 && !t.bloqueado && !isSlotPast(selectedDate, t.hora)).length} horarios disponibles`}
               </p>
             </div>
 
@@ -553,9 +558,9 @@ export default function NuevaReservaPage() {
                 </div>
               ) : (
                 slotsForDay.map((slot) => {
-                  const isFull = slot.disponibles === 0;
+                  const isFull = slot.disponibles === 0 && !slot.bloqueado;
                   const past = isSlotPast(selectedDate, slot.hora);
-                  if (isFull || past) {
+                  if (slot.bloqueado || isFull || past) {
                     return (
                       <div
                         key={slot.id}
@@ -565,7 +570,11 @@ export default function NuevaReservaPage() {
                           {formatHora(slot.hora)}
                         </span>
                         <span className="text-label-sm text-error bg-error/10 px-2 py-1 rounded">
-                          {isFull ? "Turno Lleno" : "Horario pasado"}
+                          {slot.bloqueado
+                            ? "No disponible"
+                            : isFull
+                              ? "Turno Lleno"
+                              : "Horario pasado"}
                         </span>
                       </div>
                     );

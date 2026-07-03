@@ -6,7 +6,7 @@ from sqlalchemy.orm import joinedload
 
 from .. import db
 from ..models.pago import Pago, PagoEstado, PagoMedio
-from ..models.reserva import Reserva, ReservaTipo
+from ..models.reserva import MotivoCancelacion, Reserva, ReservaTipo
 from ..models.turno import Turno
 from .mercadopago_client import get_sdk
 from .reserva_service import ReservaService
@@ -329,6 +329,25 @@ class PagoService:
         db.session.add(registro)
         db.session.commit()
         return registro
+
+    def cancelar_reserva_por_baja(self, reserva_id: int) -> None:
+        """Cancela una reserva por baja forzada del centro, reembolsando lo cobrado.
+
+        La baja es decisión del centro (eliminar la actividad, el turno o una
+        fecha puntual), no del cliente: corresponde devolver lo abonado sin
+        importar la antelación. `registrar_cancelacion` asienta el reembolso y
+        devuelve None si no había nada cobrado (reserva pendiente), en cuyo
+        caso la reserva se cancela sin reembolso.
+        """
+        registro = self.registrar_cancelacion(
+            reserva_id, resolucion=PagoEstado.REEMBOLSADO
+        )
+        motivo = (
+            MotivoCancelacion.REEMBOLSADO
+            if registro is not None
+            else MotivoCancelacion.CANCELADO
+        )
+        ReservaService().cancelar_reserva(reserva_id, motivo=motivo)
 
     # --- Resumen económico ---
 

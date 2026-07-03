@@ -73,8 +73,20 @@ export default function ActividadDetailPage() {
     setDeleteOpen(true);
   };
 
-  const handleTurnoDeleted = (turno) => {
-    setTurnos((prev) => prev.filter((t) => t.id !== turno.id));
+  const handleTurnoDeleted = (turno, fecha) => {
+    if (fecha) {
+      // Baja de una fecha puntual: el turno sigue en la grilla; se registra
+      // la fecha bloqueada para que el diálogo no la vuelva a ofrecer.
+      setTurnos((prev) =>
+        prev.map((t) =>
+          t.id === turno.id
+            ? { ...t, fechas_bloqueadas: [...(t.fechas_bloqueadas ?? []), fecha] }
+            : t,
+        ),
+      );
+    } else {
+      setTurnos((prev) => prev.filter((t) => t.id !== turno.id));
+    }
     toast.success("Turno eliminado con éxito");
   };
 
