@@ -5,6 +5,7 @@ from flask import current_app
 
 from .email_templates import (
     lista_espera_email_bodies,
+    lista_espera_llena_admin_email_bodies,
     password_email_bodies,
     renovacion_recordatorio_email_bodies,
 )
@@ -88,6 +89,45 @@ def send_lista_espera_email(
 
     _client(cfg).send(mail)
     logger.info("send_lista_espera_email -> %s (sent)", email)
+
+
+def send_lista_espera_admin_email(
+    email: str,
+    *,
+    actividad: str,
+    turno_label: str,
+    fecha_label: str,
+    cantidad: int,
+) -> None:
+    """Avisa a un administrador que una clase juntó `cantidad` en lista de espera.
+
+    Es un aviso interno de demanda (no va al cliente); el link lleva al dashboard
+    de staff para decidir si abrir otro turno o subir el cupo.
+    """
+    cfg = current_app.config
+    token = cfg.get("MAILTRAP_TOKEN")
+    sender = cfg.get("MAIL_FROM")
+    if not token or not sender:
+        raise RuntimeError(
+            "Mailtrap no está configurado (faltan MAILTRIP_TOKEN o MAIL_FROM)"
+        )
+
+    dashboard_url = f"{cfg.get('APP_BASE_URL', '').rstrip('/')}/"
+    text, html = lista_espera_llena_admin_email_bodies(
+        actividad, turno_label, fecha_label, cantidad, dashboard_url
+    )
+
+    mail = mt.Mail(
+        sender=mt.Address(email=sender, name=cfg.get("MAIL_FROM_NAME", "Sportify")),
+        to=[mt.Address(email=email)],
+        subject=f"Lista de espera llena: {actividad}",
+        text=text,
+        html=html,
+        category="Lista de Espera Admin",
+    )
+
+    _client(cfg).send(mail)
+    logger.info("send_lista_espera_admin_email -> %s (sent)", email)
 
 
 def send_recordatorio_renovacion_email(

@@ -12,6 +12,16 @@ export function notificarCupoDisponible({ clienteId, turnoId }) {
   });
 }
 
+// Disparo manual (demo) del aviso "lista de espera llena" que el sistema manda
+// solo a los admins cuando la cola de una clase llega al tope.
+export function notificarListaEsperaLlena({ turnoId }) {
+  return request("/api/notificaciones/lista-espera-llena", {
+    method: "POST",
+    body: { turno_id: turnoId },
+    fallback: "No se pudo enviar el aviso a los administradores.",
+  });
+}
+
 // Disparo manual (demo) del recordatorio de renovaciones impagas que el
 // sistema manda solo el día 10.
 export function recordarRenovacionesImpagas() {

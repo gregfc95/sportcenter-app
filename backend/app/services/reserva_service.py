@@ -204,6 +204,7 @@ class ReservaService:
             raise ValueError(
                 "Ya tenés una reserva o un lugar en la lista para este turno."
             )
+        self.lista_espera.avisar_admins_si_lleno(turno, fecha)
         return [reserva]
 
     def _unirse_lista_espera_mensual(
@@ -245,6 +246,9 @@ class ReservaService:
             raise ValueError(
                 "Ya tenés una reserva o un lugar en la lista para este turno."
             )
+        # Cada fecha del abono tiene su propia cola: puede llenar cualquiera.
+        for fecha in fechas:
+            self.lista_espera.avisar_admins_si_lleno(turno, fecha)
         return reservas
 
     def _reservable_directo(self, turno: Turno, fecha: date) -> bool:

@@ -1,8 +1,9 @@
 import { Link } from "react-router-dom";
-import { BellRing, CalendarClock, CreditCard, RotateCcw, UserPlus } from "lucide-react";
+import { BellRing, CalendarClock, CreditCard, RotateCcw, UserPlus, Users } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import NotificarCupoDialog from "./NotificarCupoDialog";
+import NotificarListaLlenaDialog from "./NotificarListaLlenaDialog";
 import RecordarRenovacionesDialog from "./RecordarRenovacionesDialog";
 import ResetPenalizacionesDialog from "./ResetPenalizacionesDialog";
 
@@ -12,6 +13,7 @@ import ResetPenalizacionesDialog from "./ResetPenalizacionesDialog";
 const ACTIONS = [
   { label: "Registrar Pago", Icon: CreditCard, href: "/turnos" },
   { label: "Notificar Cupo", Icon: BellRing, Dialog: NotificarCupoDialog },
+  { label: "Notificar Lista Llena", Icon: Users, Dialog: NotificarListaLlenaDialog },
   {
     label: "Recordar Renovaciones",
     Icon: CalendarClock,

@@ -12,7 +12,12 @@ from .. import db
 from ..models.turno import DiaSemana, Turno
 from ..models.user import User, UserRole
 from .email_service import send_lista_espera_email
-from .lista_espera_service import AR_TZ, OFERTA_VENTANA
+from .lista_espera_service import (
+    AR_TZ,
+    LISTA_ESPERA_TOPE_AVISO,
+    OFERTA_VENTANA,
+    ListaEsperaService,
+)
 
 
 def notificar_cupo_disponible(cliente_id: int, turno_id: int) -> str:
@@ -45,6 +50,23 @@ def notificar_cupo_disponible(cliente_id: int, turno_id: int) -> str:
         expira_label=expira.strftime("%H:%M"),
     )
     return cliente.email
+
+
+def notificar_lista_espera_llena(turno_id: int) -> list[str]:
+    """Dispara a mano el aviso "lista de espera llena" a los admins; devuelve los emails.
+
+    Espejo manual del aviso que se manda solo cuando la cola de una clase llega al
+    tope. Para la demo usa la próxima ocurrencia del turno como fecha y el tope
+    como cantidad; el error de envío lo traga el servicio por admin.
+    """
+    turno = db.session.get(Turno, turno_id)
+    if turno is None:
+        raise ValueError("El turno indicado no existe.")
+
+    fecha = _proxima_ocurrencia(turno, datetime.now(tz=AR_TZ))
+    return ListaEsperaService().avisar_admins_lista_llena(
+        turno, fecha, LISTA_ESPERA_TOPE_AVISO
+    )
 
 
 def _proxima_ocurrencia(turno: Turno, ahora: datetime) -> date:

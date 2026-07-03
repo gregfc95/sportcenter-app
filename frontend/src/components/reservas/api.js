@@ -268,7 +268,7 @@ export function registrarPagoManual(reservaId) {
  * Sesiones con reservas (turno + fecha) para la vista de Turnos Reservados.
  * Sólo admin/empleado.
  *
- * @returns {Promise<Array<{ turno_id: number, fecha: string, actividad: string, dia_semana: string, hora: string, cupo: number, ocupados: number, reservas: number, asistencias: number }>>}
+ * @returns {Promise<Array<{ turno_id: number, fecha: string, actividad: string, dia_semana: string, hora: string, cupo: number, ocupados: number, reservas: number, asistencias: number, tipos: string[] }>>}
  */
 export function listSesionesReservadas() {
   return request("/api/reservas/sesiones", {

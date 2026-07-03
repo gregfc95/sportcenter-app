@@ -8,7 +8,8 @@ from sqlalchemy.orm import joinedload
 from .. import db
 from ..models.reserva import EstadoEspera, MotivoCancelacion, Reserva, ReservaTipo
 from ..models.turno import Turno
-from .email_service import send_lista_espera_email
+from ..models.user import User, UserRole
+from .email_service import send_lista_espera_admin_email, send_lista_espera_email
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +21,10 @@ AR_TZ = ZoneInfo("America/Argentina/Buenos_Aires")
 # La oferta dura una hora: si el cliente no paga ni cancela, el lugar pasa al
 # siguiente y él conserva su posición para la próxima cancelación real.
 OFERTA_VENTANA = timedelta(hours=1)
+
+# Cuando la cola de una clase llega a esta cantidad, se avisa al staff: es señal
+# de demanda suficiente como para evaluar abrir otro turno o subir el cupo.
+LISTA_ESPERA_TOPE_AVISO = 10
 
 
 class ListaEsperaService:
@@ -149,6 +154,62 @@ class ListaEsperaService:
             if self._clave_unidad(r) == objetivo:
                 return i
         return None
+
+    def cantidad_en_espera(self, turno_id: int, fecha) -> int:
+        """Cuántos esperan (ESPERANDO) esa (turno, fecha).
+
+        El índice único parcial de `Reserva` deja una sola fila activa por
+        (usuario, turno, fecha), así que contar filas equivale a contar personas.
+        """
+        stmt = select(func.count(Reserva.id)).where(
+            Reserva.turno_id == turno_id,
+            Reserva.fecha == fecha,
+            Reserva.estado_espera == EstadoEspera.ESPERANDO,
+        )
+        return db.session.execute(stmt).scalar()
+
+    def avisar_admins_si_lleno(self, turno: Turno, fecha) -> None:
+        """Avisa al staff cuando la cola de esa clase alcanza el tope.
+
+        Se llama al anotar a alguien en la lista. Dispara en `==` (no `>=`): en el
+        alta la cola crece de a uno por (turno, fecha), así cruza el tope una sola
+        vez por episodio y no re-avisa en cada anotación posterior. El re-armado de
+        vencidos (`_rearmar_vencidos`) no pasa por acá a propósito: son personas
+        que ya estaban contadas, no demanda nueva.
+        """
+        if self.cantidad_en_espera(turno.id, fecha) == LISTA_ESPERA_TOPE_AVISO:
+            self.avisar_admins_lista_llena(turno, fecha, LISTA_ESPERA_TOPE_AVISO)
+
+    def avisar_admins_lista_llena(
+        self, turno: Turno, fecha, cantidad: int
+    ) -> list[str]:
+        """Manda a cada administrador el aviso de lista llena; devuelve los emails.
+
+        El email va por admin dentro de try/except para que un fallo de transporte
+        no corte el resto ni haga fallar el alta que lo gatilló.
+        """
+        turno_label = f"{turno.dia_semana.value} {turno.hora.strftime('%H:%M')}"
+        fecha_label = fecha.strftime("%d/%m")
+        admins = db.session.execute(
+            select(User).where(User.role == UserRole.ADMIN)
+        ).scalars().all()
+
+        avisados: list[str] = []
+        for admin in admins:
+            try:
+                send_lista_espera_admin_email(
+                    admin.email,
+                    actividad=turno.actividad.nombre,
+                    turno_label=turno_label,
+                    fecha_label=fecha_label,
+                    cantidad=cantidad,
+                )
+                avisados.append(admin.email)
+            except Exception:
+                logger.exception(
+                    "No se pudo avisar al admin %s de la lista llena", admin.email
+                )
+        return avisados
 
     # --- Internos ---
 

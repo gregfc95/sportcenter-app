@@ -13,7 +13,11 @@ from freezegun import freeze_time
 
 from app.models.reserva import EstadoEspera, ReservaTipo
 from app.models.turno import DiaSemana
-from app.services.lista_espera_service import ListaEsperaService
+from app.models.user import UserRole
+from app.services.lista_espera_service import (
+    LISTA_ESPERA_TOPE_AVISO,
+    ListaEsperaService,
+)
 from app.services.reserva_service import CupoLlenoError, ReservaService
 
 reserva_svc = ReservaService()
@@ -194,3 +198,53 @@ class TestConfirmarLugar:
         lista_svc.confirmar_lugar(fila)
         assert fila.estado_espera is None
         assert fila.oferta_expira_at is None
+
+
+class TestAvisoAdmins:
+    """El alta a la lista avisa al staff recién cuando la cola llega al tope."""
+
+    @pytest.fixture
+    def capturar_admin(self, monkeypatch):
+        enviados = []
+        monkeypatch.setattr(
+            "app.services.lista_espera_service.send_lista_espera_admin_email",
+            lambda email, **kw: enviados.append((email, kw)),
+        )
+        return enviados
+
+    def _anotar(self, cantidad, lleno, make_user):
+        for _ in range(cantidad):
+            reserva_svc.unirse_lista_espera(make_user().id, lleno.turno.id, lleno.fecha)
+
+    def test_no_avisa_antes_del_tope(self, lleno, make_user, capturar_admin):
+        make_user(role=UserRole.ADMIN)
+        self._anotar(LISTA_ESPERA_TOPE_AVISO - 1, lleno, make_user)
+        assert capturar_admin == []
+
+    def test_avisa_al_llegar_al_tope_con_actividad_y_fecha(
+        self, lleno, make_user, capturar_admin
+    ):
+        admin = make_user(role=UserRole.ADMIN)
+        self._anotar(LISTA_ESPERA_TOPE_AVISO, lleno, make_user)
+
+        assert len(capturar_admin) == 1
+        email, kw = capturar_admin[0]
+        assert email == admin.email
+        assert kw["actividad"] == lleno.actividad.nombre
+        assert kw["fecha_label"] == lleno.fecha.strftime("%d/%m")
+        hora = lleno.turno.hora.strftime("%H:%M")
+        assert kw["turno_label"] == f"lunes {hora}"
+        assert kw["cantidad"] == LISTA_ESPERA_TOPE_AVISO
+
+    def test_avisa_a_cada_admin_y_no_a_clientes(
+        self, lleno, make_user, capturar_admin
+    ):
+        make_user(role=UserRole.ADMIN)
+        make_user(role=UserRole.ADMIN)
+        self._anotar(LISTA_ESPERA_TOPE_AVISO, lleno, make_user)
+        assert len(capturar_admin) == 2
+
+    def test_no_reavisa_pasado_el_tope(self, lleno, make_user, capturar_admin):
+        make_user(role=UserRole.ADMIN)
+        self._anotar(LISTA_ESPERA_TOPE_AVISO + 1, lleno, make_user)
+        assert len(capturar_admin) == 1

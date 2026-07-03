@@ -3,7 +3,10 @@ from flask import Blueprint, Response, jsonify, request
 from ..auth import require_role
 from ..models.user import UserRole
 from ..services.mensualidad_service import MensualidadService
-from ..services.notificacion_service import notificar_cupo_disponible
+from ..services.notificacion_service import (
+    notificar_cupo_disponible,
+    notificar_lista_espera_llena,
+)
 
 
 notificacion_bp = Blueprint(
@@ -42,6 +45,30 @@ def notificar_cupo() -> Response:
         )
 
     return jsonify({"ok": True, "email": email}), 200
+
+
+@notificacion_bp.route("/lista-espera-llena", methods=["POST"])
+def notificar_lista_llena() -> Response:
+    """Dispara a mano el aviso "lista de espera llena" al staff (demo).
+
+    El aviso real lo manda el sistema cuando la cola de una clase llega al tope;
+    este endpoint lo muestra en una demo sin juntar esa demanda de verdad.
+    """
+    require_role(UserRole.ADMIN, UserRole.EMPLOYEE)
+    data = request.get_json() or {}
+
+    turno_id = data.get("turno_id")
+    if not isinstance(turno_id, int):
+        return jsonify({"error": "turno_id es requerido y debe ser un entero."}), 400
+
+    # Los fallos de transporte los traga el servicio por admin (igual que
+    # recordatorio-renovaciones), así que acá solo se informa cuántos salieron.
+    try:
+        emails = notificar_lista_espera_llena(turno_id)
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 404
+
+    return jsonify({"ok": True, "enviados": len(emails), "emails": emails}), 200
 
 
 @notificacion_bp.route("/recordatorio-renovaciones", methods=["POST"])
