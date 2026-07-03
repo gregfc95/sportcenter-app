@@ -5,3 +5,5 @@ from .user import User
 from .actividad import Actividad
 from .pago import Pago
 from .credito import Credito, CreditoConsumo
+from .penalizacion import Penalizacion, PenalizacionMotivo
+from .suspension import Suspension

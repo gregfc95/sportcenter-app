@@ -3,7 +3,7 @@ import logging
 from flask import Blueprint, abort, request, jsonify, Response
 from app.auth import current_user_id, require_role
 from app.models.user import UserRole
-from app.services import UserService, send_password_email
+from app.services import MensualidadService, UserService, send_password_email
 from app.utils.password import generate_password
 from app.schemas import (
     UserRegisterSchema,
@@ -19,6 +19,7 @@ logger = logging.getLogger(__name__)
 user_bp = Blueprint("users", __name__, url_prefix="/api/users")
 
 user_service = UserService()
+mensualidad_service = MensualidadService()
 register_schema = UserRegisterSchema()
 employee_register_schema = EmployeeRegisterSchema()
 login_schema = UserLoginSchema()
@@ -117,7 +118,9 @@ def login() -> Response:
 
     try:
         user = user_service.login_user(data["email"], data["password"])
-        return jsonify(response_schema.dump(user)), 200
+        payload = response_schema.dump(user)
+        payload["suspendido"] = mensualidad_service.suspendido(user.id)
+        return jsonify(payload), 200
     except ValueError as e:
         return jsonify({"error": str(e)}), 401
 
@@ -159,7 +162,9 @@ def update_profile() -> Response:
             current_password=current_password if wants_password_change else None,
             new_password=new_password if wants_password_change else None,
         )
-        return jsonify(response_schema.dump(user)), 200
+        payload = response_schema.dump(user)
+        payload["suspendido"] = mensualidad_service.suspendido(user.id)
+        return jsonify(payload), 200
     except ValueError as e:
         msg = str(e)
         if msg == "La contraseña actual no es valida":

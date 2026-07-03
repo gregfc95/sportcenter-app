@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { CalendarDays, Users } from "lucide-react";
+import { CalendarDays, Check, Clock, Users } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { EstadoBadge } from "@/components/ui/estado-badge";
@@ -10,8 +10,15 @@ import PagarSenaDialog from "@/components/reservas/PagarSenaDialog";
 import PagarMensualidadDialog from "@/components/reservas/PagarMensualidadDialog";
 import CancelarReservaDialog from "@/components/reservas/CancelarReservaDialog";
 import CancelarAbonoDialog from "@/components/reservas/CancelarAbonoDialog";
+import SalirEsperaDialog from "@/components/reservas/SalirEsperaDialog";
+import PagarEsperaBloqueado from "@/components/reservas/PagarEsperaBloqueado";
 import ClasesMensuales from "@/components/reservas/ClasesMensuales";
 import VerQrDialog from "@/components/reservas/VerQrDialog";
+import {
+  esperaDetalle,
+  esperaOfertaActiva,
+  formatRenovacionLimite,
+} from "@/components/reservas/listaEspera";
 import { formatReservaFecha, mesLabel } from "@/lib/fecha";
 
 // Los triggers se montan vía `DialogTrigger asChild`: hay que reenviar las
@@ -38,6 +45,19 @@ function PagarTrigger(props) {
       {...props}
     >
       Pagar
+    </Button>
+  );
+}
+
+function SalirTrigger(props) {
+  return (
+    <Button
+      variant="outline"
+      size="sm"
+      className="text-error border-error/40 hover:bg-error/10 hover:text-error"
+      {...props}
+    >
+      Salir
     </Button>
   );
 }
@@ -102,11 +122,15 @@ function ReservaCardShell({
 function ReservaMensualCard({ reserva, onCancelled, onPagado }) {
   const clases = reserva.mensualidad.clases;
   // Las canceladas se muestran tachadas pero no cuentan para selección,
-  // sesiones ni pago.
+  // sesiones ni pago. Una clase asistida hoy no es "pasada" pero tampoco es
+  // próxima: no se puede cancelar ni volver a asistir, así que sale del set
+  // seleccionable y del cálculo de la próxima.
   const vivas = clases.filter((c) => !c.cancelada);
-  const proximas = vivas.filter((c) => !c.pasada);
-  const pasadas = vivas.length - proximas.length;
+  const proximas = vivas.filter((c) => !c.pasada && !c.asistencia);
+  const asistidas = vivas.filter((c) => c.asistencia).length;
   const pagado = reserva.estado === "pagado";
+  const enEspera = reserva.estado === "en_espera";
+  const ofertaActiva = esperaOfertaActiva(reserva.espera);
   const proximaDatetime = proximas[0]
     ? formatReservaFecha(proximas[0].fecha, reserva.turno.hora)
     : null;
@@ -143,7 +167,30 @@ function ReservaMensualCard({ reserva, onCancelled, onPagado }) {
         ) : null
       }
       actions={
-        pagado ? (
+        enEspera ? (
+          <>
+            <SalirEsperaDialog
+              reservaId={reserva.id}
+              actividad={reserva.actividad}
+              onCancelled={onCancelled}
+              trigger={<SalirTrigger />}
+            />
+            {ofertaActiva ? (
+              <PagarMensualidadDialog
+                reservaId={reserva.id}
+                actividad={reserva.actividad}
+                datetime={proximaDatetime}
+                clases={vivas.length}
+                total={reserva.mensualidad.total}
+                descuento={reserva.descuento}
+                onPagado={onPagado}
+                trigger={<PagarTrigger />}
+              />
+            ) : (
+              <PagarEsperaBloqueado className="ml-auto" />
+            )}
+          </>
+        ) : pagado ? (
           claseSeleccionada && (
             <CancelarReservaDialog
               reservaId={claseSeleccionada.reserva_id}
@@ -176,6 +223,7 @@ function ReservaMensualCard({ reserva, onCancelled, onPagado }) {
               datetime={proximaDatetime}
               clases={vivas.length}
               total={reserva.mensualidad.total}
+              descuento={reserva.descuento}
               onPagado={onPagado}
               trigger={<PagarTrigger />}
             />
@@ -190,6 +238,22 @@ function ReservaMensualCard({ reserva, onCancelled, onPagado }) {
         </span>
         <TipoChip tipo={reserva.tipo} className="ml-auto" />
       </div>
+      {enEspera && (
+        <div className="flex items-center gap-3 text-info-blue">
+          <Clock className="size-4 shrink-0" aria-hidden="true" />
+          <span>{esperaDetalle(reserva.espera)}</span>
+        </div>
+      )}
+      {reserva.renovacion && (
+        <div className="flex items-center gap-3 text-accent">
+          <Clock className="size-4 shrink-0" aria-hidden="true" />
+          <span>
+            Renovación de tu abono · Pagá antes del{" "}
+            {formatRenovacionLimite(reserva.renovacion.fecha_limite)} o perdés el
+            lugar
+          </span>
+        </div>
+      )}
       <ClasesMensuales
         clases={clases}
         selectable={pagado}
@@ -198,7 +262,7 @@ function ReservaMensualCard({ reserva, onCancelled, onPagado }) {
       />
       <div className="flex items-center gap-2">
         <span>
-          {pasadas} de {vivas.length}{" "}
+          {asistidas} de {vivas.length}{" "}
           {vivas.length === 1 ? "sesión" : "sesiones"}
           {proximas[0]
             ? ` · próxima: ${formatReservaFecha(proximas[0].fecha, reserva.turno.hora)}`
@@ -225,6 +289,8 @@ function ReservaEventualCard({ reserva, onCancelled, onPagado }) {
   const { cupo, ocupados } = reserva.turno;
   const ocupacion = cupo > 0 ? Math.min(100, (ocupados / cupo) * 100) : 0;
   const datetime = formatReservaFecha(reserva.fecha, reserva.turno.hora);
+  const enEspera = reserva.estado === "en_espera";
+  const ofertaActiva = esperaOfertaActiva(reserva.espera);
 
   // Pendiente reanuda la seña; señada paga el saldo restante.
   const PagarDialog =
@@ -248,28 +314,52 @@ function ReservaEventualCard({ reserva, onCancelled, onPagado }) {
         ) : null
       }
       actions={
-        <>
-          <CancelarReservaDialog
-            reservaId={reserva.id}
-            actividad={reserva.actividad}
-            datetime={datetime}
-            estado={reserva.estado}
-            onCancelled={onCancelled}
-            trigger={<CancelarTrigger />}
-          />
-          {reserva.estado !== "pagado" && (
-            <PagarDialog
+        enEspera ? (
+          <>
+            <SalirEsperaDialog
+              reservaId={reserva.id}
+              actividad={reserva.actividad}
+              onCancelled={onCancelled}
+              trigger={<SalirTrigger />}
+            />
+            {ofertaActiva ? (
+              <PagarSenaDialog
+                reservaId={reserva.id}
+                actividad={reserva.actividad}
+                datetime={datetime}
+                precio={reserva.precio}
+                sena={reserva.sena}
+                onPagado={onPagado}
+                trigger={<PagarTrigger />}
+              />
+            ) : (
+              <PagarEsperaBloqueado className="ml-auto" />
+            )}
+          </>
+        ) : (
+          <>
+            <CancelarReservaDialog
               reservaId={reserva.id}
               actividad={reserva.actividad}
               datetime={datetime}
-              precio={reserva.precio}
-              sena={reserva.sena}
-              saldo={reserva.saldo}
-              onPagado={onPagado}
-              trigger={<PagarTrigger />}
+              estado={reserva.estado}
+              onCancelled={onCancelled}
+              trigger={<CancelarTrigger />}
             />
-          )}
-        </>
+            {reserva.estado !== "pagado" && (
+              <PagarDialog
+                reservaId={reserva.id}
+                actividad={reserva.actividad}
+                datetime={datetime}
+                precio={reserva.precio}
+                sena={reserva.sena}
+                saldo={reserva.saldo}
+                onPagado={onPagado}
+                trigger={<PagarTrigger />}
+              />
+            )}
+          </>
+        )
       }
     >
       <div className="flex items-center gap-3">
@@ -277,6 +367,18 @@ function ReservaEventualCard({ reserva, onCancelled, onPagado }) {
         <span className="text-primary">{datetime}</span>
         <TipoChip tipo={reserva.tipo} className="ml-auto" />
       </div>
+      {reserva.asistencia && (
+        <div className="flex items-center gap-3 text-success-green">
+          <Check className="size-4 shrink-0" aria-hidden="true" />
+          <span>Asististe</span>
+        </div>
+      )}
+      {enEspera && (
+        <div className="flex items-center gap-3 text-info-blue">
+          <Clock className="size-4 shrink-0" aria-hidden="true" />
+          <span>{esperaDetalle(reserva.espera)}</span>
+        </div>
+      )}
       <div className="flex items-center gap-3">
         <Users className="size-4 shrink-0" aria-hidden="true" />
         <span>

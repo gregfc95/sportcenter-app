@@ -4,6 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
 from .. import db
+from ..models.reserva import EstadoEspera
 from ..models.turno import Turno
 from ..models.turno_fecha_bloqueada import TurnoFechaBloqueada
 from .pago_service import PagoService
@@ -20,8 +21,15 @@ class TurnoService:
     # --- Lógica de negocio de reservas y cupo ---
 
     def cantidad_reservas(self, turno: Turno, fecha: date) -> int:
-        # Eventuales y mensuales consumen cupo por igual en cada sesión.
-        return sum(1 for r in turno.reservas if r.fecha == fecha)
+        # Eventuales y mensuales consumen cupo por igual en cada sesión. Las
+        # filas en espera (esperando/vencido) no ocupan cupo; las ofertadas sí,
+        # porque retienen el lugar mientras dura su ventana de pago.
+        return sum(
+            1
+            for r in turno.reservas
+            if r.fecha == fecha
+            and r.estado_espera in (None, EstadoEspera.OFERTADO)
+        )
 
     def hay_cupo(self, turno: Turno, fecha: date) -> bool:
         return self.cantidad_reservas(turno, fecha) < turno.cupo
@@ -171,7 +179,7 @@ class TurnoService:
         hoy = date.today()
         por_fecha: dict[date, int] = {}
         for r in turno.reservas:
-            if r.fecha >= hoy:
+            if r.fecha >= hoy and r.estado_espera in (None, EstadoEspera.OFERTADO):
                 por_fecha[r.fecha] = por_fecha.get(r.fecha, 0) + 1
         return max(por_fecha.values(), default=0)
 

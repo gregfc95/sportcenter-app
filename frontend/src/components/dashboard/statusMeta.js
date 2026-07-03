@@ -10,6 +10,10 @@ export const STATUS_META = {
     strip: "bg-accent",
     icon: "text-accent",
   },
+  en_espera: {
+    strip: "bg-info-blue",
+    icon: "text-info-blue",
+  },
   pagado: {
     strip: "bg-surface-container-high",
     icon: "text-on-surface-variant",

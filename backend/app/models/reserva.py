@@ -16,6 +16,12 @@ class MotivoCancelacion(str, Enum):
     CREDITO = "credito"
 
 
+class EstadoEspera(str, Enum):
+    ESPERANDO = "esperando"   # en la cola, no consume cupo
+    OFERTADO = "ofertado"     # con la oferta activa, retiene el lugar (consume cupo)
+    VENCIDO = "vencido"       # dejó vencer la oferta; re-elegible tras una cancelación real
+
+
 class Reserva(SoftDeleteMixin, db.Model):
     __tablename__ = "reservas"
 
@@ -53,6 +59,27 @@ class Reserva(SoftDeleteMixin, db.Model):
     # otro grupo, así las generaciones canceladas no se mezclan. Null en las
     # eventuales (grupo de una) y hasta el backfill de filas viejas.
     grupo_id = db.Column(db.String(32), nullable=True, index=True)
+
+    # Lista de espera: NULL es una reserva normal. Ciclo de vida
+    # esperando → ofertado → (pago → NULL | vencido → esperando de nuevo). Solo
+    # NULL y `ofertado` consumen cupo; `esperando`/`vencido` esperan su turno.
+    # `oferta_expira_at` marca el fin de la ventana de una oferta `ofertado`.
+    estado_espera = db.Column(
+        db.Enum(
+            EstadoEspera,
+            name="estado_espera",
+            values_callable=lambda x: [e.value for e in x],
+        ),
+        nullable=True,
+        index=True,
+    )
+    oferta_expira_at = db.Column(db.DateTime(timezone=True), nullable=True)
+
+    # Marca las reservas generadas automáticamente como renovación de un abono
+    # pago del mes anterior: guarda el grupo_id del abono de origen. NULL en las
+    # reservas creadas a mano. Es también la clave de idempotencia de la
+    # generación (no se regenera un origen ya renovado, incluso si se declinó).
+    renovacion_de_grupo_id = db.Column(db.String(32), nullable=True, index=True)
 
     # Asistencia por QR: el token identifica esta reserva-fecha dentro del
     # código (se genera recién cuando el cliente pide su QR, por eso nullable);
@@ -105,13 +132,22 @@ class Reserva(SoftDeleteMixin, db.Model):
     )
 
     def __init__(
-        self, user_id, turno_id, fecha, tipo=ReservaTipo.EVENTUAL, grupo_id=None
+        self,
+        user_id,
+        turno_id,
+        fecha,
+        tipo=ReservaTipo.EVENTUAL,
+        grupo_id=None,
+        estado_espera=None,
+        renovacion_de_grupo_id=None,
     ):
         self.user_id = user_id
         self.turno_id = turno_id
         self.fecha = fecha
         self.tipo = tipo
         self.grupo_id = grupo_id
+        self.estado_espera = estado_espera
+        self.renovacion_de_grupo_id = renovacion_de_grupo_id
 
     @property
     def asistio(self) -> bool:
@@ -131,4 +167,8 @@ class Reserva(SoftDeleteMixin, db.Model):
             "turno_id": self.turno_id,
             "fecha": self.fecha.isoformat() if self.fecha else None,
             "tipo": self.tipo.value if self.tipo else None,
+            "estado_espera": self.estado_espera.value if self.estado_espera else None,
+            "oferta_expira_at": (
+                self.oferta_expira_at.isoformat() if self.oferta_expira_at else None
+            ),
         }

@@ -5,16 +5,11 @@ import { CalendarX2 } from "lucide-react";
 import { usePageTitle } from "@/lib/usePageTitle";
 import { Button } from "@/components/ui/button";
 import { PageHeading } from "@/components/ui/page-heading";
+import { SegmentedControl } from "@/components/ui/segmented-control";
 import { listMisReservas } from "@/components/reservas/api";
+import { FILTROS_TIPO, filtrarPorTipo } from "@/components/reservas/filtros";
 import ReservaCard from "@/components/reservas/ReservaCard";
-import { cn } from "@/lib/utils";
-
-// Filtro por tipo de reserva del listado.
-const FILTROS = [
-  { value: "todos", label: "Todos" },
-  { value: "mensual", label: "Mensuales" },
-  { value: "eventual", label: "Eventuales" },
-];
+import AccountStatusCard from "@/components/dashboard/AccountStatusCard";
 
 export default function MisTurnosPage() {
   usePageTitle("Mis Turnos");
@@ -80,8 +75,7 @@ export default function MisTurnosPage() {
     );
   };
 
-  const visibles =
-    filtro === "todos" ? reservas : reservas.filter((r) => r.tipo === filtro);
+  const visibles = filtrarPorTipo(reservas, filtro);
   const hasTurnos = reservas.length > 0;
 
   return (
@@ -98,33 +92,16 @@ export default function MisTurnosPage() {
         </Button>
       </header>
 
+      <AccountStatusCard />
+
       {!loaded ? null : hasTurnos ? (
         <>
-          <div
-            role="group"
+          <SegmentedControl
+            options={FILTROS_TIPO}
+            value={filtro}
+            onChange={setFiltro}
             aria-label="Filtrar por tipo de reserva"
-            className="flex bg-surface-container-high rounded-xl p-1 border border-outline-variant self-start"
-          >
-            {FILTROS.map((opcion) => {
-              const active = filtro === opcion.value;
-              return (
-                <button
-                  key={opcion.value}
-                  type="button"
-                  onClick={() => setFiltro(opcion.value)}
-                  aria-pressed={active}
-                  className={cn(
-                    "px-4 py-2 rounded-lg text-label-sm transition-colors cursor-pointer",
-                    active
-                      ? "bg-primary/10 text-primary"
-                      : "text-on-surface-variant hover:text-on-surface",
-                  )}
-                >
-                  {opcion.label}
-                </button>
-              );
-            })}
-          </div>
+          />
 
           {visibles.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-gutter">

@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from decimal import Decimal
 
 from flask import current_app
@@ -6,14 +7,38 @@ from sqlalchemy.orm import joinedload, selectinload
 
 from .. import db
 from ..models.pago import Pago, PagoEstado, PagoMedio
-from ..models.reserva import MotivoCancelacion, Reserva, ReservaTipo
+from ..models.reserva import EstadoEspera, MotivoCancelacion, Reserva, ReservaTipo
 from ..models.turno import Turno
 from .credito_service import CreditoService
+from .lista_espera_service import ListaEsperaService
+from .mensualidad_service import MensualidadService
 from .mercadopago_client import get_sdk
 from .reserva_service import ReservaService
 
 
 class PagoService:
+
+    def __init__(self):
+        self.lista_espera = ListaEsperaService()
+        self.mensualidad = MensualidadService()
+
+    def _validar_espera_pagable(self, reserva: Reserva) -> None:
+        """Rechaza pagar una fila en espera que todavía no tiene oferta vigente.
+
+        Solo una oferta `ofertado` sin vencer habilita el pago; `esperando` y
+        `vencido` aún no tienen el lugar. El chequeo explícito de vencimiento
+        cubre el retardo de hasta 60 s del barrido del scheduler.
+        """
+        estado = reserva.estado_espera
+        if estado in (EstadoEspera.ESPERANDO, EstadoEspera.VENCIDO):
+            raise ValueError("Todavía no te tocó el lugar en la lista de espera.")
+        if estado == EstadoEspera.OFERTADO and (
+            reserva.oferta_expira_at is None
+            or reserva.oferta_expira_at < datetime.now(timezone.utc)
+        ):
+            raise ValueError(
+                "La oferta de tu lugar venció; seguís en la lista para la próxima vacante."
+            )
 
     # --- Checkout Pro (Mercado Pago) ---
 
@@ -31,6 +56,7 @@ class PagoService:
         if reserva.tipo == ReservaTipo.MENSUAL:
             # El abono mensual no admite seña: se paga completo por adelantado.
             raise ValueError("Un abono mensual se paga completo, sin seña.")
+        self._validar_espera_pagable(reserva)
 
         actividad = reserva.turno.actividad
         sena = actividad.precio / Decimal("2")
@@ -55,6 +81,7 @@ class PagoService:
         reserva = db.session.get(Reserva, reserva_id)
         if reserva is None:
             raise ValueError("La reserva indicada no existe.")
+        self._validar_espera_pagable(reserva)
 
         sena = self._pago_por_estado(reserva_id, PagoEstado.SENADO)
         if sena is None:
@@ -91,13 +118,21 @@ class PagoService:
             raise ValueError("La reserva indicada no existe.")
         if reserva.tipo != ReservaTipo.MENSUAL:
             raise ValueError("La reserva no es de un abono mensual.")
+        self._validar_espera_pagable(reserva)
 
         grupo = ReservaService().grupo_mensual(reserva)
         if any(self._pagos_cobrados(r.id) for r in grupo):
             raise ValueError("La mensualidad ya tiene un pago registrado.")
 
         actividad = reserva.turno.actividad
-        monto = actividad.precio * len(grupo)
+        # El descuento de fidelidad se aplica por clase con el mismo cálculo que
+        # usa `registrar_mensualidad`, así el link cobra lo mismo que se asienta.
+        monto_clase = self.mensualidad.monto_clase_mensualidad(
+            actividad.precio, reserva.user_id
+        )
+        monto = monto_clase * len(grupo)
+        descuento = self.mensualidad.descuento_mensualidad(reserva.user_id)
+        monto_original = actividad.precio * len(grupo)
         resultado = self._checkout_con_credito(
             user_id=reserva.user_id,
             actividad_id=actividad.id,
@@ -113,6 +148,8 @@ class PagoService:
             "fechas": [r.fecha.isoformat() for r in grupo],
             "clases": len(grupo),
             "monto": float(monto),
+            "descuento_pct": int(descuento * 100),
+            "monto_original": float(monto_original),
         }
 
     def registrar_mensualidad(self, reserva_id: int) -> list[Pago]:
@@ -131,7 +168,14 @@ class PagoService:
 
         grupo = ReservaService().grupo_mensual(reserva)
         actividad = reserva.turno.actividad
-        precio = actividad.precio
+        # El monto por clase se calcula antes de levantar la suspensión: una
+        # compra que reactiva una cuenta suspendida paga sin descuento.
+        monto_clase = self.mensualidad.monto_clase_mensualidad(
+            actividad.precio, reserva.user_id
+        )
+
+        # Si venía de la lista de espera, al confirmar el pago deja de esperar.
+        self.lista_espera.confirmar_lugar(reserva)
 
         pagos = []
         nuevos = False
@@ -141,7 +185,7 @@ class PagoService:
                 pago = Pago(
                     user_id=r.user_id,
                     reserva_id=r.id,
-                    monto=precio,
+                    monto=monto_clase,
                     estado=PagoEstado.PAGADO,
                 )
                 db.session.add(pago)
@@ -153,6 +197,7 @@ class PagoService:
             pagos.append(pago)
         if nuevos:
             db.session.commit()
+            self.mensualidad.levantar_suspension(reserva.user_id)
         return pagos
 
     def _crear_preferencia(
@@ -266,6 +311,10 @@ class PagoService:
         precio = reserva.turno.actividad.precio
         monto = precio / Decimal("2")
 
+        # Si venía de la lista de espera, al pagar deja de esperar: se limpia su
+        # estado (y el del grupo) en la misma transacción que asienta el pago.
+        self.lista_espera.confirmar_lugar(reserva)
+
         pago = Pago(
             user_id=reserva.user_id,
             reserva_id=reserva_id,
@@ -275,6 +324,9 @@ class PagoService:
         db.session.add(pago)
         self._aplicar_credito(pago, reserva.turno.actividad.id)
         db.session.commit()
+        # Completar un pago (seña) de una reserva nueva reactiva la cuenta si
+        # estaba suspendida (esa compra no lleva descuento).
+        self.mensualidad.levantar_suspension(reserva.user_id)
         return pago
 
     def registrar_sena_si_falta(self, reserva_id: int) -> Pago:
@@ -356,6 +408,7 @@ class PagoService:
         )
         db.session.add(pago)
         db.session.commit()
+        self.mensualidad.levantar_suspension(reserva.user_id)
         return pago
 
     def registrar_cancelacion(

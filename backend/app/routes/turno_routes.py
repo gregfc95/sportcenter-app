@@ -6,13 +6,14 @@ from marshmallow import ValidationError
 from ..auth import current_user_id, require_role
 from ..models.user import UserRole
 from ..schemas import TurnoSchema
-from ..services import ActividadService, TurnoService
+from ..services import ActividadService, ListaEsperaService, TurnoService
 
 
 turno_bp = Blueprint("turnos", __name__)
 
 turno_service = TurnoService()
 actividad_service = ActividadService()
+lista_espera_service = ListaEsperaService()
 turno_schema = TurnoSchema()
 turnos_schema = TurnoSchema(many=True)
 
@@ -49,6 +50,12 @@ def list_turnos_por_actividad(actividad_id: int) -> Response:
             turno_dict["bloqueado"] = bloqueado
             turno_dict["disponibles"] = (
                 0 if bloqueado else turno_service.lugares_disponibles(turno, fecha)
+            )
+            # Con prioridad estricta un lugar libre puede estar reservado a la
+            # espera de un abono; el front lo muestra como "lista de espera" y no
+            # como reservable directo.
+            turno_dict["lista_espera"] = (
+                not bloqueado and lista_espera_service.hay_demanda(turno.id, fecha)
             )
 
     return jsonify(dumped), 200

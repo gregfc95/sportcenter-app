@@ -5,9 +5,16 @@ from flask import Blueprint, Response, jsonify, request
 from .. import db
 from ..auth import current_user_id, require_role
 from ..models.pago import PagoEstado
-from ..models.reserva import MotivoCancelacion, Reserva, ReservaTipo
+from ..models.reserva import EstadoEspera, MotivoCancelacion, Reserva, ReservaTipo
 from ..models.user import UserRole
-from ..services import CreditoService, PagoService, ReservaService
+from ..services import (
+    CreditoService,
+    ListaEsperaService,
+    MensualidadService,
+    PagoService,
+    ReservaService,
+)
+from ..services.reserva_service import CupoLlenoError
 
 
 pago_bp = Blueprint("pagos", __name__, url_prefix="/api/pagos")
@@ -15,6 +22,8 @@ pago_bp = Blueprint("pagos", __name__, url_prefix="/api/pagos")
 reserva_service = ReservaService()
 pago_service = PagoService()
 credito_service = CreditoService()
+lista_espera_service = ListaEsperaService()
+mensualidad_service = MensualidadService()
 
 
 def _monto_credito(pago) -> float:
@@ -215,6 +224,9 @@ def checkout() -> Response:
     if tipo == ReservaTipo.MENSUAL:
         try:
             reservas = reserva_service.crear_reserva_mensual(user_id, turno_id, fecha)
+        except CupoLlenoError as e:
+            # Sin cupo (o con lista de espera): el front ofrece anotarse.
+            return jsonify({"error": str(e)}), 409
         except ValueError as e:
             return jsonify({"error": str(e)}), 400
 
@@ -232,6 +244,9 @@ def checkout() -> Response:
 
     try:
         reserva = reserva_service.crear_reserva(user_id, turno_id, fecha, tipo)
+    except CupoLlenoError as e:
+        # Sin cupo (o con lista de espera): el front ofrece anotarse.
+        return jsonify({"error": str(e)}), 409
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
 
@@ -463,8 +478,25 @@ def cancelar_checkout() -> Response:
         # Tiene seña/pago: no la cancelamos por un retorno de error.
         return jsonify({"ok": True, "cancelada": False}), 200
 
+    # Datos previos a la baja para promover la lista y penalizar.
+    info = [(r.turno_id, r.fecha, r.estado_espera) for r in grupo]
+    es_mensual = reserva.tipo == ReservaTipo.MENSUAL
+    no_espera = [r for r in grupo if r.estado_espera is None]
+
     for r in grupo:
         r.motivo_cancelacion = MotivoCancelacion.CANCELADO
         r.soft_delete()
     db.session.commit()
+
+    # Cancelar un abono mensual (renovación o abono nunca pagado) suma una
+    # penalización por clase; las filas en espera no penalizan.
+    if es_mensual and no_espera:
+        mensualidad_service.registrar_penalizaciones_cancelacion(no_espera)
+
+    for turno_id, fecha, estado_prev in info:
+        if estado_prev is None:
+            lista_espera_service.promover(turno_id, fecha, motivo="cancelacion")
+        elif estado_prev == EstadoEspera.OFERTADO:
+            lista_espera_service.promover(turno_id, fecha, motivo="vencimiento")
+
     return jsonify({"ok": True, "cancelada": True}), 200

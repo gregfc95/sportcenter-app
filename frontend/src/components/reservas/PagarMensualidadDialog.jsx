@@ -33,7 +33,8 @@ import { formatPrice } from "@/lib/utils";
  * @param {string}          props.actividad  - Nombre de la actividad (para el copy).
  * @param {string}          props.datetime   - Próxima clase ya formateada (fecha y hora).
  * @param {number}          props.clases     - Cantidad de clases del mes.
- * @param {number}          props.total      - Total de la mensualidad.
+ * @param {number}          props.total      - Total de la mensualidad (ya con el descuento de fidelidad aplicado, si corresponde).
+ * @param {{ pct: number, total_original: number, total_final: number }} [props.descuento] - Descuento de fidelidad a mostrar en el desglose.
  * @param {() => void}      [props.onPagado] - Se llama tras pagar 100% con crédito (sin MP), para refrescar la vista.
  */
 export default function PagarMensualidadDialog({
@@ -43,6 +44,7 @@ export default function PagarMensualidadDialog({
   datetime,
   clases,
   total,
+  descuento,
   onPagado,
 }) {
   const [open, setOpen] = useState(false);
@@ -122,6 +124,14 @@ export default function PagarMensualidadDialog({
               <span>Clases del mes</span>
               <span className="text-on-surface">{clases}</span>
             </div>
+            {descuento && (
+              <div className="flex justify-between text-success-green">
+                <span>Descuento fidelidad ({descuento.pct}%)</span>
+                <span>
+                  −{formatPrice(descuento.total_original - descuento.total_final)}
+                </span>
+              </div>
+            )}
             {descuentoCredito > 0 && (
               <div className="flex justify-between text-credit-violet">
                 <span>Crédito a favor</span>

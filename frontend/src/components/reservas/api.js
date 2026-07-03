@@ -119,9 +119,27 @@ export function confirmarMensualidad(reservaId) {
 }
 
 /**
+ * Anota al usuario en la lista de espera de un turno lleno. No cobra nada: la
+ * reserva queda en espera hasta que se libere un lugar y llegue el aviso por
+ * email para pagarla desde Mis Turnos. Para un abono mensual anota el mes
+ * completo si al menos una de sus fechas está llena.
+ *
+ * @param {{ turno_id: number, fecha: string, tipo?: string }} payload
+ * @returns {Promise<{ reserva_id: number, tipo: string, estado: string, fechas: string[] }>}
+ */
+export function unirseListaEspera(payload) {
+  return request("/api/reservas/lista-espera", {
+    method: "POST",
+    body: payload,
+    fallback: "No pudimos anotarte en la lista de espera.",
+  });
+}
+
+/**
  * Cancela (soft-delete) una reserva cuyo pago no se concretó (abandono/rechazo
  * en Mercado Pago). Idempotente; no cancela si ya tiene un pago registrado.
- * Si la reserva es de un abono mensual, cancela el grupo completo.
+ * Si la reserva es de un abono mensual, cancela el grupo completo. También es
+ * la baja de una entrada de la lista de espera (sale de la cola).
  *
  * @param {number} reservaId
  */
@@ -130,6 +148,19 @@ export function cancelarCheckout(reservaId) {
     method: "POST",
     body: { reserva_id: reservaId },
     fallback: "No se pudo cancelar la reserva.",
+  });
+}
+
+/**
+ * Estado de suscripción mensual del cliente actual: si está suspendido, las
+ * penalizaciones del mes en curso (con su tope) y si le corresponde el
+ * descuento de fidelidad. Para el widget de estado de cuenta.
+ *
+ * @returns {Promise<{ suspendido: boolean, penalizaciones_mes: number, penalizaciones_max: number, tiene_descuento: boolean, descuento_pct: number }>}
+ */
+export function getEstadoMensual() {
+  return request("/api/mensualidad/estado", {
+    fallback: "No pudimos cargar el estado de tu cuenta.",
   });
 }
 
@@ -289,10 +320,10 @@ export function registrarAsistencia(codigo) {
 }
 
 /**
- * Historial de reservas del usuario para Mi Historial: todas las fechas
- * (pasadas incluidas) con su estado de asistencia.
+ * Historial de reservas resueltas del usuario para Mi Historial: turnos pasados
+ * y cancelados (sin pendientes/futuras) con su estado.
  *
- * @returns {Promise<Array<{ reserva_id: number, actividad: string, fecha: string, dia_semana: string, hora: string, tipo: string, estado: "asistio"|"ausente"|"pendiente" }>>}
+ * @returns {Promise<Array<{ reserva_id: number, actividad: string, fecha: string, dia_semana: string, hora: string, tipo: string, estado: "cancelado"|"asistio"|"ausente" }>>}
  */
 export function listMiHistorial() {
   return request("/api/asistencias/historial", {

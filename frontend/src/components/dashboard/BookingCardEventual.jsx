@@ -1,4 +1,4 @@
-import { CalendarDays, Users } from "lucide-react";
+import { CalendarDays, Check, Clock, Users } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { EstadoBadge } from "@/components/ui/estado-badge";
@@ -7,7 +7,10 @@ import { ActividadIcon } from "@/components/actividades/ActividadIcon";
 import PagarSaldoDialog from "@/components/reservas/PagarSaldoDialog";
 import PagarSenaDialog from "@/components/reservas/PagarSenaDialog";
 import CancelarReservaDialog from "@/components/reservas/CancelarReservaDialog";
+import SalirEsperaDialog from "@/components/reservas/SalirEsperaDialog";
+import PagarEsperaBloqueado from "@/components/reservas/PagarEsperaBloqueado";
 import VerQrDialog from "@/components/reservas/VerQrDialog";
+import { esperaDetalle, esperaOfertaActiva } from "@/components/reservas/listaEspera";
 import { STATUS_META } from "./statusMeta";
 import { cn } from "@/lib/utils";
 
@@ -22,6 +25,7 @@ export default function BookingCardEventual({
   sena,
   saldo,
   asistencia,
+  espera,
   onCancelled,
   onPagado,
 }) {
@@ -30,8 +34,25 @@ export default function BookingCardEventual({
   const showSena = status === "pendiente";
   const showSaldo = status === "senado";
   const showCapacity = Boolean(capacity);
+  const enEspera = status === "en_espera";
+  const ofertaActiva = esperaOfertaActiva(espera);
 
-  const cancelButton = (
+  const cancelButton = enEspera ? (
+    <SalirEsperaDialog
+      reservaId={reservaId}
+      actividad={sport}
+      onCancelled={onCancelled}
+      trigger={
+        <Button
+          variant="outline"
+          size="sm"
+          className="text-error border-error/40 hover:bg-error/10 hover:text-error"
+        >
+          Salir
+        </Button>
+      }
+    />
+  ) : (
     <CancelarReservaDialog
       reservaId={reservaId}
       actividad={sport}
@@ -59,7 +80,7 @@ export default function BookingCardEventual({
       Pagar
     </Button>
   );
-  const pagarButton = showSena ? (
+  const senaDialog = (
     <PagarSenaDialog
       reservaId={reservaId}
       actividad={sport}
@@ -69,18 +90,26 @@ export default function BookingCardEventual({
       onPagado={onPagado}
       trigger={pagarTrigger}
     />
-  ) : showSaldo ? (
-    <PagarSaldoDialog
-      reservaId={reservaId}
-      actividad={sport}
-      datetime={datetime}
-      precio={precio}
-      sena={sena}
-      saldo={saldo}
-      onPagado={onPagado}
-      trigger={pagarTrigger}
-    />
-  ) : null;
+  );
+  let pagarButton = null;
+  if (enEspera) {
+    pagarButton = ofertaActiva ? senaDialog : <PagarEsperaBloqueado />;
+  } else if (showSena) {
+    pagarButton = senaDialog;
+  } else if (showSaldo) {
+    pagarButton = (
+      <PagarSaldoDialog
+        reservaId={reservaId}
+        actividad={sport}
+        datetime={datetime}
+        precio={precio}
+        sena={sena}
+        saldo={saldo}
+        onPagado={onPagado}
+        trigger={pagarTrigger}
+      />
+    );
+  }
   // El turno pagado muestra su QR de asistencia (habilitado solo el día).
   const qrButton = status === "pagado" && (
     <VerQrDialog
@@ -127,6 +156,18 @@ export default function BookingCardEventual({
               <CalendarDays className="size-5 text-on-surface-variant" strokeWidth={2} />
               {datetime}
             </span>
+            {asistencia && (
+              <span className="flex items-center gap-xs text-label-sm text-success-green">
+                <Check className="size-4" strokeWidth={2} />
+                Asististe
+              </span>
+            )}
+            {enEspera && (
+              <span className="flex items-center gap-xs text-label-sm text-info-blue">
+                <Clock className="size-4" strokeWidth={2} />
+                {esperaDetalle(espera)}
+              </span>
+            )}
           </div>
 
           <EstadoBadge estado={status} className="md:hidden" />
