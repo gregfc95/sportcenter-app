@@ -44,6 +44,7 @@ def _reserva_sesion_dict(reserva) -> dict:
         "id": reserva.id,
         "tipo": reserva.tipo.value,
         "estado": _estado_pago(reserva),
+        "asistencia": reserva.asistio,
         "monto_pagado": float(resumen["cobrado"]),
         "precio": float(resumen["total"]),
         "saldo": float(resumen["saldo"]),
@@ -78,6 +79,11 @@ def list_mis_reservas() -> Response:
     grupos_vistos = set()
     for reserva in reservas:
         turno = reserva.turno
+        # El filtro de soft-delete deja `turno`/`actividad` en None si el
+        # centro los dio de baja: sin horario ni cupo no hay card que armar
+        # (mismo criterio que listar_sesiones_reservadas, que las saltea).
+        if turno is None or turno.actividad is None:
+            continue
         actividad = turno.actividad
         disponibles = turno_service.lugares_disponibles(turno, reserva.fecha)
 
@@ -123,6 +129,7 @@ def list_mis_reservas() -> Response:
                                 "fecha": r.fecha.isoformat(),
                                 "pasada": r.fecha < hoy,
                                 "cancelada": r.is_deleted,
+                                "asistencia": r.asistio,
                             }
                             for r in grupo
                         ],
@@ -148,6 +155,7 @@ def list_mis_reservas() -> Response:
                 "fecha": reserva.fecha.isoformat(),
                 "tipo": reserva.tipo.value,
                 "estado": _estado_pago(reserva),
+                "asistencia": reserva.asistio,
                 "actividad": actividad.nombre,
                 "precio": float(resumen["total"]),
                 "sena": float(resumen["sena"]),
@@ -180,7 +188,8 @@ def list_sesiones_reservadas() -> Response:
     for turno, fecha in sesiones:
         actividad = turno.actividad
         disponibles = turno_service.lugares_disponibles(turno, fecha)
-        reservas_sesion = sum(1 for r in turno.reservas if r.fecha == fecha)
+        reservas_sesion = [r for r in turno.reservas if r.fecha == fecha]
+        asistencias = sum(1 for r in reservas_sesion if r.asistio)
         payload.append(
             {
                 "turno_id": turno.id,
@@ -190,7 +199,8 @@ def list_sesiones_reservadas() -> Response:
                 "hora": turno.hora.strftime("%H:%M"),
                 "cupo": turno.cupo,
                 "ocupados": turno.cupo - disponibles,
-                "reservas": reservas_sesion,
+                "reservas": len(reservas_sesion),
+                "asistencias": asistencias,
             }
         )
 

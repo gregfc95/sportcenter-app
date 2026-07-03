@@ -19,6 +19,7 @@ const CARD_DESC_BY_HREF = {
   "/actividades": "Administrá las actividades disponibles",
   "/pagos": "Consultá los pagos del centro",
   "/turnos": "Administrá los turnos reservados",
+  "/registrar-asistencia": "Escaneá el QR del cliente para registrar su asistencia",
 };
 
 function getStaffCards(role) {
@@ -38,6 +39,10 @@ function toUpcomingBookings(reservas) {
       id: r.id,
       reservaId: r.id,
       sport: r.actividad,
+      // `fecha` cruda (ISO) además del `datetime` formateado: el botón de QR
+      // compara contra hoy y el string "Hoy, 20:00" no sirve para eso.
+      fecha: r.fecha,
+      asistencia: r.asistencia ?? false,
       datetime: formatReservaFecha(r.fecha, r.turno.hora),
       status: r.estado,
       capacity: { taken: r.turno.ocupados, total: r.turno.cupo },

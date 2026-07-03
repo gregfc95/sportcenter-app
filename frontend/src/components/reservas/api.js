@@ -193,7 +193,7 @@ export function registrarPagoManual(reservaId) {
  * Sesiones con reservas (turno + fecha) para la vista de Turnos Reservados.
  * Sólo admin/empleado.
  *
- * @returns {Promise<Array<{ turno_id: number, fecha: string, actividad: string, dia_semana: string, hora: string, cupo: number, ocupados: number, reservas: number }>>}
+ * @returns {Promise<Array<{ turno_id: number, fecha: string, actividad: string, dia_semana: string, hora: string, cupo: number, ocupados: number, reservas: number, asistencias: number }>>}
  */
 export function listSesionesReservadas() {
   return request("/api/reservas/sesiones", {
@@ -212,5 +212,46 @@ export function listSesionesReservadas() {
 export function getSesionReservada(turnoId, fecha) {
   return request(`/api/reservas/sesiones/${turnoId}/${fecha}`, {
     fallback: "No pudimos cargar la sesión.",
+  });
+}
+
+/**
+ * QR de asistencia de una reserva del usuario (imagen como data-URL). Sólo
+ * disponible el día del turno; el mensaje de error del backend es el texto
+ * exacto del toast a mostrar.
+ *
+ * @param {number} reservaId
+ * @returns {Promise<{ reserva_id: number, qr: string, actividad: string, fecha: string, hora: string }>}
+ */
+export function getReservaQr(reservaId) {
+  return request(`/api/asistencias/reservas/${reservaId}/qr`, {
+    fallback: "No se pudo generar el código QR.",
+  });
+}
+
+/**
+ * Registra la asistencia a partir del código escaneado. Sólo admin/empleado.
+ * Errores: 404 QR ajeno al sistema, 409 ya registrado; el mensaje es el toast.
+ *
+ * @param {string} codigo - texto crudo leído del QR
+ * @returns {Promise<{ ok: boolean, reserva_id: number, cliente: { nombre: string, apellido: string, email: string }|null, actividad: string, hora: string }>}
+ */
+export function registrarAsistencia(codigo) {
+  return request("/api/asistencias/escanear", {
+    method: "POST",
+    body: { codigo },
+    fallback: "No se pudo registrar la asistencia.",
+  });
+}
+
+/**
+ * Historial de reservas del usuario para Mi Historial: todas las fechas
+ * (pasadas incluidas) con su estado de asistencia.
+ *
+ * @returns {Promise<Array<{ reserva_id: number, actividad: string, fecha: string, dia_semana: string, hora: string, tipo: string, estado: "asistio"|"ausente"|"pendiente" }>>}
+ */
+export function listMiHistorial() {
+  return request("/api/asistencias/historial", {
+    fallback: "No pudimos cargar tu historial.",
   });
 }

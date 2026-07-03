@@ -28,12 +28,14 @@ def create_app(config_object=None):
     from .routes.user_routes import user_bp
     from .routes.pago_routes import pago_bp
     from .routes.reserva_routes import reserva_bp
+    from .routes.asistencia_routes import asistencia_bp
     app.register_blueprint(main)
     app.register_blueprint(turno_bp)
     app.register_blueprint(actividad_bp)
     app.register_blueprint(user_bp)
     app.register_blueprint(pago_bp)
     app.register_blueprint(reserva_bp)
+    app.register_blueprint(asistencia_bp)
     from seed import register_commands
     register_commands(app)
 

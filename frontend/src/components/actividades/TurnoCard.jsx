@@ -6,9 +6,10 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { formatHora } from "@/lib/fecha";
 
 export default function TurnoCard({ turno, onEdit, onDelete }) {
-  const hora = turno.hora?.slice(0, 5) ?? turno.hora;
+  const hora = formatHora(turno.hora);
   return (
     <div className="bg-surface-container-high border border-outline-variant rounded-lg p-sm relative hover:border-primary/40 transition-colors">
       <div className="flex items-start justify-between gap-2">

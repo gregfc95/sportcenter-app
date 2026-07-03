@@ -6,6 +6,8 @@ import {
   Goal,
   Target,
   CalendarDays,
+  History,
+  QrCode,
   Wallet,
   Users,
   Briefcase,
@@ -22,12 +24,14 @@ const CLIENT_NAV_LINKS = [
   { label: "Inicio", href: "/dashboard", Icon: Home },
   { label: "Mis Turnos", href: "/mis-turnos", Icon: CalendarDays },
   { label: "Mis Pagos", href: "/mis-pagos", Icon: Wallet },
+  { label: "Mi Historial", href: "/mi-historial", Icon: History },
 ];
 
 const EMPLOYEE_NAV_LINKS = [
   { label: "Inicio", href: "/dashboard", Icon: Home },
   { label: "Clientes", href: "/clientes", Icon: Users },
   { label: "Turnos Reservados", href: "/turnos", Icon: CalendarDays },
+  { label: "Registrar Asistencia", href: "/registrar-asistencia", Icon: QrCode },
 ];
 
 const ADMIN_NAV_LINKS = [
@@ -37,6 +41,7 @@ const ADMIN_NAV_LINKS = [
   { label: "Actividades", href: "/actividades", Icon: Dumbbell },
   { label: "Pagos", href: "/pagos", Icon: Wallet },
   { label: "Turnos Reservados", href: "/turnos", Icon: CalendarDays },
+  { label: "Registrar Asistencia", href: "/registrar-asistencia", Icon: QrCode },
 ];
 
 export const DASHBOARD_NAV_LINKS_BY_ROLE = {

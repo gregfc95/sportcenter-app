@@ -8,21 +8,12 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { PageHeading } from "@/components/ui/page-heading";
 import { cn } from "@/lib/utils";
+import { DIAS_SEMANA } from "@/lib/fecha";
 import {
   ApiError,
   createTurno,
   getActividad,
 } from "@/components/actividades/api";
-
-const DIAS = [
-  { value: "lunes", label: "Lunes", short: "Lun" },
-  { value: "martes", label: "Martes", short: "Mar" },
-  { value: "miercoles", label: "Miércoles", short: "Mié" },
-  { value: "jueves", label: "Jueves", short: "Jue" },
-  { value: "viernes", label: "Viernes", short: "Vie" },
-  { value: "sabado", label: "Sábado", short: "Sáb" },
-  { value: "domingo", label: "Domingo", short: "Dom" },
-];
 
 function fieldShellClasses(hasError) {
   return cn(
@@ -191,7 +182,7 @@ export default function CrearTurnoPage() {
                 aria-label="Día de la semana"
                 className="grid grid-cols-4 sm:grid-cols-7 gap-2"
               >
-                {DIAS.map((d) => {
+                {DIAS_SEMANA.map((d) => {
                   const selected = dia === d.value;
                   return (
                     <button

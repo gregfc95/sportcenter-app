@@ -14,19 +14,10 @@ import {
   getActividad,
   listTurnosByActividad,
 } from "@/components/actividades/api";
-
-const DAYS = [
-  { key: "lunes", label: "Lunes" },
-  { key: "martes", label: "Martes" },
-  { key: "miercoles", label: "Miércoles" },
-  { key: "jueves", label: "Jueves" },
-  { key: "viernes", label: "Viernes" },
-  { key: "sabado", label: "Sábado" },
-  { key: "domingo", label: "Domingo" },
-];
+import { DIAS_SEMANA } from "@/lib/fecha";
 
 function groupByDay(turnos) {
-  const grouped = Object.fromEntries(DAYS.map((d) => [d.key, []]));
+  const grouped = Object.fromEntries(DIAS_SEMANA.map((d) => [d.value, []]));
   for (const turno of turnos) {
     const list = grouped[turno.dia_semana];
     if (list) list.push(turno);
@@ -188,18 +179,18 @@ export default function ActividadDetailPage() {
         {hasTurnos ? (
           <div className="p-md md:p-lg overflow-x-auto">
             <div className="min-w-[800px] grid grid-cols-7 gap-2">
-              {DAYS.map(({ key, label }) => (
+              {DIAS_SEMANA.map(({ value, label }) => (
                 <div
-                  key={`header-${key}`}
+                  key={`header-${value}`}
                   className="text-label-md text-on-surface-variant pb-md text-center border-b border-outline-variant/40"
                 >
                   {label}
                 </div>
               ))}
-              {DAYS.map(({ key }) => {
-                const dayTurnos = grouped[key];
+              {DIAS_SEMANA.map(({ value }) => {
+                const dayTurnos = grouped[value];
                 return (
-                  <div key={`col-${key}`} className="flex flex-col gap-2 pt-2">
+                  <div key={`col-${value}`} className="flex flex-col gap-2 pt-2">
                     {dayTurnos.length === 0 ? (
                       <div className="flex flex-col items-center justify-center py-lg opacity-50 text-on-surface-variant">
                         <CalendarX2 className="size-5 mb-1" />

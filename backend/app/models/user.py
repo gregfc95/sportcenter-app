@@ -57,7 +57,14 @@ class User(SoftDeleteMixin, db.Model):
         nullable=False,
     )
 
-    reservas = db.relationship("Reserva", back_populates="user", lazy=True)
+    # Reserva también tiene dos FKs a users (user_id del cliente y
+    # asistencia_registrada_por_id del staff); esta es la del cliente.
+    reservas = db.relationship(
+        "Reserva",
+        back_populates="user",
+        foreign_keys="Reserva.user_id",
+        lazy=True,
+    )
     # Pago tiene dos FKs a users (user_id del cliente y registrado_por_id del
     # staff); esta relación es la de los pagos del cliente (user_id).
     pagos = db.relationship(

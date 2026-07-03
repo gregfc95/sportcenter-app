@@ -7,23 +7,25 @@ import { getActividadIcon } from "@/components/actividades/actividadIcons";
 import PagarSaldoDialog from "@/components/reservas/PagarSaldoDialog";
 import PagarSenaDialog from "@/components/reservas/PagarSenaDialog";
 import CancelarReservaDialog from "@/components/reservas/CancelarReservaDialog";
+import VerQrDialog from "@/components/reservas/VerQrDialog";
 import { STATUS_META } from "./statusMeta";
 import { cn } from "@/lib/utils";
 
 export default function BookingCardEventual({
   reservaId,
   sport,
+  fecha,
   datetime,
   status = "pendiente",
   capacity,
   precio,
   sena,
   saldo,
+  asistencia,
   onCancelled,
 }) {
   const meta = STATUS_META[status] ?? STATUS_META.pendiente;
   const Icon = getActividadIcon(sport);
-  // "Ver QR" para pagados se implementará a futuro; por ahora solo el pago.
   // Pendiente paga la seña (reanuda el checkout); señada paga el saldo.
   const showSena = status === "pendiente";
   const showSaldo = status === "senado";
@@ -77,17 +79,16 @@ export default function BookingCardEventual({
       trigger={pagarTrigger}
     />
   ) : null;
-  /* TODO (a futuro): "Ver QR" para turnos pagados. Reimportar `QrCode`
-     de lucide-react al reactivar.
-      <Button
-        variant="outline"
-        size="sm"
-        className="text-on-surface border-outline-variant hover:bg-surface-container-high"
-      >
-        <QrCode className="size-4" strokeWidth={2} />
-        Ver QR
-      </Button>
-  */
+  // El turno pagado muestra su QR de asistencia (habilitado solo el día).
+  const qrButton = status === "pagado" && (
+    <VerQrDialog
+      reservaId={reservaId}
+      fecha={fecha}
+      asistencia={asistencia}
+      actividad={sport}
+      datetime={datetime}
+    />
+  );
 
   return (
     <article
@@ -145,6 +146,7 @@ export default function BookingCardEventual({
         <div className="ml-auto md:ml-0 flex items-center gap-sm">
           {cancelButton}
           {pagarButton}
+          {qrButton}
         </div>
       </div>
     </article>

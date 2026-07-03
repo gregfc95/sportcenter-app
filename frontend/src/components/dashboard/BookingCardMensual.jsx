@@ -9,6 +9,7 @@ import ClasesMensuales from "@/components/reservas/ClasesMensuales";
 import PagarMensualidadDialog from "@/components/reservas/PagarMensualidadDialog";
 import CancelarReservaDialog from "@/components/reservas/CancelarReservaDialog";
 import CancelarAbonoDialog from "@/components/reservas/CancelarAbonoDialog";
+import VerQrDialog from "@/components/reservas/VerQrDialog";
 import { formatReservaFecha, mesLabel } from "@/lib/fecha";
 import { cn } from "@/lib/utils";
 import { STATUS_META } from "./statusMeta";
@@ -159,18 +160,31 @@ export default function BookingCardMensual({
         <div className="ml-auto flex items-center gap-sm">
           {pagado ? (
             claseSeleccionada && (
-              <CancelarReservaDialog
-                reservaId={claseSeleccionada.reserva_id}
-                actividad={sport}
-                datetime={formatReservaFecha(
-                  claseSeleccionada.fecha,
-                  turno.hora,
-                )}
-                mensual
-                estado={status}
-                onCancelled={onCancelled}
-                trigger={<CancelarTrigger label="Cancelar" />}
-              />
+              <>
+                <CancelarReservaDialog
+                  reservaId={claseSeleccionada.reserva_id}
+                  actividad={sport}
+                  datetime={formatReservaFecha(
+                    claseSeleccionada.fecha,
+                    turno.hora,
+                  )}
+                  mensual
+                  estado={status}
+                  onCancelled={onCancelled}
+                  trigger={<CancelarTrigger label="Cancelar" />}
+                />
+                {/* QR de asistencia de la clase seleccionada en los chips. */}
+                <VerQrDialog
+                  reservaId={claseSeleccionada.reserva_id}
+                  fecha={claseSeleccionada.fecha}
+                  asistencia={claseSeleccionada.asistencia}
+                  actividad={sport}
+                  datetime={formatReservaFecha(
+                    claseSeleccionada.fecha,
+                    turno.hora,
+                  )}
+                />
+              </>
             )
           ) : (
             <>

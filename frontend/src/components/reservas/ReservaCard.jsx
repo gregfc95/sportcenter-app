@@ -11,6 +11,7 @@ import PagarMensualidadDialog from "@/components/reservas/PagarMensualidadDialog
 import CancelarReservaDialog from "@/components/reservas/CancelarReservaDialog";
 import CancelarAbonoDialog from "@/components/reservas/CancelarAbonoDialog";
 import ClasesMensuales from "@/components/reservas/ClasesMensuales";
+import VerQrDialog from "@/components/reservas/VerQrDialog";
 import { formatReservaFecha, mesLabel } from "@/lib/fecha";
 
 // Los triggers se montan vía `DialogTrigger asChild`: hay que reenviar las
@@ -46,7 +47,14 @@ function PagarTrigger(props) {
  * con icono/título/chip de estado, sección de detalles (children) y footer de
  * acciones.
  */
-function ReservaCardShell({ actividad, subtitle, estado, children, actions }) {
+function ReservaCardShell({
+  actividad,
+  subtitle,
+  estado,
+  children,
+  actions,
+  qrAction,
+}) {
   const Icon = getActividadIcon(actividad);
 
   return (
@@ -75,23 +83,15 @@ function ReservaCardShell({ actividad, subtitle, estado, children, actions }) {
         {children}
       </div>
 
-      {/* Actions — cancelar (por clase en los abonos) y pago si falta.
+      {/* Actions — cancelar (por clase en los abonos), pago si falta y el QR
+          de asistencia del turno pagado (en los abonos, el de la clase
+          seleccionada; nunca convive con Pagar, que solo sale sin pagar).
           `mt-auto` los ancla abajo: en la grilla las cards se estiran a la
           fila y una eventual corta dejaría el footer flotando al medio. */}
       <div className="relative z-10 mt-auto flex items-center gap-sm pt-sm border-t border-outline-variant">
         {actions}
+        {qrAction}
       </div>
-      {/* TODO (a futuro): mostrar el QR del turno pagado. Reimportar `QrCode`
-          de lucide-react al reactivar.
-      {estado === "pagado" && (
-        <div className="relative z-10 flex pt-sm border-t border-outline-variant">
-          <Button variant="outline" size="sm" className="ml-auto">
-            <QrCode className="size-4" />
-            Ver QR
-          </Button>
-        </div>
-      )}
-      */}
     </div>
   );
 }
@@ -124,6 +124,21 @@ function ReservaMensualCard({ reserva, onCancelled }) {
       actividad={reserva.actividad}
       subtitle={`Todos los ${reserva.turno.dia_semana} · ${reserva.turno.hora}`}
       estado={reserva.estado}
+      qrAction={
+        pagado && claseSeleccionada ? (
+          <VerQrDialog
+            reservaId={claseSeleccionada.reserva_id}
+            fecha={claseSeleccionada.fecha}
+            asistencia={claseSeleccionada.asistencia}
+            actividad={reserva.actividad}
+            datetime={formatReservaFecha(
+              claseSeleccionada.fecha,
+              reserva.turno.hora,
+            )}
+            className="ml-auto"
+          />
+        ) : null
+      }
       actions={
         pagado ? (
           claseSeleccionada && (
@@ -216,6 +231,18 @@ function ReservaEventualCard({ reserva, onCancelled }) {
       actividad={reserva.actividad}
       subtitle={`Reserva #${reserva.id}`}
       estado={reserva.estado}
+      qrAction={
+        reserva.estado === "pagado" ? (
+          <VerQrDialog
+            reservaId={reserva.id}
+            fecha={reserva.fecha}
+            asistencia={reserva.asistencia}
+            actividad={reserva.actividad}
+            datetime={datetime}
+            className="ml-auto"
+          />
+        ) : null
+      }
       actions={
         <>
           <CancelarReservaDialog
