@@ -19,6 +19,7 @@ const CARD_DESC_BY_HREF = {
   "/actividades": "Administrá las actividades disponibles",
   "/pagos": "Consultá los pagos del centro",
   "/turnos": "Administrá los turnos reservados",
+  "/registrar-asistencia": "Escaneá el QR del cliente para registrar su asistencia",
 };
 
 function getStaffCards(role) {
@@ -38,17 +39,25 @@ function toUpcomingBookings(reservas) {
       id: r.id,
       reservaId: r.id,
       sport: r.actividad,
+      // `fecha` cruda (ISO) además del `datetime` formateado: el botón de QR
+      // compara contra hoy y el string "Hoy, 20:00" no sirve para eso.
+      fecha: r.fecha,
+      asistencia: r.asistencia ?? false,
       datetime: formatReservaFecha(r.fecha, r.turno.hora),
       status: r.estado,
       capacity: { taken: r.turno.ocupados, total: r.turno.cupo },
       precio: r.precio,
       sena: r.sena,
       saldo: r.saldo,
+      tipo: r.tipo,
+      mensualidad: r.mensualidad ?? null,
+      turno: { dia_semana: r.turno.dia_semana, hora: r.turno.hora },
     }));
 }
 
 function ClientDashboard({ user }) {
   const [bookings, setBookings] = useState([]);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
     let active = true;
@@ -62,11 +71,11 @@ function ClientDashboard({ user }) {
     return () => {
       active = false;
     };
-  }, []);
+  }, [refreshKey]);
 
-  const handleCancelled = (reservaId) => {
-    setBookings((prev) => prev.filter((b) => b.reservaId !== reservaId));
-  };
+  // Tras cancelar se refresca la lista: una eventual saca su card, pero en un
+  // abono mensual solo sale la clase cancelada (el id no coincide con la card).
+  const handleCancelled = () => setRefreshKey((k) => k + 1);
 
   return (
     <div className="flex flex-col gap-lg px-margin-mobile md:px-lg mt-md md:mt-lg max-w-4xl mx-auto w-full">

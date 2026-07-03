@@ -1,171 +1,27 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { CalendarX2, CalendarDays, Users } from "lucide-react";
+import { CalendarX2 } from "lucide-react";
 
 import { usePageTitle } from "@/lib/usePageTitle";
 import { Button } from "@/components/ui/button";
 import { PageHeading } from "@/components/ui/page-heading";
-import { getActividadIcon } from "@/components/actividades/actividadIcons";
 import { listMisReservas } from "@/components/reservas/api";
-import PagarSaldoDialog from "@/components/reservas/PagarSaldoDialog";
-import PagarSenaDialog from "@/components/reservas/PagarSenaDialog";
-import CancelarReservaDialog from "@/components/reservas/CancelarReservaDialog";
-import { formatReservaFecha } from "@/lib/fecha";
+import ReservaCard from "@/components/reservas/ReservaCard";
 import { cn } from "@/lib/utils";
 
-// Cómo se presenta cada estado de pago en la card.
-const ESTADOS = {
-  pagado: {
-    label: "Pagado",
-    dot: "bg-success-green",
-    text: "text-success-green",
-    chip: "bg-success-green/10 border-success-green/30",
-  },
-  senado: {
-    label: "Señado",
-    dot: "bg-accent",
-    text: "text-accent",
-    chip: "bg-accent/10 border-accent/30",
-  },
-  pendiente: {
-    label: "Pendiente",
-    dot: "bg-error",
-    text: "text-error",
-    chip: "bg-error/10 border-error/30",
-  },
-};
-
-function ReservaCard({ reserva, onCancelled }) {
-  const estado = ESTADOS[reserva.estado] ?? ESTADOS.pendiente;
-  const { cupo, ocupados } = reserva.turno;
-  const ocupacion = cupo > 0 ? Math.min(100, (ocupados / cupo) * 100) : 0;
-  const Icon = getActividadIcon(reserva.actividad);
-  const pagado = reserva.estado === "pagado";
-
-  return (
-    <div className="relative overflow-hidden bg-surface-container border border-outline-variant rounded-xl p-md flex flex-col gap-md hover:border-primary/50 transition-colors">
-      <div
-        aria-hidden="true"
-        className="absolute -top-10 -right-10 w-32 h-32 bg-primary/10 rounded-full blur-3xl pointer-events-none"
-      />
-
-      {/* Header: icon + name + status */}
-      <div className="relative z-10 flex justify-between items-start gap-2">
-        <div className="flex items-center gap-sm">
-          <div className="w-12 h-12 rounded-lg bg-surface-container-high border border-outline-variant flex items-center justify-center shrink-0">
-            <Icon className="size-6 text-primary" aria-hidden="true" />
-          </div>
-          <div className="flex flex-col">
-            <h3 className="text-label-md text-on-surface">{reserva.actividad}</h3>
-            <span className="text-xs text-on-surface-variant">
-              Reserva #{reserva.id}
-            </span>
-          </div>
-        </div>
-        <div
-          className={cn(
-            "flex items-center gap-1.5 px-2 py-1 rounded-full border shrink-0",
-            estado.chip,
-          )}
-        >
-          <span className={cn("w-2 h-2 rounded-full", estado.dot)} />
-          <span
-            className={cn(
-              "text-[10px] font-bold uppercase tracking-widest",
-              estado.text,
-            )}
-          >
-            {estado.label}
-          </span>
-        </div>
-      </div>
-
-      {/* Details */}
-      <div className="relative z-10 flex flex-col gap-sm text-label-sm text-on-surface-variant">
-        <div className="flex items-center gap-3">
-          <CalendarDays className="size-4 shrink-0" aria-hidden="true" />
-          <span>{formatReservaFecha(reserva.fecha, reserva.turno.hora)}</span>
-          <span className="ml-auto px-2 py-0.5 bg-surface-container-high rounded text-xs capitalize">
-            {reserva.tipo}
-          </span>
-        </div>
-        <div className="flex items-center gap-3">
-          <Users className="size-4 shrink-0" aria-hidden="true" />
-          <span>
-            Cupo: {ocupados} / {cupo}
-          </span>
-          <div className="ml-auto w-16 h-1.5 bg-outline-variant rounded-full overflow-hidden">
-            <div
-              className="h-full bg-primary rounded-full"
-              style={{ width: `${ocupacion}%` }}
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* Actions — cancelar siempre, y pago del saldo si falta. "Ver QR" a futuro. */}
-      <div className="relative z-10 flex items-center gap-sm pt-sm border-t border-outline-variant">
-        <CancelarReservaDialog
-          reservaId={reserva.id}
-          actividad={reserva.actividad}
-          datetime={formatReservaFecha(reserva.fecha, reserva.turno.hora)}
-          onCancelled={onCancelled}
-          trigger={
-            <Button
-              variant="outline"
-              size="sm"
-              className="text-error border-error/40 hover:bg-error/10 hover:text-error"
-            >
-              Cancelar
-            </Button>
-          }
-        />
-        {!pagado &&
-          (() => {
-            // Pendiente reanuda la seña; señada paga el saldo restante.
-            const PagarDialog =
-              reserva.estado === "senado" ? PagarSaldoDialog : PagarSenaDialog;
-            return (
-              <PagarDialog
-                reservaId={reserva.id}
-                actividad={reserva.actividad}
-                datetime={formatReservaFecha(reserva.fecha, reserva.turno.hora)}
-                precio={reserva.precio}
-                sena={reserva.sena}
-                saldo={reserva.saldo}
-                trigger={
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="ml-auto text-primary border-primary/40 hover:bg-primary/10 hover:text-primary"
-                  >
-                    Pagar
-                  </Button>
-                }
-              />
-            );
-          })()}
-      </div>
-      {/* TODO (a futuro): mostrar el QR del turno pagado. Reimportar `QrCode`
-          de lucide-react al reactivar.
-      {pagado && (
-        <div className="relative z-10 flex pt-sm border-t border-outline-variant">
-          <Button variant="outline" size="sm" className="ml-auto">
-            <QrCode className="size-4" />
-            Ver QR
-          </Button>
-        </div>
-      )}
-      */}
-    </div>
-  );
-}
+// Filtro por tipo de reserva del listado.
+const FILTROS = [
+  { value: "todos", label: "Todos" },
+  { value: "mensual", label: "Mensuales" },
+  { value: "eventual", label: "Eventuales" },
+];
 
 export default function MisTurnosPage() {
   usePageTitle("Mis Turnos");
 
   const [reservas, setReservas] = useState([]);
   const [loaded, setLoaded] = useState(false);
+  const [filtro, setFiltro] = useState("todos");
 
   useEffect(() => {
     let active = true;
@@ -184,10 +40,42 @@ export default function MisTurnosPage() {
     };
   }, []);
 
+  // Cancelación: una eventual saca su card; un abono pendiente se cancela
+  // completo (sale la card, el id recibido es el de la card); en uno pagado
+  // la clase cancelada queda tachada en la fila de chips (y la card entera
+  // sale si no le quedan clases próximas sin cancelar).
   const handleCancelled = (reservaId) => {
-    setReservas((prev) => prev.filter((r) => r.id !== reservaId));
+    setReservas((prev) =>
+      prev
+        // La card sale entera salvo en un abono pagado, donde el id recibido
+        // es el de una clase (puede coincidir con el id de la card).
+        .filter(
+          (r) =>
+            (r.mensualidad && r.estado === "pagado") || r.id !== reservaId,
+        )
+        .map((r) =>
+          r.mensualidad
+            ? {
+                ...r,
+                mensualidad: {
+                  ...r.mensualidad,
+                  clases: r.mensualidad.clases.map((c) =>
+                    c.reserva_id === reservaId ? { ...c, cancelada: true } : c,
+                  ),
+                },
+              }
+            : r,
+        )
+        .filter((r) =>
+          r.mensualidad
+            ? r.mensualidad.clases.some((c) => !c.pasada && !c.cancelada)
+            : true,
+        ),
+    );
   };
 
+  const visibles =
+    filtro === "todos" ? reservas : reservas.filter((r) => r.tipo === filtro);
   const hasTurnos = reservas.length > 0;
 
   return (
@@ -205,15 +93,50 @@ export default function MisTurnosPage() {
       </header>
 
       {!loaded ? null : hasTurnos ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-gutter">
-          {reservas.map((reserva) => (
-            <ReservaCard
-              key={reserva.id}
-              reserva={reserva}
-              onCancelled={handleCancelled}
-            />
-          ))}
-        </div>
+        <>
+          <div
+            role="group"
+            aria-label="Filtrar por tipo de reserva"
+            className="flex bg-surface-container-high rounded-xl p-1 border border-outline-variant self-start"
+          >
+            {FILTROS.map((opcion) => {
+              const active = filtro === opcion.value;
+              return (
+                <button
+                  key={opcion.value}
+                  type="button"
+                  onClick={() => setFiltro(opcion.value)}
+                  aria-pressed={active}
+                  className={cn(
+                    "px-4 py-2 rounded-lg text-label-sm transition-colors cursor-pointer",
+                    active
+                      ? "bg-primary/10 text-primary"
+                      : "text-on-surface-variant hover:text-on-surface",
+                  )}
+                >
+                  {opcion.label}
+                </button>
+              );
+            })}
+          </div>
+
+          {visibles.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-gutter">
+              {visibles.map((reserva) => (
+                <ReservaCard
+                  key={reserva.id}
+                  reserva={reserva}
+                  onCancelled={handleCancelled}
+                />
+              ))}
+            </div>
+          ) : (
+            <p className="text-body-md text-on-surface-variant">
+              No tenés reservas{" "}
+              {filtro === "mensual" ? "mensuales" : "eventuales"}.
+            </p>
+          )}
+        </>
       ) : (
         <section className="bg-surface-container border border-outline-variant rounded-xl flex flex-col overflow-hidden">
           <div className="p-md md:p-lg flex flex-col items-center justify-center py-xl text-on-surface-variant">

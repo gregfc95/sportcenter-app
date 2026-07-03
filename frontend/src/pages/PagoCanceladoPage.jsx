@@ -6,11 +6,26 @@ import { Button } from "@/components/ui/button";
 import { PageHeading } from "@/components/ui/page-heading";
 import { formatPrice } from "@/lib/utils";
 
-// Resultado de cancelar una reserva. Recibe { reembolsado, monto } por el
-// `state` de la navegación (lo manda CancelarReservaDialog). Sin state —p. ej.
-// si se entra por URL directa o tras refrescar— cae en el caso neutro.
-function resolveVariant({ reembolsado, monto }) {
+// Resultado de cancelar una reserva. Recibe { reembolsado, resolucion, monto }
+// por el `state` de la navegación (lo manda CancelarReservaDialog). Sin state
+// —p. ej. si se entra por URL directa o tras refrescar— cae en el caso neutro.
+function resolveVariant({ reembolsado, resolucion, monto }) {
   const hasPayment = monto != null && Number(monto) > 0;
+
+  if (resolucion === "credito" && hasPayment) {
+    return {
+      pageTitle: "Crédito a favor",
+      heading: "Crédito a Favor",
+      title: "La clase quedó como crédito a favor",
+      message:
+        "Se canceló la clase y lo abonado quedó como crédito a favor para esta actividad.",
+      amount: monto,
+      Icon: CheckCircle2,
+      iconClass: "text-sky-500",
+      to: "/mis-pagos",
+      cta: "Ir a Mis Pagos",
+    };
+  }
 
   if (reembolsado && hasPayment) {
     return {
@@ -32,7 +47,7 @@ function resolveVariant({ reembolsado, monto }) {
       heading: "Reserva Cancelada",
       title: "Reserva cancelada sin reembolso",
       message:
-        "Las cancelaciones dentro de las 24 hs previas al turno no tienen reembolso.",
+        "Las cancelaciones dentro de la ventana previa al turno (24 hs, o 48 hs para clases mensuales) no tienen reembolso.",
       amount: null,
       Icon: AlertTriangle,
       iconClass: "text-amber-500",
@@ -58,6 +73,7 @@ export default function PagoCanceladoPage() {
   const { state } = useLocation();
   const variant = resolveVariant({
     reembolsado: state?.reembolsado ?? false,
+    resolucion: state?.resolucion ?? null,
     monto: state?.monto ?? null,
   });
   usePageTitle(variant.pageTitle);

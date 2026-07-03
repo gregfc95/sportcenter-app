@@ -1,27 +1,26 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { CalendarX2, CalendarDays, Users, ChevronRight } from "lucide-react";
+import {
+  CalendarX2,
+  CalendarDays,
+  Users,
+  UserCheck,
+  ChevronRight,
+} from "lucide-react";
 
 import { usePageTitle } from "@/lib/usePageTitle";
 import { PageHeading } from "@/components/ui/page-heading";
 import { getActividadIcon } from "@/components/actividades/actividadIcons";
 import { listSesionesReservadas } from "@/components/reservas/api";
-import { formatReservaFecha } from "@/lib/fecha";
+import { formatReservaFecha, todayISO } from "@/lib/fecha";
 import { cn } from "@/lib/utils";
 
-// YYYY-MM-DD local para comparar contra `sesion.fecha` (que ya viene en ese
-// formato) sin desfase de zona horaria.
-function todayISO() {
-  const d = new Date();
-  const mes = String(d.getMonth() + 1).padStart(2, "0");
-  const dia = String(d.getDate()).padStart(2, "0");
-  return `${d.getFullYear()}-${mes}-${dia}`;
-}
-
 function SesionCard({ sesion }) {
-  const { cupo, ocupados } = sesion;
+  const { cupo, ocupados, reservas, asistencias = 0 } = sesion;
   const ocupacion = cupo > 0 ? Math.min(100, (ocupados / cupo) * 100) : 0;
   const lleno = cupo > 0 && ocupados >= cupo;
+  const asistenciaPct =
+    reservas > 0 ? Math.min(100, (asistencias / reservas) * 100) : 0;
   const Icon = getActividadIcon(sesion.actividad);
 
   return (
@@ -70,6 +69,18 @@ function SesionCard({ sesion }) {
             <div
               className={cn("h-full rounded-full", lleno ? "bg-error" : "bg-primary")}
               style={{ width: `${ocupacion}%` }}
+            />
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          <UserCheck className="size-4 shrink-0" aria-hidden="true" />
+          <span>
+            Asistencia: {asistencias} / {reservas}
+          </span>
+          <div className="ml-auto w-16 h-1.5 bg-outline-variant rounded-full overflow-hidden">
+            <div
+              className="h-full rounded-full bg-success-green"
+              style={{ width: `${asistenciaPct}%` }}
             />
           </div>
         </div>

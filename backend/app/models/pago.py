@@ -10,6 +10,7 @@ class PagoEstado(str, Enum):
     SENADO = "senado"
     CANCELADO = "cancelado"
     REEMBOLSADO = "reembolsado"
+    CREDITO = "credito"
 
 
 class PagoMedio(str, Enum):
@@ -70,9 +71,7 @@ class Pago(SoftDeleteMixin, db.Model):
     # `user` es el cliente dueño del pago; `registrado_por` es el empleado/admin
     # que lo cargó manualmente (NULL cuando el cobro fue automático por Mercado
     # Pago). Como hay dos FKs a users, hay que indicar foreign_keys en cada una.
-    user = db.relationship(
-        "User", back_populates="pagos", foreign_keys=[user_id]
-    )
+    user = db.relationship("User", back_populates="pagos", foreign_keys=[user_id])
     registrado_por = db.relationship("User", foreign_keys=[registrado_por_id])
     reserva = db.relationship("Reserva", back_populates="pagos")
 

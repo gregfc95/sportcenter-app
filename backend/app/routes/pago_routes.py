@@ -171,6 +171,24 @@ def checkout() -> Response:
     except ValueError:
         return jsonify({"error": "tipo de reserva inválido."}), 400
 
+    if tipo == ReservaTipo.MENSUAL:
+        try:
+            reservas = reserva_service.crear_reserva_mensual(user_id, turno_id, fecha)
+        except ValueError as e:
+            return jsonify({"error": str(e)}), 400
+
+        try:
+            pref = pago_service.crear_preferencia_mensualidad(reservas[0].id)
+        except (ValueError, RuntimeError) as e:
+            # Sin link de pago no debe quedar un abono pendiente ocupando el
+            # cupo de todo el mes: se da de baja el grupo recién creado.
+            for r in reservas:
+                r.soft_delete()
+            db.session.commit()
+            return jsonify({"error": str(e)}), 502
+
+        return jsonify({"tipo": ReservaTipo.MENSUAL.value, **pref}), 201
+
     try:
         reserva = reserva_service.crear_reserva(user_id, turno_id, fecha, tipo)
     except ValueError as e:
@@ -182,6 +200,79 @@ def checkout() -> Response:
         return jsonify({"error": str(e)}), 400
 
     return jsonify({"reserva_id": reserva.id, **pref}), 201
+
+
+@pago_bp.route("/mensualidad/checkout", methods=["POST"])
+def checkout_mensualidad() -> Response:
+    """Genera el link de Checkout Pro para pagar un abono mensual pendiente.
+
+    A diferencia de `/checkout`, no crea reservas: reanuda el pago de un abono
+    que quedó pendiente (sin pago) desde Mis Turnos. Acepta cualquier reserva
+    del grupo; el link cubre el total de las clases del mes.
+    """
+    user_id = current_user_id()
+    data = request.get_json() or {}
+
+    reserva_id = data.get("reserva_id")
+    if not isinstance(reserva_id, int):
+        return jsonify({"error": "reserva_id es requerido y debe ser un entero."}), 400
+
+    reserva = db.session.get(Reserva, reserva_id)
+    if reserva is None:
+        return jsonify({"error": "La reserva indicada no existe."}), 404
+    if reserva.user_id != user_id:
+        return jsonify({"error": "La reserva no pertenece al usuario."}), 403
+    if reserva.tipo != ReservaTipo.MENSUAL:
+        return jsonify({"error": "La reserva no es de un abono mensual."}), 400
+
+    grupo = reserva_service.grupo_mensual(reserva)
+    if any(pago_service.tiene_pago(r.id) for r in grupo):
+        return jsonify({"error": "La mensualidad ya tiene un pago registrado."}), 409
+
+    try:
+        pref = pago_service.crear_preferencia_mensualidad(reserva_id)
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+
+    return jsonify(pref), 201
+
+
+@pago_bp.route("/mensualidad", methods=["POST"])
+def registrar_mensualidad() -> Response:
+    """Registra el pago completo del abono al volver con éxito de Mercado Pago.
+
+    Idempotente: las clases que ya tienen pago se devuelven sin duplicar.
+    Responde el total cobrado para el toast de confirmación.
+    """
+    user_id = current_user_id()
+    data = request.get_json() or {}
+
+    reserva_id = data.get("reserva_id")
+    if not isinstance(reserva_id, int):
+        return jsonify({"error": "reserva_id es requerido y debe ser un entero."}), 400
+
+    reserva = db.session.get(Reserva, reserva_id)
+    if reserva is None:
+        return jsonify({"error": "La reserva indicada no existe."}), 404
+    if reserva.user_id != user_id:
+        return jsonify({"error": "La reserva no pertenece al usuario."}), 403
+
+    try:
+        pagos = pago_service.registrar_mensualidad(reserva_id)
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+
+    monto_total = sum((p.monto for p in pagos), start=0)
+    return (
+        jsonify(
+            {
+                "reserva_id": reserva_id,
+                "monto_total": float(monto_total),
+                "pagos": [p.to_dict() for p in pagos],
+            }
+        ),
+        200,
+    )
 
 
 @pago_bp.route("/sena/checkout", methods=["POST"])
@@ -319,11 +410,20 @@ def cancelar_checkout() -> Response:
     if reserva.user_id != user_id:
         return jsonify({"error": "La reserva no pertenece al usuario."}), 403
 
-    if pago_service.tiene_pago(reserva_id):
+    # Un abono mensual se cancela completo: todas las clases del grupo quedan
+    # sin efecto si ninguna tiene pago registrado.
+    grupo = (
+        reserva_service.grupo_mensual(reserva)
+        if reserva.tipo == ReservaTipo.MENSUAL
+        else [reserva]
+    )
+
+    if any(pago_service.tiene_pago(r.id) for r in grupo):
         # Tiene seña/pago: no la cancelamos por un retorno de error.
         return jsonify({"ok": True, "cancelada": False}), 200
 
-    reserva.motivo_cancelacion = MotivoCancelacion.CANCELADO
-    reserva.soft_delete()
+    for r in grupo:
+        r.motivo_cancelacion = MotivoCancelacion.CANCELADO
+        r.soft_delete()
     db.session.commit()
     return jsonify({"ok": True, "cancelada": True}), 200

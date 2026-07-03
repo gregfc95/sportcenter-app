@@ -10,17 +10,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { diaLabelMinuscula } from "@/lib/fecha";
 import { deleteTurno } from "./api";
-
-const DAY_LABEL = {
-  lunes: "lunes",
-  martes: "martes",
-  miercoles: "miércoles",
-  jueves: "jueves",
-  viernes: "viernes",
-  sabado: "sábado",
-  domingo: "domingo",
-};
 
 export default function DeleteTurnoDialog({
   open,
@@ -45,7 +36,7 @@ export default function DeleteTurnoDialog({
     }
   };
 
-  const dayLabel = turno ? (DAY_LABEL[turno.dia_semana] ?? turno.dia_semana) : "";
+  const dayLabel = turno ? diaLabelMinuscula(turno.dia_semana) : "";
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

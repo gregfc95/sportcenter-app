@@ -2,6 +2,8 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import CrearTurnoPage from "./pages/CrearTurnoPage";
 import MisTurnosPage from "./pages/MisTurnosPage";
 import MisPagosPage from "./pages/MisPagosPage";
+import MiHistorialPage from "./pages/MiHistorialPage";
+import RegistrarAsistenciaPage from "./pages/RegistrarAsistenciaPage";
 import PagosPage from "./pages/PagosPage";
 import TurnosReservadosPage from "./pages/TurnosReservadosPage";
 import TurnoReservadoDetailPage from "./pages/TurnoReservadoDetailPage";
@@ -48,6 +50,11 @@ function App() {
             <Route path="/crear-turno" element={<CrearTurnoPage />} />
             <Route path="/mis-turnos" element={<MisTurnosPage />} />
             <Route path="/mis-pagos" element={<MisPagosPage />} />
+            <Route path="/mi-historial" element={<MiHistorialPage />} />
+            <Route
+              path="/registrar-asistencia"
+              element={<RegistrarAsistenciaPage />}
+            />
             <Route path="/pagos" element={<PagosPage />} />
             <Route path="/turnos" element={<TurnosReservadosPage />} />
             <Route

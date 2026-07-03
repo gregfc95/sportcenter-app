@@ -6,9 +6,10 @@ from sqlalchemy.orm import joinedload
 
 from .. import db
 from ..models.pago import Pago, PagoEstado, PagoMedio
-from ..models.reserva import Reserva
+from ..models.reserva import Reserva, ReservaTipo
 from ..models.turno import Turno
 from .mercadopago_client import get_sdk
+from .reserva_service import ReservaService
 
 
 class PagoService:
@@ -25,6 +26,9 @@ class PagoService:
         reserva = db.session.get(Reserva, reserva_id)
         if reserva is None:
             raise ValueError("La reserva indicada no existe.")
+        if reserva.tipo == ReservaTipo.MENSUAL:
+            # El abono mensual no admite seña: se paga completo por adelantado.
+            raise ValueError("Un abono mensual se paga completo, sin seña.")
 
         actividad = reserva.turno.actividad
         sena = actividad.precio / Decimal("2")
@@ -64,6 +68,76 @@ class PagoService:
             monto=saldo,
             success_path="/pago/exito?accion=completar",
         )
+
+    def crear_preferencia_mensualidad(self, reserva_id: int) -> dict:
+        """Crea una preferencia de Checkout Pro por el total del abono mensual.
+
+        El abono se paga completo (precio de la clase × clases restantes del
+        mes), sin seña. `reserva_id` puede ser cualquier reserva del grupo; la
+        preferencia queda referenciada a la primera (la de fecha más temprana).
+        El `success_path` lleva `accion=mensualidad` para que el retorno de
+        Mercado Pago registre el pago del abono completo.
+        """
+        reserva = db.session.get(Reserva, reserva_id)
+        if reserva is None:
+            raise ValueError("La reserva indicada no existe.")
+        if reserva.tipo != ReservaTipo.MENSUAL:
+            raise ValueError("La reserva no es de un abono mensual.")
+
+        grupo = ReservaService().grupo_mensual(reserva)
+        if any(self._pagos_cobrados(r.id) for r in grupo):
+            raise ValueError("La mensualidad ya tiene un pago registrado.")
+
+        actividad = reserva.turno.actividad
+        monto = actividad.precio * len(grupo)
+        pref = self._crear_preferencia(
+            grupo[0].id,
+            title=f"Mensualidad - {actividad.nombre}",
+            monto=monto,
+            success_path="/pago/exito?accion=mensualidad",
+        )
+        return {
+            **pref,
+            "reserva_id": grupo[0].id,
+            "fechas": [r.fecha.isoformat() for r in grupo],
+            "clases": len(grupo),
+            "monto": float(monto),
+        }
+
+    def registrar_mensualidad(self, reserva_id: int) -> list[Pago]:
+        """Registra el pago completo del abono mensual (idempotente).
+
+        Se llama al volver con éxito de Mercado Pago. Crea un Pago PAGADO por
+        clase (monto = precio vigente de la actividad) para cada reserva del
+        grupo que aún no tenga pago; las que ya lo tienen se devuelven tal
+        cual, así el doble retorno (o StrictMode) no duplica cobros.
+        """
+        reserva = db.session.get(Reserva, reserva_id)
+        if reserva is None:
+            raise ValueError("La reserva indicada no existe.")
+        if reserva.tipo != ReservaTipo.MENSUAL:
+            raise ValueError("La reserva no es de un abono mensual.")
+
+        grupo = ReservaService().grupo_mensual(reserva)
+        precio = reserva.turno.actividad.precio
+
+        pagos = []
+        nuevos = False
+        for r in grupo:
+            pago = self._pago_existente(r.id)
+            if pago is None:
+                pago = Pago(
+                    user_id=r.user_id,
+                    reserva_id=r.id,
+                    monto=precio,
+                    estado=PagoEstado.PAGADO,
+                )
+                db.session.add(pago)
+                nuevos = True
+            pagos.append(pago)
+        if nuevos:
+            db.session.commit()
+        return pagos
 
     def _crear_preferencia(
         self, reserva_id: int, *, title: str, monto: Decimal, success_path: str
@@ -209,22 +283,34 @@ class PagoService:
         db.session.commit()
         return pago
 
-    def registrar_cancelacion(self, reserva_id: int, *, reembolsar: bool) -> Pago | None:
+    def registrar_cancelacion(
+        self, reserva_id: int, *, resolucion: PagoEstado
+    ) -> Pago | None:
         """Cierra el historial de pagos de una reserva cancelada.
 
-        Suma lo efectivamente cobrado (la seña, o seña + saldo si estaba pagada)
-        y agrega una fila inmutable al historial: REEMBOLSADO cuando se devuelve
-        el dinero (cancelación con más de 24 h de anticipación) o CANCELADO
-        cuando se retiene (dentro de las 24 h). No interactúa con Mercado Pago:
-        es solo el asiento contable.
+        Suma lo efectivamente cobrado y agrega una fila inmutable al historial
+        según la `resolucion`: REEMBOLSADO cuando se devuelve el dinero,
+        CREDITO cuando queda como crédito a favor de esa actividad (clases
+        mensuales, a elección del cliente) o CANCELADO cuando se retiene
+        (dentro de la ventana de anticipación). No interactúa con Mercado
+        Pago: es solo el asiento contable.
 
         Si la reserva no tiene pagos cobrados (estaba pendiente), no hay nada que
         registrar y devuelve None. Idempotente: si ya existe la fila de cierre la
         devuelve sin duplicarla.
         """
-        cierre = self._pago_por_estado(
-            reserva_id, PagoEstado.REEMBOLSADO
-        ) or self._pago_por_estado(reserva_id, PagoEstado.CANCELADO)
+        if resolucion not in (
+            PagoEstado.REEMBOLSADO,
+            PagoEstado.CANCELADO,
+            PagoEstado.CREDITO,
+        ):
+            raise ValueError("Resolución de cancelación inválida.")
+
+        cierre = (
+            self._pago_por_estado(reserva_id, PagoEstado.REEMBOLSADO)
+            or self._pago_por_estado(reserva_id, PagoEstado.CANCELADO)
+            or self._pago_por_estado(reserva_id, PagoEstado.CREDITO)
+        )
         if cierre is not None:
             return cierre
 
@@ -233,7 +319,7 @@ class PagoService:
             return None
 
         total = sum((p.monto for p in cobrados), Decimal("0"))
-        estado = PagoEstado.REEMBOLSADO if reembolsar else PagoEstado.CANCELADO
+        estado = resolucion
         registro = Pago(
             user_id=cobrados[0].user_id,
             reserva_id=reserva_id,
@@ -258,7 +344,33 @@ class PagoService:
         El saldo es el total menos lo efectivamente cobrado (seña y/o saldo), con
         piso en cero por seguridad. Opera sobre `reserva.pagos` en memoria para no
         agregar consultas cuando la relación ya está cargada.
+
+        Una clase mensual no tiene seña: se abona completa con el resto del
+        abono. Su total es el monto del pago registrado (snapshot del precio al
+        pagar) o el precio vigente si el abono sigue pendiente.
         """
+        if reserva.tipo == ReservaTipo.MENSUAL:
+            pagado = next(
+                (p for p in reserva.pagos if p.estado == PagoEstado.PAGADO), None
+            )
+            total = pagado.monto if pagado is not None else (
+                reserva.turno.actividad.precio
+            )
+            cobrado = sum(
+                (
+                    p.monto
+                    for p in reserva.pagos
+                    if p.estado in (PagoEstado.SENADO, PagoEstado.PAGADO)
+                ),
+                Decimal("0"),
+            )
+            return {
+                "total": total,
+                "sena": Decimal("0"),
+                "cobrado": cobrado,
+                "saldo": max(total - cobrado, Decimal("0")),
+            }
+
         sena = next(
             (p for p in reserva.pagos if p.estado == PagoEstado.SENADO), None
         )

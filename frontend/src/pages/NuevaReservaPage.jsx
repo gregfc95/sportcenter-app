@@ -19,44 +19,15 @@ import {
 } from "@/components/actividades/api";
 import { crearCheckout } from "@/components/reservas/api";
 import { cn, formatPrice } from "@/lib/utils";
-
-const MONTHS = [
-  "Enero",
-  "Febrero",
-  "Marzo",
-  "Abril",
-  "Mayo",
-  "Junio",
-  "Julio",
-  "Agosto",
-  "Septiembre",
-  "Octubre",
-  "Noviembre",
-  "Diciembre",
-];
-
-const WEEKDAYS = ["LU", "MA", "MI", "JU", "VI", "SA", "DO"];
-
-// Maps the backend's `dia_semana` value to a Monday-first weekday index, so a
-// turno can be matched against a calendar cell's day of week.
-const DIA_TO_INDEX = {
-  lunes: 0,
-  martes: 1,
-  miercoles: 2,
-  jueves: 3,
-  viernes: 4,
-  sabado: 5,
-  domingo: 6,
-};
-
-function startOfDay(date) {
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
-}
-
-// Turnos serialize `hora` as ISO time ("14:00:00"); show just HH:MM.
-function formatHora(hora) {
-  return typeof hora === "string" ? hora.slice(0, 5) : hora;
-}
+import {
+  MESES,
+  WEEKDAYS_MIN,
+  DIA_TO_INDEX,
+  toISODate,
+  formatHora,
+  mondayIndex,
+  startOfDay,
+} from "@/lib/fecha";
 
 // True if a turno's start (its `hora` on `date`) is already in the past. The
 // calendar only blocks past *days*, so today's already-elapsed turnos still
@@ -75,17 +46,19 @@ function isSlotPast(date, hora) {
   return slotStart <= new Date();
 }
 
-// Local YYYY-MM-DD (avoids the UTC shift that toISOString() introduces).
-function toISODate(date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
-// Monday-first weekday index (0 = Monday ... 6 = Sunday).
-function mondayIndex(date) {
-  return (date.getDay() + 6) % 7;
+// Fechas del abono mensual: el mismo día de semana desde `fechaInicio` hasta
+// fin de mes (a lo sumo 5). Sólo para mostrar; el backend las recalcula.
+function fechasMensuales(fechaInicio) {
+  const fechas = [];
+  let f = fechaInicio;
+  while (
+    f.getMonth() === fechaInicio.getMonth() &&
+    f.getFullYear() === fechaInicio.getFullYear()
+  ) {
+    fechas.push(f);
+    f = new Date(f.getFullYear(), f.getMonth(), f.getDate() + 7);
+  }
+  return fechas;
 }
 
 function buildMonthCells(year, month) {
@@ -107,6 +80,10 @@ export default function NuevaReservaPage() {
 
   const [actividades, setActividades] = useState([]);
   const [actividadId, setActividadId] = useState(actividadParam ?? "");
+  // Tipo de reserva: "eventual" (una clase, seña del 50%) o "mensual" (todas
+  // las clases restantes del mes, pago completo). No pre-seleccionamos: el
+  // usuario debe elegir explícitamente antes de habilitar el calendario.
+  const [tipo, setTipo] = useState(null);
   const [viewYear, setViewYear] = useState(today.getFullYear());
   const [viewMonth, setViewMonth] = useState(today.getMonth());
   // No pre-seleccionamos fecha: el usuario debe elegir un día explícitamente.
@@ -244,11 +221,34 @@ export default function NuevaReservaPage() {
     [slotsForDay, selectedSlot],
   );
 
-  // El cobro es siempre una seña del 50% del precio de la clase; el resto se
+  const esMensual = tipo === "mensual";
+
+  // El calendario recién se habilita cuando hay actividad Y tipo elegidos.
+  const configReady = Boolean(actividadId) && Boolean(tipo);
+
+  // Fechas del abono (mensual): desde la fecha elegida hasta fin de mes.
+  const fechasMes = useMemo(
+    () => (esMensual && selectedDate ? fechasMensuales(selectedDate) : []),
+    [esMensual, selectedDate],
+  );
+
+  // ISO de todas las fechas del abono, para marcarlas en el calendario.
+  const fechasAbonoISO = useMemo(
+    () => new Set(fechasMes.map(toISODate)),
+    [fechasMes],
+  );
+
+  // Eventual: el cobro es una seña del 50% del precio de la clase; el resto se
   // abona en el establecimiento (la mitad coincide con iniciar_pago en el back).
+  // Mensual: se paga el total de las clases restantes del mes, sin seña.
   const precioClase = selectedActividad ? Number(selectedActividad.precio) : null;
   const sena = precioClase != null ? precioClase / 2 : null;
-  const total = sena != null ? formatPrice(sena) : "—";
+  const totalMensualidad =
+    precioClase != null && fechasMes.length > 0
+      ? precioClase * fechasMes.length
+      : null;
+  const montoAPagar = esMensual ? totalMensualidad : sena;
+  const total = montoAPagar != null ? formatPrice(montoAPagar) : "—";
 
   const [submitting, setSubmitting] = useState(false);
 
@@ -259,12 +259,13 @@ export default function NuevaReservaPage() {
       const { init_point, reserva_id } = await crearCheckout({
         turno_id: selectedTurno.id,
         fecha: toISODate(selectedDate),
-        tipo: "eventual",
+        tipo,
       });
       // Guardamos la seña y la reserva para confirmarla y mostrar el toast al
       // volver de Mercado Pago; sessionStorage sobrevive la ida y vuelta en la
       // misma pestaña.
-      if (sena != null) sessionStorage.setItem("pago_sena", String(sena));
+      if (!esMensual && sena != null)
+        sessionStorage.setItem("pago_sena", String(sena));
       sessionStorage.setItem("pago_reserva_id", String(reserva_id));
       // Redirige al Checkout Pro de Mercado Pago.
       window.location.href = init_point;
@@ -348,38 +349,48 @@ export default function NuevaReservaPage() {
                 Tipo de Reserva
               </span>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Mensual — disabled / coming soon */}
-{/*                 <div
-                  aria-disabled="true"
-                  className="relative flex flex-col gap-2 p-4 rounded-xl border border-outline-variant bg-surface-container-low opacity-60 cursor-not-allowed"
-                >
-                  <div className="flex justify-between items-center w-full">
-                    <span className="text-label-md text-on-surface text-lg">
-                      Mensual
-                    </span>
-                    <span className="bg-surface-container-high text-on-surface-variant text-[10px] font-bold px-2 py-1 rounded-full uppercase tracking-wider">
-                      Próximamente
-                    </span>
-                  </div>
-                  <p className="text-label-sm text-on-surface-variant">
-                    Reserva fija para todo el mes.
-                  </p>
-                </div> */}
-
-                {/* Eventual — selected */}
-                <div className="relative flex flex-col gap-2 p-4 rounded-xl border-2 border-primary bg-primary/5">
-                  <div className="flex justify-between items-center w-full">
-                    <span className="text-label-md text-on-surface text-lg">
-                      Eventual
-                    </span>
-                  </div>
-                  <p className="text-label-sm text-on-surface-variant">
-                    Un solo turno para una fecha.
-                  </p>
-                  <div className="absolute top-4 right-4 w-5 h-5 rounded-full border-2 border-primary flex items-center justify-center bg-primary/20">
-                    <div className="w-2.5 h-2.5 rounded-full bg-primary" />
-                  </div>
-                </div>
+                {[
+                  {
+                    value: "mensual",
+                    label: "Mensual",
+                    detail: "Reserva fija para todo el mes.",
+                  },
+                  {
+                    value: "eventual",
+                    label: "Eventual",
+                    detail: "Un solo turno para una fecha.",
+                  },
+                ].map((opcion) => {
+                  const selected = tipo === opcion.value;
+                  return (
+                    <button
+                      key={opcion.value}
+                      type="button"
+                      onClick={() => setTipo(opcion.value)}
+                      aria-pressed={selected}
+                      className={cn(
+                        "relative flex flex-col gap-2 p-4 rounded-xl text-left transition-colors cursor-pointer",
+                        selected
+                          ? "border-2 border-primary bg-primary/5"
+                          : "border border-outline-variant bg-surface-container-low hover:border-primary/50",
+                      )}
+                    >
+                      <div className="flex justify-between items-center w-full">
+                        <span className="text-label-md text-on-surface text-lg">
+                          {opcion.label}
+                        </span>
+                      </div>
+                      <p className="text-label-sm text-on-surface-variant">
+                        {opcion.detail}
+                      </p>
+                      {selected && (
+                        <div className="absolute top-4 right-4 w-5 h-5 rounded-full border-2 border-primary flex items-center justify-center bg-primary/20">
+                          <div className="w-2.5 h-2.5 rounded-full bg-primary" />
+                        </div>
+                      )}
+                    </button>
+                  );
+                })}
               </div>
             </div>
           </div>
@@ -391,13 +402,13 @@ export default function NuevaReservaPage() {
           <div className="md:col-span-7 bg-surface-container border border-accent/15 rounded-xl p-md md:p-lg flex flex-col">
             <div className="flex justify-between items-center mb-6">
               <h3 className="text-headline-md text-on-surface">
-                {MONTHS[viewMonth]} {viewYear}
+                {MESES[viewMonth]} {viewYear}
               </h3>
               <div className="flex gap-2">
                 <button
                   type="button"
                   onClick={goToPrevMonth}
-                  disabled={!actividadId || atCurrentMonth}
+                  disabled={!configReady || atCurrentMonth}
                   aria-label="Mes anterior"
                   className="w-8 h-8 rounded-full border border-outline-variant flex items-center justify-center text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-colors disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent"
                 >
@@ -406,7 +417,7 @@ export default function NuevaReservaPage() {
                 <button
                   type="button"
                   onClick={goToNextMonth}
-                  disabled={!actividadId}
+                  disabled={!configReady}
                   aria-label="Mes siguiente"
                   className="w-8 h-8 rounded-full border border-outline-variant flex items-center justify-center text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-colors disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent"
                 >
@@ -416,16 +427,16 @@ export default function NuevaReservaPage() {
             </div>
 
             <div className="grid grid-cols-7 text-center text-label-sm text-on-surface-variant mb-4">
-              {WEEKDAYS.map((day) => (
+              {WEEKDAYS_MIN.map((day) => (
                 <div key={day}>{day}</div>
               ))}
             </div>
 
             <div
-              aria-disabled={!actividadId}
+              aria-disabled={!configReady}
               className={cn(
                 "grid grid-cols-7 text-center gap-y-2 text-label-md",
-                !actividadId && "opacity-40 pointer-events-none select-none",
+                !configReady && "opacity-40 pointer-events-none select-none",
               )}
             >
               {cells.map((day, index) => {
@@ -465,6 +476,11 @@ export default function NuevaReservaPage() {
                     </div>
                   );
                 }
+                // Mensual: las demás fechas del abono (mismo día de semana del
+                // mes) se marcan con un realce suave; la fecha de inicio elegida
+                // mantiene el círculo primario sólido.
+                const enAbono =
+                  esMensual && fechasAbonoISO.has(toISODate(cellDate));
                 return (
                   <button
                     key={day}
@@ -480,7 +496,9 @@ export default function NuevaReservaPage() {
                         "w-8 h-8 rounded-full flex items-center justify-center transition-colors",
                         selected
                           ? "bg-primary text-primary-foreground"
-                          : "hover:bg-surface-container-high",
+                          : enAbono
+                            ? "bg-primary/20 text-primary"
+                            : "hover:bg-surface-container-high",
                       )}
                     >
                       {day}
@@ -502,17 +520,19 @@ export default function NuevaReservaPage() {
             <div className="mb-6">
               <h3 className="text-headline-md text-on-surface">
                 {selectedDate
-                  ? `${selectedDate.getDate()} de ${MONTHS[selectedDate.getMonth()]}`
+                  ? `${selectedDate.getDate()} de ${MESES[selectedDate.getMonth()]}`
                   : "Elegí una fecha"}
               </h3>
               <p className="text-label-sm text-on-surface-variant">
                 {!actividadId
                   ? "Elegí una actividad"
-                  : !selectedDate
-                    ? ""
-                    : loadingDayTurnos
+                  : !tipo
+                    ? "Elegí el tipo de reserva"
+                    : !selectedDate
                       ? ""
-                      : `${slotsForDay.filter((t) => t.disponibles !== 0 && !isSlotPast(selectedDate, t.hora)).length} horarios disponibles`}
+                      : loadingDayTurnos
+                        ? ""
+                        : `${slotsForDay.filter((t) => t.disponibles !== 0 && !isSlotPast(selectedDate, t.hora)).length} horarios disponibles`}
               </p>
             </div>
 
@@ -520,6 +540,10 @@ export default function NuevaReservaPage() {
               {!actividadId ? (
                 <p className="text-body-md text-on-surface-variant">
                   Seleccioná una actividad para ver sus turnos.
+                </p>
+              ) : !tipo ? (
+                <p className="text-body-md text-on-surface-variant">
+                  Elegí el tipo de reserva para continuar.
                 </p>
               ) : !selectedDate ? null : loadingDayTurnos ? null : slotsForDay.length === 0 ? (
                 <div className="w-full border border-error/20 bg-error/5 rounded-lg p-4 text-center">
@@ -586,7 +610,9 @@ export default function NuevaReservaPage() {
         {selectedTurno && (
           <section className="bg-surface-container border border-accent/15 rounded-xl p-md md:p-lg flex flex-col gap-3">
             <span className="text-label-sm text-on-surface-variant uppercase tracking-widest">
-              Clase seleccionada (1 Eventual)
+              {esMensual
+                ? `Clases seleccionadas (${fechasMes.length} Mensual)`
+                : "Clase seleccionada (1 Eventual)"}
             </span>
             <div className="flex flex-wrap gap-x-6 gap-y-3">
               <div className="flex flex-col gap-0.5">
@@ -603,7 +629,9 @@ export default function NuevaReservaPage() {
                 </span>
                 <span className="text-body-md text-on-surface">
                   {selectedDate
-                    ? `${selectedDate.getDate()} de ${MONTHS[selectedDate.getMonth()]} ${selectedDate.getFullYear()}`
+                    ? esMensual
+                      ? `Desde el ${selectedDate.getDate()} de ${MESES[selectedDate.getMonth()]} ${selectedDate.getFullYear()}`
+                      : `${selectedDate.getDate()} de ${MESES[selectedDate.getMonth()]} ${selectedDate.getFullYear()}`
                     : "—"}
                 </span>
               </div>
@@ -624,24 +652,70 @@ export default function NuevaReservaPage() {
                 </span>
               </div>
             </div>
+
+            {/* Mensual: todas las fechas del mes en las que queda abonado */}
+            {esMensual && fechasMes.length > 0 && (
+              <div className="flex flex-col gap-2 border-t border-outline-variant pt-3">
+                <span className="text-label-sm text-on-surface-variant uppercase tracking-wider">
+                  Fechas del abono
+                </span>
+                <div className="flex flex-wrap gap-2">
+                  {fechasMes.map((fecha) => (
+                    <span
+                      key={toISODate(fecha)}
+                      className="px-3 py-1.5 rounded-lg border border-primary/40 bg-primary/5 text-label-sm text-on-surface"
+                    >
+                      {String(fecha.getDate()).padStart(2, "0")}/
+                      {String(fecha.getMonth() + 1).padStart(2, "0")}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
           </section>
         )}
 
         {/* Section 4: summary */}
         <section className="bg-surface-container-high rounded-xl p-md md:p-lg border border-accent/15 flex flex-col gap-4 shadow-lg">
           <div className="flex flex-col gap-2 text-body-md text-on-surface-variant border-b border-outline-variant pb-4">
-            <div className="flex justify-between items-center">
-              <span>Seña a pagar (50%):</span>
-              <span className="text-on-surface text-label-md">
-                {selectedTurno && sena != null ? formatPrice(sena) : "—"}
-              </span>
-            </div>
+            {!tipo ? (
+              <div className="flex justify-between items-center">
+                <span>Total a pagar:</span>
+                <span className="text-on-surface text-label-md">—</span>
+              </div>
+            ) : esMensual ? (
+              <div className="flex justify-between items-center">
+                <span>
+                  Clases del mes
+                  {selectedTurno && fechasMes.length > 0
+                    ? ` (${fechasMes.length})`
+                    : ""}
+                  :
+                </span>
+                <span className="text-on-surface text-label-md">
+                  {selectedTurno && precioClase != null && fechasMes.length > 0
+                    ? `${fechasMes.length} × ${formatPrice(precioClase)}`
+                    : "—"}
+                </span>
+              </div>
+            ) : (
+              <div className="flex justify-between items-center">
+                <span>Seña a pagar (50%):</span>
+                <span className="text-on-surface text-label-md">
+                  {selectedTurno && sena != null ? formatPrice(sena) : "—"}
+                </span>
+              </div>
+            )}
           </div>
 
           <div className="flex justify-between items-end pt-2">
             <div className="flex flex-col">
               <span className="text-label-sm text-on-surface-variant uppercase tracking-wider mb-1">
-                Total a pagar (seña)
+                {!tipo
+                  ? "Total a pagar"
+                  : esMensual
+                    ? "Total mensualidad"
+                    : "Total a pagar (seña)"}
               </span>
               <span className="text-headline-lg text-primary leading-none">
                 {selectedTurno ? total : "—"}

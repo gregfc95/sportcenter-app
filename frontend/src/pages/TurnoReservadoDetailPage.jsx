@@ -1,37 +1,24 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { CalendarDays, ChevronRight, Clock, Search, Users } from "lucide-react";
+import {
+  CalendarDays,
+  ChevronRight,
+  Clock,
+  Search,
+  UserCheck,
+  Users,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { usePageTitle } from "@/lib/usePageTitle";
+import { todayISO } from "@/lib/fecha";
 import { cn, formatPrice } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { EstadoBadge } from "@/components/ui/estado-badge";
 import { Input } from "@/components/ui/input";
 import { getActividadIcon } from "@/components/actividades/actividadIcons";
 import { getSesionReservada, registrarPagoManual } from "@/components/reservas/api";
 import RegistrarPagoDialog from "@/components/reservas/RegistrarPagoDialog";
-
-// Mismo criterio de estados de pago que en Mis Turnos: pagado > señado > pendiente.
-const ESTADOS = {
-  pagado: {
-    label: "Pagado",
-    dot: "bg-success-green",
-    text: "text-success-green",
-    chip: "bg-success-green/10 border-success-green/30",
-  },
-  senado: {
-    label: "Señado",
-    dot: "bg-accent",
-    text: "text-accent",
-    chip: "bg-accent/10 border-accent/30",
-  },
-  pendiente: {
-    label: "Pendiente",
-    dot: "bg-error",
-    text: "text-error",
-    chip: "bg-error/10 border-error/30",
-  },
-};
 
 // Una reserva mensual es de un cliente abonado; una eventual, de paso.
 const TIPO_LABELS = { eventual: "Eventual", mensual: "Abonado" };
@@ -53,28 +40,6 @@ function Field({ label, children }) {
       </span>
       <div className="mt-1">{children}</div>
     </div>
-  );
-}
-
-function EstadoBadge({ estado }) {
-  const info = ESTADOS[estado] ?? ESTADOS.pendiente;
-  return (
-    <span
-      className={cn(
-        "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border",
-        info.chip,
-      )}
-    >
-      <span className={cn("w-1.5 h-1.5 rounded-full", info.dot)} />
-      <span
-        className={cn(
-          "text-[10px] font-bold uppercase tracking-widest",
-          info.text,
-        )}
-      >
-        {info.label}
-      </span>
-    </span>
   );
 }
 
@@ -138,17 +103,13 @@ export default function TurnoReservadoDetailPage() {
   // pasado (el saldo se paga al asistir). Solo se bloquea cuando el día entero
   // quedó atrás. `turno.fecha` y la fecha de hoy son ambas YYYY-MM-DD locales,
   // así que se comparan como texto sin riesgo de desfase horario.
-  const hoyISO = (() => {
-    const d = new Date();
-    const mes = String(d.getMonth() + 1).padStart(2, "0");
-    const dia = String(d.getDate()).padStart(2, "0");
-    return `${d.getFullYear()}-${mes}-${dia}`;
-  })();
-  const diaPasado = Boolean(turno.fecha) && turno.fecha < hoyISO;
+  const diaPasado = Boolean(turno.fecha) && turno.fecha < todayISO();
   const ocupacion =
     turno.cupo > 0 ? Math.min(100, (turno.ocupados / turno.cupo) * 100) : 0;
   const lleno = turno.cupo > 0 && turno.ocupados >= turno.cupo;
   const count = reservas.length;
+  const asistencias = reservas.filter((r) => r.asistencia).length;
+  const asistenciaPct = count > 0 ? Math.min(100, (asistencias / count) * 100) : 0;
 
   const term = query.trim().toLowerCase();
   const filtered = term
@@ -234,6 +195,24 @@ export default function TurnoReservadoDetailPage() {
                 </div>
               </div>
             </Field>
+
+            <Field label="Asistencia">
+              <div className="flex items-center gap-3">
+                <span className="text-body-md text-on-surface font-medium flex items-center gap-2">
+                  <UserCheck
+                    className="size-4 text-on-surface-variant"
+                    aria-hidden="true"
+                  />
+                  {asistencias}/{count}
+                </span>
+                <div className="h-2 w-24 bg-outline-variant rounded-full overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-success-green"
+                    style={{ width: `${asistenciaPct}%` }}
+                  />
+                </div>
+              </div>
+            </Field>
           </div>
         </div>
       </section>
@@ -282,6 +261,9 @@ export default function TurnoReservadoDetailPage() {
                   <th className="py-md px-md text-label-sm text-on-surface-variant uppercase tracking-wider text-center">
                     Estado
                   </th>
+                  <th className="py-md px-md text-label-sm text-on-surface-variant uppercase tracking-wider text-center">
+                    Asistencia
+                  </th>
                   <th className="py-md px-md text-label-sm text-on-surface-variant uppercase tracking-wider text-right">
                     Pagado
                   </th>
@@ -294,7 +276,7 @@ export default function TurnoReservadoDetailPage() {
                 {filtered.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={5}
+                      colSpan={6}
                       className="py-lg px-md text-center text-on-surface-variant"
                     >
                       No se encontraron reservas para "{query.trim()}".
@@ -333,6 +315,18 @@ export default function TurnoReservadoDetailPage() {
                         </td>
                         <td className="py-sm px-md text-center">
                           <EstadoBadge estado={reserva.estado} />
+                        </td>
+                        <td className="py-sm px-md text-center">
+                          <span
+                            className={cn(
+                              "text-label-sm font-medium",
+                              reserva.asistencia
+                                ? "text-success-green"
+                                : "text-on-surface-variant",
+                            )}
+                          >
+                            {reserva.asistencia ? "Asistió" : "Ausente"}
+                          </span>
                         </td>
                         <td className="py-sm px-md text-right text-on-surface font-medium">
                           {formatPrice(reserva.monto_pagado)}

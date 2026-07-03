@@ -4,7 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
 from .. import db
-from ..models.reserva import Reserva, ReservaTipo
+from ..models.reserva import Reserva
 from ..models.turno import Turno
 
 
@@ -16,11 +16,8 @@ class TurnoService:
     # --- Lógica de negocio de reservas y cupo ---
 
     def cantidad_reservas(self, turno: Turno, fecha: date) -> int:
-        return sum(
-            1
-            for r in turno.reservas
-            if r.fecha == fecha and r.tipo == ReservaTipo.EVENTUAL
-        )
+        # Eventuales y mensuales consumen cupo por igual en cada sesión.
+        return sum(1 for r in turno.reservas if r.fecha == fecha)
 
     def hay_cupo(self, turno: Turno, fecha: date) -> bool:
         return self.cantidad_reservas(turno, fecha) < turno.cupo
@@ -137,7 +134,7 @@ class TurnoService:
         return turno
 
     def _max_reservas_vigentes(self, turno: Turno) -> int:
-        """Máximo de reservas eventuales activas en una misma sesión de hoy en adelante.
+        """Máximo de reservas activas en una misma sesión de hoy en adelante.
 
         Una "sesión" es el turno en una fecha concreta. El cupo se consume por
         sesión, así que el piso para bajar el cupo es la sesión más reservada que
@@ -148,7 +145,7 @@ class TurnoService:
         hoy = date.today()
         por_fecha: dict[date, int] = {}
         for r in turno.reservas:
-            if r.fecha >= hoy and r.tipo == ReservaTipo.EVENTUAL:
+            if r.fecha >= hoy:
                 por_fecha[r.fecha] = por_fecha.get(r.fecha, 0) + 1
         return max(por_fecha.values(), default=0)
 

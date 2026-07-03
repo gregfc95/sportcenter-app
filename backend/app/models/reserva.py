@@ -13,6 +13,7 @@ class ReservaTipo(str, Enum):
 class MotivoCancelacion(str, Enum):
     REEMBOLSADO = "reembolsado"
     CANCELADO = "cancelado"
+    CREDITO = "credito"
 
 
 class Reserva(SoftDeleteMixin, db.Model):
@@ -47,6 +48,22 @@ class Reserva(SoftDeleteMixin, db.Model):
         ),
         nullable=True,
     )
+    # Identidad del abono mensual: todas las clases de una misma compra
+    # comparten `grupo_id`. Reservar de nuevo el mismo mes (tras cancelar) crea
+    # otro grupo, así las generaciones canceladas no se mezclan. Null en las
+    # eventuales (grupo de una) y hasta el backfill de filas viejas.
+    grupo_id = db.Column(db.String(32), nullable=True, index=True)
+
+    # Asistencia por QR: el token identifica esta reserva-fecha dentro del
+    # código (se genera recién cuando el cliente pide su QR, por eso nullable);
+    # registrada_at/por asientan cuándo se escaneó y qué empleado/admin lo hizo.
+    qr_token = db.Column(db.String(64), nullable=True, unique=True)
+    asistencia_registrada_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    asistencia_registrada_por_id = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
 
     created_at = db.Column(
         db.DateTime(timezone=True),
@@ -61,7 +78,14 @@ class Reserva(SoftDeleteMixin, db.Model):
     )
 
     turno = db.relationship("Turno", back_populates="reservas")
-    user = db.relationship("User", back_populates="reservas")
+    # `user` es el cliente dueño; `asistencia_registrada_por` el staff que
+    # escaneó el QR. Como hay dos FKs a users, hay que indicar foreign_keys.
+    user = db.relationship(
+        "User", back_populates="reservas", foreign_keys=[user_id]
+    )
+    asistencia_registrada_por = db.relationship(
+        "User", foreign_keys=[asistencia_registrada_por_id]
+    )
     pagos = db.relationship(
         "Pago",
         back_populates="reserva",
@@ -80,11 +104,18 @@ class Reserva(SoftDeleteMixin, db.Model):
         ),
     )
 
-    def __init__(self, user_id, turno_id, fecha, tipo=ReservaTipo.EVENTUAL):
+    def __init__(
+        self, user_id, turno_id, fecha, tipo=ReservaTipo.EVENTUAL, grupo_id=None
+    ):
         self.user_id = user_id
         self.turno_id = turno_id
         self.fecha = fecha
         self.tipo = tipo
+        self.grupo_id = grupo_id
+
+    @property
+    def asistio(self) -> bool:
+        return self.asistencia_registrada_at is not None
 
     def __repr__(self):
         tipo = self.tipo.value if self.tipo else None

@@ -50,18 +50,19 @@ class TestTurnoSuperpuesto:
 
 
 class TestCupo:
-    def test_cuenta_solo_eventuales_de_esa_fecha(self):
+    def test_cuenta_eventuales_y_mensuales_de_esa_fecha(self):
+        # Los abonados mensuales también consumen cupo en cada sesión.
         f1, f2 = date(2026, 6, 1), date(2026, 6, 8)
         turno = _turno(
             cupo=10,
             reservas=[
                 _reserva(f1),
                 _reserva(f1),
-                _reserva(f1, tipo=ReservaTipo.MENSUAL),  # no cuenta
+                _reserva(f1, tipo=ReservaTipo.MENSUAL),  # también cuenta
                 _reserva(f2),                            # otra fecha
             ],
         )
-        assert svc.cantidad_reservas(turno, f1) == 2
+        assert svc.cantidad_reservas(turno, f1) == 3
 
     def test_hay_cupo_y_lugares_disponibles(self):
         f = date(2026, 6, 1)
@@ -89,10 +90,10 @@ class TestMaxReservasVigentes:
                 _reserva(futura_2),
                 _reserva(pasada),                          # pasada: ignorada
                 _reserva(pasada),
-                _reserva(futura_1, tipo=ReservaTipo.MENSUAL),  # mensual: ignorada
+                _reserva(futura_1, tipo=ReservaTipo.MENSUAL),  # también cuenta
             ],
         )
-        assert svc._max_reservas_vigentes(turno) == 3
+        assert svc._max_reservas_vigentes(turno) == 4
 
     def test_sin_reservas_futuras_es_cero(self):
         pasada = date.today() - timedelta(days=7)

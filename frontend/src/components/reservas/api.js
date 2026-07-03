@@ -75,8 +75,40 @@ export function completarPago(reservaId) {
 }
 
 /**
+ * Genera el link de Checkout Pro para pagar un abono mensual pendiente desde
+ * Mis Turnos. Sirve cualquier reserva del grupo; el monto cubre todas las
+ * clases del mes.
+ *
+ * @param {number} reservaId
+ * @returns {Promise<{ reserva_id: number, fechas: string[], clases: number, monto: number, preference_id: string, init_point: string, sandbox_init_point: string }>}
+ */
+export function crearCheckoutMensualidad(reservaId) {
+  return request("/api/pagos/mensualidad/checkout", {
+    method: "POST",
+    body: { reserva_id: reservaId },
+    fallback: "No se pudo iniciar el pago de la mensualidad.",
+  });
+}
+
+/**
+ * Registra el pago completo del abono mensual (al volver con éxito de Mercado
+ * Pago). Idempotente.
+ *
+ * @param {number} reservaId
+ * @returns {Promise<{ reserva_id: number, monto_total: number, pagos: Array<object> }>}
+ */
+export function confirmarMensualidad(reservaId) {
+  return request("/api/pagos/mensualidad", {
+    method: "POST",
+    body: { reserva_id: reservaId },
+    fallback: "No se pudo registrar la mensualidad.",
+  });
+}
+
+/**
  * Cancela (soft-delete) una reserva cuyo pago no se concretó (abandono/rechazo
  * en Mercado Pago). Idempotente; no cancela si ya tiene un pago registrado.
+ * Si la reserva es de un abono mensual, cancela el grupo completo.
  *
  * @param {number} reservaId
  */
@@ -92,11 +124,17 @@ export function cancelarCheckout(reservaId) {
  * Cancela (soft-delete) una reserva del usuario actual. No interactúa con
  * Mercado Pago: solo da de baja la reserva.
  *
+ * Para una clase de un abono mensual cancelada con más de 48 h se puede elegir
+ * `resolucion: "credito"` (crédito a favor) en lugar del reembolso.
+ *
  * @param {number} reservaId
+ * @param {{ resolucion?: "reembolso" | "credito" }} [opciones]
+ * @returns {Promise<{ ok: boolean, reembolsado: boolean, resolucion: string, monto: number|null }>}
  */
-export function cancelarReserva(reservaId) {
+export function cancelarReserva(reservaId, opciones = {}) {
   return request(`/api/reservas/${reservaId}/cancelar`, {
     method: "POST",
+    ...(opciones.resolucion ? { body: { resolucion: opciones.resolucion } } : {}),
     fallback: "No se pudo cancelar la reserva.",
   });
 }
@@ -155,7 +193,7 @@ export function registrarPagoManual(reservaId) {
  * Sesiones con reservas (turno + fecha) para la vista de Turnos Reservados.
  * Sólo admin/empleado.
  *
- * @returns {Promise<Array<{ turno_id: number, fecha: string, actividad: string, dia_semana: string, hora: string, cupo: number, ocupados: number, reservas: number }>>}
+ * @returns {Promise<Array<{ turno_id: number, fecha: string, actividad: string, dia_semana: string, hora: string, cupo: number, ocupados: number, reservas: number, asistencias: number }>>}
  */
 export function listSesionesReservadas() {
   return request("/api/reservas/sesiones", {
@@ -174,5 +212,46 @@ export function listSesionesReservadas() {
 export function getSesionReservada(turnoId, fecha) {
   return request(`/api/reservas/sesiones/${turnoId}/${fecha}`, {
     fallback: "No pudimos cargar la sesión.",
+  });
+}
+
+/**
+ * QR de asistencia de una reserva del usuario (imagen como data-URL). Sólo
+ * disponible el día del turno; el mensaje de error del backend es el texto
+ * exacto del toast a mostrar.
+ *
+ * @param {number} reservaId
+ * @returns {Promise<{ reserva_id: number, qr: string, actividad: string, fecha: string, hora: string }>}
+ */
+export function getReservaQr(reservaId) {
+  return request(`/api/asistencias/reservas/${reservaId}/qr`, {
+    fallback: "No se pudo generar el código QR.",
+  });
+}
+
+/**
+ * Registra la asistencia a partir del código escaneado. Sólo admin/empleado.
+ * Errores: 404 QR ajeno al sistema, 409 ya registrado; el mensaje es el toast.
+ *
+ * @param {string} codigo - texto crudo leído del QR
+ * @returns {Promise<{ ok: boolean, reserva_id: number, cliente: { nombre: string, apellido: string, email: string }|null, actividad: string, hora: string }>}
+ */
+export function registrarAsistencia(codigo) {
+  return request("/api/asistencias/escanear", {
+    method: "POST",
+    body: { codigo },
+    fallback: "No se pudo registrar la asistencia.",
+  });
+}
+
+/**
+ * Historial de reservas del usuario para Mi Historial: todas las fechas
+ * (pasadas incluidas) con su estado de asistencia.
+ *
+ * @returns {Promise<Array<{ reserva_id: number, actividad: string, fecha: string, dia_semana: string, hora: string, tipo: string, estado: "asistio"|"ausente"|"pendiente" }>>}
+ */
+export function listMiHistorial() {
+  return request("/api/asistencias/historial", {
+    fallback: "No pudimos cargar tu historial.",
   });
 }

@@ -78,7 +78,7 @@ class ActividadService:
         for turno in actividad.turnos:
             for reserva in [r for r in turno.reservas if r.fecha >= hoy]:
                 registro = self.pago_service.registrar_cancelacion(
-                    reserva.id, reembolsar=True
+                    reserva.id, resolucion=PagoEstado.REEMBOLSADO
                 )
                 motivo = (
                     MotivoCancelacion.REEMBOLSADO

@@ -13,17 +13,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
+import { diaLabelMinuscula, formatHora } from "@/lib/fecha";
 import { ApiError, updateTurno } from "./api";
-
-const DAY_LABEL = {
-  lunes: "lunes",
-  martes: "martes",
-  miercoles: "miércoles",
-  jueves: "jueves",
-  viernes: "viernes",
-  sabado: "sábado",
-  domingo: "domingo",
-};
 
 export default function EditTurnoDialog({
   open,
@@ -77,8 +68,8 @@ export default function EditTurnoDialog({
     }
   };
 
-  const dayLabel = turno ? (DAY_LABEL[turno.dia_semana] ?? turno.dia_semana) : "";
-  const hora = turno?.hora?.slice(0, 5) ?? turno?.hora ?? "";
+  const dayLabel = turno ? diaLabelMinuscula(turno.dia_semana) : "";
+  const hora = turno ? formatHora(turno.hora) : "";
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
