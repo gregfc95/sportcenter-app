@@ -10,9 +10,14 @@ import {
 
 import { usePageTitle } from "@/lib/usePageTitle";
 import { PageHeading } from "@/components/ui/page-heading";
+import { SegmentedControl } from "@/components/ui/segmented-control";
 import { ActividadIcon } from "@/components/actividades/ActividadIcon";
 import { TipoChip } from "@/components/ui/tipo-chip";
 import { listSesionesReservadas } from "@/components/reservas/api";
+import {
+  FILTROS_TIPO,
+  filtrarSesionesPorTipo,
+} from "@/components/reservas/filtros";
 import { formatReservaFecha, todayISO } from "@/lib/fecha";
 import { cn } from "@/lib/utils";
 
@@ -108,6 +113,7 @@ export default function TurnosReservadosPage() {
 
   const [sesiones, setSesiones] = useState([]);
   const [loaded, setLoaded] = useState(false);
+  const [filtro, setFiltro] = useState("todos");
 
   useEffect(() => {
     let active = true;
@@ -133,11 +139,11 @@ export default function TurnosReservadosPage() {
     const hoy = todayISO();
     const proximos = [];
     const pasados = [];
-    for (const sesion of sesiones) {
+    for (const sesion of filtrarSesionesPorTipo(sesiones, filtro)) {
       (sesion.fecha < hoy ? pasados : proximos).push(sesion);
     }
     return { proximos, pasados };
-  }, [sesiones]);
+  }, [sesiones, filtro]);
 
   const hasSesiones = sesiones.length > 0;
 
@@ -152,6 +158,19 @@ export default function TurnosReservadosPage() {
 
       {!loaded ? null : hasSesiones ? (
         <div className="flex flex-col gap-lg">
+          <SegmentedControl
+            options={FILTROS_TIPO}
+            value={filtro}
+            onChange={setFiltro}
+            aria-label="Filtrar por tipo de reserva"
+          />
+
+          {proximos.length === 0 && pasados.length === 0 && (
+            <p className="text-body-md text-on-surface-variant">
+              No hay turnos {filtro === "mensual" ? "mensuales" : "eventuales"}.
+            </p>
+          )}
+
           {proximos.length > 0 && (
             <section className="flex flex-col gap-md">
               <h2 className="text-headline-md text-on-surface">Próximos</h2>

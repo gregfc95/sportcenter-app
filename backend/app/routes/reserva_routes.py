@@ -248,6 +248,10 @@ def list_sesiones_reservadas() -> Response:
             if r.fecha == fecha and r.estado_espera is None
         ]
         asistencias = sum(1 for r in reservas_sesion if r.asistio)
+        # Una sesión puede mezclar mensuales y eventuales; exponemos los tipos
+        # presentes (orden fijo) para el chip de la lista de Turnos Reservados.
+        tipos_presentes = {r.tipo.value for r in reservas_sesion}
+        tipos = [t for t in ("mensual", "eventual") if t in tipos_presentes]
         payload.append(
             {
                 "turno_id": turno.id,
@@ -259,6 +263,7 @@ def list_sesiones_reservadas() -> Response:
                 "ocupados": turno.cupo - disponibles,
                 "reservas": len(reservas_sesion),
                 "asistencias": asistencias,
+                "tipos": tipos,
             }
         )
 

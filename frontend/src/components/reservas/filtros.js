@@ -16,3 +16,19 @@ export const FILTROS_TIPO = [
 export function filtrarPorTipo(items, filtro) {
   return filtro === "todos" ? items : items.filter((i) => i.tipo === filtro);
 }
+
+/**
+ * Filtra sesiones por tipo (vista de Turnos Reservados). A diferencia de las
+ * reservas, cada sesión agrega varias reservas y trae un array `tipos` que
+ * puede mezclar mensual y eventual; coincide si el tipo buscado está presente.
+ * `todos` devuelve la lista sin tocar.
+ *
+ * @param {Array} sesiones - sesiones (traen `tipos`).
+ * @param {string} filtro - valor de `FILTROS_TIPO`.
+ * @returns {Array} las sesiones que pasan el filtro.
+ */
+export function filtrarSesionesPorTipo(sesiones, filtro) {
+  return filtro === "todos"
+    ? sesiones
+    : sesiones.filter((s) => s.tipos?.includes(filtro));
+}
