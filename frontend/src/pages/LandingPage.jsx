@@ -11,7 +11,7 @@ import {
   Check,
 } from "lucide-react";
 
-import { useTheme } from "@/lib/ThemeContext";
+import { useTheme } from "@/lib/useTheme";
 import { usePageTitle } from "@/lib/usePageTitle";
 
 import principalLight from "@/assets/image-principal-light.png";

@@ -16,12 +16,10 @@ import { cn, formatPrice } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { EstadoBadge } from "@/components/ui/estado-badge";
 import { Input } from "@/components/ui/input";
+import { TipoChip } from "@/components/ui/tipo-chip";
 import { getActividadIcon } from "@/components/actividades/actividadIcons";
 import { getSesionReservada, registrarPagoManual } from "@/components/reservas/api";
 import RegistrarPagoDialog from "@/components/reservas/RegistrarPagoDialog";
-
-// Una reserva mensual es de un cliente abonado; una eventual, de paso.
-const TIPO_LABELS = { eventual: "Eventual", mensual: "Abonado" };
 
 function formatFechaLarga(iso, diaSemana) {
   if (!iso) return "—";
@@ -284,7 +282,6 @@ export default function TurnoReservadoDetailPage() {
                   </tr>
                 ) : (
                   filtered.map((reserva) => {
-                    const abonado = reserva.tipo === "mensual";
                     return (
                       <tr
                         key={reserva.id}
@@ -302,16 +299,8 @@ export default function TurnoReservadoDetailPage() {
                             )}
                           </div>
                         </td>
-                        <td className="py-sm px-md text-body-md">
-                          <span
-                            className={cn(
-                              abonado
-                                ? "text-primary"
-                                : "text-on-surface-variant",
-                            )}
-                          >
-                            {TIPO_LABELS[reserva.tipo] ?? reserva.tipo}
-                          </span>
+                        <td className="py-sm px-md">
+                          <TipoChip tipo={reserva.tipo} />
                         </td>
                         <td className="py-sm px-md text-center">
                           <EstadoBadge estado={reserva.estado} />

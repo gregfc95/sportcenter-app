@@ -1,15 +1,22 @@
 import { useState } from "react";
-import { CalendarDays, Users } from "lucide-react";
+import { CalendarDays, Clock, Users } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { EstadoBadge } from "@/components/ui/estado-badge";
 import { TipoChip } from "@/components/ui/tipo-chip";
-import { getActividadIcon } from "@/components/actividades/actividadIcons";
+import { ActividadIcon } from "@/components/actividades/ActividadIcon";
 import ClasesMensuales from "@/components/reservas/ClasesMensuales";
 import PagarMensualidadDialog from "@/components/reservas/PagarMensualidadDialog";
 import CancelarReservaDialog from "@/components/reservas/CancelarReservaDialog";
 import CancelarAbonoDialog from "@/components/reservas/CancelarAbonoDialog";
+import SalirEsperaDialog from "@/components/reservas/SalirEsperaDialog";
+import PagarEsperaBloqueado from "@/components/reservas/PagarEsperaBloqueado";
 import VerQrDialog from "@/components/reservas/VerQrDialog";
+import {
+  esperaDetalle,
+  esperaOfertaActiva,
+  formatRenovacionLimite,
+} from "@/components/reservas/listaEspera";
 import { formatReservaFecha, mesLabel } from "@/lib/fecha";
 import { cn } from "@/lib/utils";
 import { STATUS_META } from "./statusMeta";
@@ -58,20 +65,27 @@ export default function BookingCardMensual({
   capacity,
   mensualidad,
   turno,
+  espera,
+  renovacion,
+  descuento,
   onCancelled,
+  onPagado,
 }) {
   const meta = STATUS_META[status] ?? STATUS_META.pendiente;
-  const Icon = getActividadIcon(sport);
   const pagado = status === "pagado";
+  const enEspera = status === "en_espera";
+  const ofertaActiva = esperaOfertaActiva(espera);
   // Mismo criterio que la card eventual; el cupo es el de la próxima clase.
   const showCapacity = Boolean(capacity);
 
   const clases = mensualidad.clases;
   // Las canceladas se muestran tachadas pero no cuentan para selección,
-  // sesiones ni pago.
+  // sesiones ni pago. Una clase asistida hoy no es "pasada" pero tampoco es
+  // próxima: no se puede cancelar ni volver a asistir, así que sale del set
+  // seleccionable y del cálculo de la próxima.
   const vivas = clases.filter((c) => !c.cancelada);
-  const proximas = vivas.filter((c) => !c.pasada);
-  const pasadas = vivas.length - proximas.length;
+  const proximas = vivas.filter((c) => !c.pasada && !c.asistencia);
+  const asistidas = vivas.filter((c) => c.asistencia).length;
   const proximaDatetime = proximas[0]
     ? formatReservaFecha(proximas[0].fecha, turno.hora)
     : null;
@@ -99,7 +113,11 @@ export default function BookingCardMensual({
       <div className="flex justify-between items-start gap-sm pl-xs">
         <div className="flex flex-col gap-xs">
           <div className="flex items-center gap-xs">
-            <Icon className={cn("size-5", meta.icon)} strokeWidth={2} />
+            <ActividadIcon
+              actividad={sport}
+              className={cn("size-5", meta.icon)}
+              strokeWidth={2}
+            />
             <h4 className="text-label-md uppercase tracking-wider text-primary">
               {sport}
             </h4>
@@ -133,6 +151,22 @@ export default function BookingCardMensual({
         <EstadoBadge estado={status} />
       </div>
 
+      {enEspera && (
+        <div className="pl-xs flex items-center gap-xs text-label-sm text-info-blue">
+          <Clock className="size-4 shrink-0" strokeWidth={2} />
+          <span>{esperaDetalle(espera)}</span>
+        </div>
+      )}
+      {renovacion && (
+        <div className="pl-xs flex items-center gap-xs text-label-sm text-accent">
+          <Clock className="size-4 shrink-0" strokeWidth={2} />
+          <span>
+            Renovación · Pagá antes del{" "}
+            {formatRenovacionLimite(renovacion.fecha_limite)} o perdés el lugar
+          </span>
+        </div>
+      )}
+
       <div className="pl-xs">
         <ClasesMensuales
           clases={clases}
@@ -144,7 +178,7 @@ export default function BookingCardMensual({
 
       <div className="pl-xs flex items-center gap-2 text-label-sm text-on-surface-variant">
         <span>
-          {pasadas} de {vivas.length}{" "}
+          {asistidas} de {vivas.length}{" "}
           {vivas.length === 1 ? "sesión" : "sesiones"}
           {proximaDatetime ? ` · próxima: ${proximaDatetime}` : ""}
         </span>
@@ -158,7 +192,30 @@ export default function BookingCardMensual({
           </span>
         )}
         <div className="ml-auto flex items-center gap-sm">
-          {pagado ? (
+          {enEspera ? (
+            <>
+              <SalirEsperaDialog
+                reservaId={reservaId}
+                actividad={sport}
+                onCancelled={onCancelled}
+                trigger={<CancelarTrigger label="Salir" />}
+              />
+              {ofertaActiva ? (
+                <PagarMensualidadDialog
+                  reservaId={reservaId}
+                  actividad={sport}
+                  datetime={proximaDatetime}
+                  clases={vivas.length}
+                  total={mensualidad.total}
+                  descuento={descuento}
+                  onPagado={onPagado}
+                  trigger={<PagarTrigger />}
+                />
+              ) : (
+                <PagarEsperaBloqueado />
+              )}
+            </>
+          ) : pagado ? (
             claseSeleccionada && (
               <>
                 <CancelarReservaDialog
@@ -202,6 +259,8 @@ export default function BookingCardMensual({
                 datetime={proximaDatetime}
                 clases={vivas.length}
                 total={mensualidad.total}
+                descuento={descuento}
+                onPagado={onPagado}
                 trigger={<PagarTrigger />}
               />
             </>

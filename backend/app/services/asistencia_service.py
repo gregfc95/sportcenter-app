@@ -1,10 +1,10 @@
 import base64
 import secrets
-from datetime import date, datetime, timezone
+from datetime import datetime, timezone
 from io import BytesIO
 
 import qrcode
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import joinedload
 
 from .. import db
@@ -26,13 +26,20 @@ class QrYaUtilizado(ValueError):
     """El código ya fue usado para registrar asistencia (409)."""
 
 
-def estado_asistencia(reserva: Reserva, hoy: date) -> str:
-    """Estado para el historial del cliente: asistio / ausente / pendiente."""
+def estado_asistencia(reserva: Reserva) -> str:
+    """Estado de una reserva ya resuelta para Mi Historial: cancelado / asistio / ausente.
+
+    La cancelación (soft-delete) va primero: un turno cancelado liberó su lugar,
+    así que se muestra "Cancelado" y nunca se cuenta como inasistencia. Solo se
+    llama sobre reservas resueltas —`historial_usuario` deja fuera las
+    pendientes/futuras—, por eso una reserva activa sin asistencia es siempre una
+    inasistencia pasada.
+    """
+    if reserva.is_deleted:
+        return "cancelado"
     if reserva.asistencia_registrada_at is not None:
         return "asistio"
-    if reserva.fecha < hoy:
-        return "ausente"
-    return "pendiente"
+    return "ausente"
 
 
 class AsistenciaService:
@@ -96,15 +103,28 @@ class AsistenciaService:
         return reserva
 
     def historial_usuario(self, user_id: int) -> list[Reserva]:
-        """Todas las reservas activas del usuario, más recientes primero.
+        """Reservas resueltas del usuario para Mi Historial, más recientes primero.
 
-        A diferencia de `ReservaService.listar_por_usuario` incluye las fechas
-        pasadas: es la fuente de Mi Historial (asistió / ausente / pendiente).
+        Solo estados resueltos —cancelada, con asistencia, o de fecha pasada—; las
+        pendientes/futuras quedan fuera (viven en Mis Turnos). Con `include_deleted`
+        reaparecen las canceladas para mostrarlas como "Cancelado" de inmediato,
+        aunque su fecha sea futura; cancelar es el único soft-delete de una reserva,
+        así que solo vuelven esas. Excluye la lista de espera: no son asistencias.
         """
+        hoy = datetime.now(tz=AR_TZ).date()
         stmt = (
             select(Reserva)
-            .where(Reserva.user_id == user_id)
+            .where(
+                Reserva.user_id == user_id,
+                Reserva.estado_espera.is_(None),
+                or_(
+                    Reserva.deleted_at.isnot(None),
+                    Reserva.asistencia_registrada_at.isnot(None),
+                    Reserva.fecha < hoy,
+                ),
+            )
             .options(joinedload(Reserva.turno).joinedload(Turno.actividad))
             .order_by(Reserva.fecha.desc())
+            .execution_options(include_deleted=True)
         )
         return db.session.execute(stmt).scalars().all()

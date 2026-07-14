@@ -54,6 +54,12 @@ class Turno(SoftDeleteMixin, db.Model):
         lazy=True,
         passive_deletes=True,
     )
+    fechas_bloqueadas = db.relationship(
+        "TurnoFechaBloqueada",
+        back_populates="turno",
+        lazy=True,
+        passive_deletes=True,
+    )
 
     __table_args__ = (
         db.Index(

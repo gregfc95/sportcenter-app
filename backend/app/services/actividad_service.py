@@ -5,14 +5,11 @@ from sqlalchemy.exc import IntegrityError
 
 from .. import db
 from ..models import Actividad
-from ..models.reserva import MotivoCancelacion
 from .pago_service import PagoService
-from .reserva_service import ReservaService
 
 
 class ActividadService:
     def __init__(self):
-        self.reserva_service = ReservaService()
         self.pago_service = PagoService()
 
     def obtener_todas(self) -> list[Actividad]:
@@ -69,20 +66,10 @@ class ActividadService:
     def _cancelar_reservas_vigentes(self, actividad: Actividad) -> None:
         """Cancela y reembolsa las reservas vigentes de todos los turnos.
 
-        El filtro global de soft-delete deja fuera las reservas ya canceladas, así
-        que solo se procesan las activas. `registrar_cancelacion` asienta el
-        reembolso (devuelve None si no había nada cobrado: reserva pendiente, que
-        igual se cancela como CANCELADO).
+        El filtro global de soft-delete deja fuera las reservas ya canceladas,
+        así que solo se procesan las activas.
         """
         hoy = date.today()
         for turno in actividad.turnos:
             for reserva in [r for r in turno.reservas if r.fecha >= hoy]:
-                registro = self.pago_service.registrar_cancelacion(
-                    reserva.id, resolucion=PagoEstado.REEMBOLSADO
-                )
-                motivo = (
-                    MotivoCancelacion.REEMBOLSADO
-                    if registro is not None
-                    else MotivoCancelacion.CANCELADO
-                )
-                self.reserva_service.cancelar_reserva(reserva.id, motivo=motivo)
+                self.pago_service.cancelar_reserva_por_baja(reserva.id)

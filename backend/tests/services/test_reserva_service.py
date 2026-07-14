@@ -4,8 +4,10 @@ from datetime import date, time, timedelta
 
 import pytest
 
+from app import db
 from app.models.reserva import MotivoCancelacion, ReservaTipo
 from app.models.turno import DiaSemana
+from app.models.turno_fecha_bloqueada import TurnoFechaBloqueada
 from app.services.reserva_service import ReservaService, fechas_mensuales
 
 svc = ReservaService()
@@ -275,3 +277,65 @@ class TestListarPorUsuario:
 
         svc.cancelar_reserva(reserva.id)
         assert svc.listar_por_usuario(user.id) == []
+
+
+class TestFechasBloqueadas:
+    """Reservas contra fechas dadas de baja por el centro (`turno_fechas_bloqueadas`)."""
+
+    def _bloquear(self, turno, fecha):
+        db.session.add(TurnoFechaBloqueada(turno_id=turno.id, fecha=fecha))
+        db.session.commit()
+
+    def test_eventual_sobre_fecha_bloqueada_falla(
+        self, make_user, make_actividad, make_turno, next_date_for
+    ):
+        user = make_user()
+        turno = make_turno(make_actividad(), dia_semana=DiaSemana.LUNES)
+        fecha = next_date_for(DiaSemana.LUNES)
+        self._bloquear(turno, fecha)
+
+        with pytest.raises(ValueError, match="no está disponible"):
+            svc.crear_reserva(user.id, turno.id, fecha)
+
+    def test_otro_turno_misma_fecha_no_se_bloquea(
+        self, make_user, make_actividad, make_turno, next_date_for
+    ):
+        # El bloqueo es por turno, no por día del centro.
+        user = make_user()
+        turno_a = make_turno(make_actividad(), dia_semana=DiaSemana.LUNES, hora=time(10, 0))
+        turno_b = make_turno(make_actividad(), dia_semana=DiaSemana.LUNES, hora=time(16, 0))
+        fecha = next_date_for(DiaSemana.LUNES)
+        self._bloquear(turno_a, fecha)
+
+        reserva = svc.crear_reserva(user.id, turno_b.id, fecha)
+        assert reserva.id is not None
+
+    def test_mensual_saltea_la_fecha_bloqueada(
+        self, make_user, make_actividad, make_turno, next_date_for
+    ):
+        user = make_user()
+        turno = make_turno(make_actividad(), dia_semana=DiaSemana.LUNES)
+        # Fecha de inicio con al menos dos clases restantes en el mes, para que
+        # el salteo deje un abono no vacío.
+        fecha = next_date_for(DiaSemana.LUNES)
+        while len(fechas_mensuales(fecha)) < 2:
+            fecha += timedelta(days=7)
+        bloqueada = fechas_mensuales(fecha)[1]
+        self._bloquear(turno, bloqueada)
+
+        reservas = svc.crear_reserva_mensual(user.id, turno.id, fecha)
+
+        esperadas = [f for f in fechas_mensuales(fecha) if f != bloqueada]
+        assert [r.fecha for r in reservas] == esperadas
+
+    def test_mensual_con_todas_las_fechas_bloqueadas_falla(
+        self, make_user, make_actividad, make_turno, next_date_for
+    ):
+        user = make_user()
+        turno = make_turno(make_actividad(), dia_semana=DiaSemana.LUNES)
+        fecha = next_date_for(DiaSemana.LUNES)
+        for f in fechas_mensuales(fecha):
+            self._bloquear(turno, f)
+
+        with pytest.raises(ValueError, match="clases disponibles"):
+            svc.crear_reserva_mensual(user.id, turno.id, fecha)

@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
   ChevronRight,
   ChevronLeft,
   CheckCircle2,
   ArrowRight,
   Handshake,
+  Users,
+  Wallet,
 } from "lucide-react";
 
 import { toast } from "sonner";
@@ -17,7 +19,12 @@ import {
   listActividades,
   listTurnosByActividad,
 } from "@/components/actividades/api";
-import { crearCheckout } from "@/components/reservas/api";
+import {
+  crearCheckout,
+  getCreditoAplicable,
+  getEstadoMensual,
+} from "@/components/reservas/api";
+import UnirseEsperaDialog from "@/components/reservas/UnirseEsperaDialog";
 import { cn, formatPrice } from "@/lib/utils";
 import {
   MESES,
@@ -73,6 +80,7 @@ function buildMonthCells(year, month) {
 
 export default function NuevaReservaPage() {
   usePageTitle("Nueva Reserva");
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const actividadParam = searchParams.get("actividad");
 
@@ -98,6 +106,11 @@ export default function NuevaReservaPage() {
   // so it's already correct on the render where the selection changes — no
   // flash of "no turnos" before the fetch effect gets a chance to run.
   const [loadedDayTurnosKey, setLoadedDayTurnosKey] = useState(null);
+  // Crédito a favor disponible para la actividad elegida (saldo canjeable).
+  const [creditoDisponible, setCreditoDisponible] = useState(0);
+  // Descuento de fidelidad del cliente (0 o 20). Es por usuario, no por
+  // actividad; el backend lo recomputa al cobrar. Solo aplica a abonos mensuales.
+  const [descuentoPct, setDescuentoPct] = useState(0);
 
   useEffect(() => {
     let active = true;
@@ -108,6 +121,22 @@ export default function NuevaReservaPage() {
       })
       .catch(() => {
         if (active) setActividades([]);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  // Descuento de fidelidad del cliente, para reflejarlo en el preview del abono
+  // (el backend lo aplica al cobrar). Se pierde con penalizaciones/suspensión.
+  useEffect(() => {
+    let active = true;
+    getEstadoMensual()
+      .then((data) => {
+        if (active) setDescuentoPct(data?.descuento_pct ?? 0);
+      })
+      .catch(() => {
+        if (active) setDescuentoPct(0);
       });
     return () => {
       active = false;
@@ -126,6 +155,23 @@ export default function NuevaReservaPage() {
       })
       .catch(() => {
         if (active) setTurnos([]);
+      });
+    return () => {
+      active = false;
+    };
+  }, [actividadId]);
+
+  // Crédito a favor de la actividad: se auto-aplica como descuento en el
+  // checkout. Es una vista previa; el backend lo recomputa al confirmar.
+  useEffect(() => {
+    if (!actividadId) return;
+    let active = true;
+    getCreditoAplicable({ actividadId })
+      .then((data) => {
+        if (active) setCreditoDisponible(data?.saldo_disponible ?? 0);
+      })
+      .catch(() => {
+        if (active) setCreditoDisponible(0);
       });
     return () => {
       active = false;
@@ -223,14 +269,29 @@ export default function NuevaReservaPage() {
 
   const esMensual = tipo === "mensual";
 
+  // Un horario admite lista de espera cuando no está bloqueado ni pasado pero
+  // no tiene lugar: cupo lleno, o marcado por el backend (`lista_espera`) porque
+  // hay demanda esperando aunque figure algún lugar (prioridad estricta).
+  const slotJoinable = (slot) =>
+    Boolean(slot) &&
+    !slot.bloqueado &&
+    !isSlotPast(selectedDate, slot.hora) &&
+    (slot.disponibles === 0 || slot.lista_espera);
+  const selectedEnEspera = slotJoinable(selectedTurno);
+
   // El calendario recién se habilita cuando hay actividad Y tipo elegidos.
   const configReady = Boolean(actividadId) && Boolean(tipo);
 
-  // Fechas del abono (mensual): desde la fecha elegida hasta fin de mes.
-  const fechasMes = useMemo(
-    () => (esMensual && selectedDate ? fechasMensuales(selectedDate) : []),
-    [esMensual, selectedDate],
-  );
+  // Fechas del abono (mensual): desde la fecha elegida hasta fin de mes, sin
+  // las fechas que el centro dio de baja para el turno elegido (el backend
+  // también las saltea al crear el abono, así el preview coincide con el cobro).
+  const fechasMes = useMemo(() => {
+    if (!esMensual || !selectedDate) return [];
+    const bloqueadas = new Set(selectedTurno?.fechas_bloqueadas ?? []);
+    return fechasMensuales(selectedDate).filter(
+      (fecha) => !bloqueadas.has(toISODate(fecha)),
+    );
+  }, [esMensual, selectedDate, selectedTurno]);
 
   // ISO de todas las fechas del abono, para marcarlas en el calendario.
   const fechasAbonoISO = useMemo(
@@ -243,33 +304,74 @@ export default function NuevaReservaPage() {
   // Mensual: se paga el total de las clases restantes del mes, sin seña.
   const precioClase = selectedActividad ? Number(selectedActividad.precio) : null;
   const sena = precioClase != null ? precioClase / 2 : null;
-  const totalMensualidad =
+  // Descuento de fidelidad (solo mensual): se cuantiza por clase, igual que el
+  // backend (`monto_clase_mensualidad`), para que el preview coincida con el cobro.
+  const aplicaDescuento = esMensual && descuentoPct > 0 && precioClase != null;
+  const montoClaseMensual =
+    aplicaDescuento
+      ? Math.round(precioClase * (1 - descuentoPct / 100) * 100) / 100
+      : precioClase;
+  const totalMensualBruto =
     precioClase != null && fechasMes.length > 0
       ? precioClase * fechasMes.length
       : null;
+  const totalMensualidad =
+    montoClaseMensual != null && fechasMes.length > 0
+      ? montoClaseMensual * fechasMes.length
+      : null;
+  const descuentoFidelidad =
+    aplicaDescuento && totalMensualBruto != null
+      ? totalMensualBruto - totalMensualidad
+      : 0;
   const montoAPagar = esMensual ? totalMensualidad : sena;
-  const total = montoAPagar != null ? formatPrice(montoAPagar) : "—";
+  // Crédito a favor aplicado: nunca más que el monto a pagar. Si lo cubre todo,
+  // el checkout saltea Mercado Pago.
+  const descuentoCredito =
+    montoAPagar != null ? Math.min(creditoDisponible, montoAPagar) : 0;
+  const totalFinal = montoAPagar != null ? montoAPagar - descuentoCredito : null;
+  const cubiertoConCredito = totalFinal === 0 && descuentoCredito > 0;
+  const total = totalFinal != null ? formatPrice(totalFinal) : "—";
 
   const [submitting, setSubmitting] = useState(false);
+  // Diálogo de lista de espera: se abre al elegir un horario lleno o cuando el
+  // backend responde 409 (p. ej. un abono cuyo mes tiene alguna clase llena).
+  const [esperaOpen, setEsperaOpen] = useState(false);
 
   const handleConfirm = async () => {
     if (!selectedTurno || submitting) return;
     setSubmitting(true);
     try {
-      const { init_point, reserva_id } = await crearCheckout({
+      const resp = await crearCheckout({
         turno_id: selectedTurno.id,
         fecha: toISODate(selectedDate),
         tipo,
       });
+      // Crédito cubrió el total: el pago ya quedó registrado, no hay redirección.
+      if (resp.pagado_con_credito) {
+        toast.success(
+          esMensual
+            ? "Reserva confirmada. Abono pagado con tu crédito a favor."
+            : "Reserva confirmada. Seña pagada con tu crédito a favor.",
+        );
+        navigate("/mis-turnos");
+        return;
+      }
       // Guardamos la seña y la reserva para confirmarla y mostrar el toast al
       // volver de Mercado Pago; sessionStorage sobrevive la ida y vuelta en la
       // misma pestaña.
       if (!esMensual && sena != null)
         sessionStorage.setItem("pago_sena", String(sena));
-      sessionStorage.setItem("pago_reserva_id", String(reserva_id));
+      sessionStorage.setItem("pago_reserva_id", String(resp.reserva_id));
       // Redirige al Checkout Pro de Mercado Pago.
-      window.location.href = init_point;
+      window.location.href = resp.init_point;
     } catch (err) {
+      // 409: el turno está lleno o hay lista de espera (para un abono, alguna
+      // clase del mes). Se ofrece anotarse en la lista en vez de fallar.
+      if (err?.status === 409) {
+        setSubmitting(false);
+        setEsperaOpen(true);
+        return;
+      }
       toast.error(err?.message ?? "No se pudo iniciar el pago.");
       setSubmitting(false);
     }
@@ -532,7 +634,7 @@ export default function NuevaReservaPage() {
                       ? ""
                       : loadingDayTurnos
                         ? ""
-                        : `${slotsForDay.filter((t) => t.disponibles !== 0 && !isSlotPast(selectedDate, t.hora)).length} horarios disponibles`}
+                        : `${slotsForDay.filter((t) => t.disponibles !== 0 && !t.bloqueado && !isSlotPast(selectedDate, t.hora)).length} horarios disponibles`}
               </p>
             </div>
 
@@ -553,9 +655,10 @@ export default function NuevaReservaPage() {
                 </div>
               ) : (
                 slotsForDay.map((slot) => {
-                  const isFull = slot.disponibles === 0;
                   const past = isSlotPast(selectedDate, slot.hora);
-                  if (isFull || past) {
+                  // Bloqueado o pasado: muerto. Lleno o con lista de espera:
+                  // seleccionable para anotarse en la lista.
+                  if (slot.bloqueado || past) {
                     return (
                       <div
                         key={slot.id}
@@ -565,11 +668,12 @@ export default function NuevaReservaPage() {
                           {formatHora(slot.hora)}
                         </span>
                         <span className="text-label-sm text-error bg-error/10 px-2 py-1 rounded">
-                          {isFull ? "Turno Lleno" : "Horario pasado"}
+                          {slot.bloqueado ? "No disponible" : "Horario pasado"}
                         </span>
                       </div>
                     );
                   }
+                  const joinable = slot.disponibles === 0 || slot.lista_espera;
                   const selected = selectedSlot === slot.id;
                   return (
                     <button
@@ -580,7 +684,9 @@ export default function NuevaReservaPage() {
                         "w-full border rounded-lg p-3 flex justify-between items-center transition-all group",
                         selected
                           ? "border-primary bg-surface-container-high"
-                          : "border-outline-variant bg-surface-container-low hover:border-primary hover:bg-surface-container-high",
+                          : joinable
+                            ? "border-info-blue/40 bg-info-blue/5 hover:border-info-blue"
+                            : "border-outline-variant bg-surface-container-low hover:border-primary hover:bg-surface-container-high",
                       )}
                     >
                       <div className="flex items-center gap-3">
@@ -591,12 +697,21 @@ export default function NuevaReservaPage() {
                           {formatHora(slot.hora)}
                         </span>
                       </div>
-                      <span className="text-label-sm text-on-surface-variant text-right">
+                      <span
+                        className={cn(
+                          "text-label-sm text-right",
+                          joinable ? "text-info-blue" : "text-on-surface-variant",
+                        )}
+                      >
                         {selected
-                          ? "Seleccionado"
-                          : slot.disponibles != null
-                            ? `${slot.disponibles} ${slot.disponibles === 1 ? "lugar" : "lugares"}`
-                            : "Seleccionar"}
+                          ? joinable
+                            ? "En lista de espera"
+                            : "Seleccionado"
+                          : joinable
+                            ? "Lleno · Lista de espera"
+                            : slot.disponibles != null
+                              ? `${slot.disponibles} ${slot.disponibles === 1 ? "lugar" : "lugares"}`
+                              : "Seleccionar"}
                       </span>
                     </button>
                   );
@@ -677,69 +792,137 @@ export default function NuevaReservaPage() {
 
         {/* Section 4: summary */}
         <section className="bg-surface-container-high rounded-xl p-md md:p-lg border border-accent/15 flex flex-col gap-4 shadow-lg">
-          <div className="flex flex-col gap-2 text-body-md text-on-surface-variant border-b border-outline-variant pb-4">
-            {!tipo ? (
-              <div className="flex justify-between items-center">
-                <span>Total a pagar:</span>
-                <span className="text-on-surface text-label-md">—</span>
-              </div>
-            ) : esMensual ? (
-              <div className="flex justify-between items-center">
+          {selectedEnEspera ? (
+            <>
+              <div className="flex items-start gap-3 rounded-lg border border-info-blue/30 bg-info-blue/10 p-3 text-body-md text-on-surface-variant">
+                <Users
+                  className="size-4 shrink-0 text-info-blue mt-0.5"
+                  aria-hidden="true"
+                />
                 <span>
-                  Clases del mes
-                  {selectedTurno && fechasMes.length > 0
-                    ? ` (${fechasMes.length})`
-                    : ""}
-                  :
-                </span>
-                <span className="text-on-surface text-label-md">
-                  {selectedTurno && precioClase != null && fechasMes.length > 0
-                    ? `${fechasMes.length} × ${formatPrice(precioClase)}`
-                    : "—"}
+                  {esMensual
+                    ? "Alguna clase del mes está llena."
+                    : "Este turno está lleno."}{" "}
+                  Podés anotarte en la lista de espera: no se cobra nada hasta que
+                  se libere un lugar y te avisemos por email.
                 </span>
               </div>
-            ) : (
-              <div className="flex justify-between items-center">
-                <span>Seña a pagar (50%):</span>
-                <span className="text-on-surface text-label-md">
-                  {selectedTurno && sena != null ? formatPrice(sena) : "—"}
-                </span>
+              <Button
+                type="button"
+                size="lg"
+                onClick={() => setEsperaOpen(true)}
+                disabled={!selectedTurno}
+                className="w-full mt-2"
+              >
+                Anotarme en la Lista de Espera
+                <ArrowRight className="size-5" />
+              </Button>
+            </>
+          ) : (
+            <>
+              <div className="flex flex-col gap-2 text-body-md text-on-surface-variant border-b border-outline-variant pb-4">
+                {!tipo ? (
+                  <div className="flex justify-between items-center">
+                    <span>Total a pagar:</span>
+                    <span className="text-on-surface text-label-md">—</span>
+                  </div>
+                ) : esMensual ? (
+                  <div className="flex justify-between items-center">
+                    <span>
+                      Clases del mes
+                      {selectedTurno && fechasMes.length > 0
+                        ? ` (${fechasMes.length})`
+                        : ""}
+                      :
+                    </span>
+                    <span className="text-on-surface text-label-md">
+                      {selectedTurno && precioClase != null && fechasMes.length > 0
+                        ? `${fechasMes.length} × ${formatPrice(precioClase)}`
+                        : "—"}
+                    </span>
+                  </div>
+                ) : (
+                  <div className="flex justify-between items-center">
+                    <span>Seña a pagar (50%):</span>
+                    <span className="text-on-surface text-label-md">
+                      {selectedTurno && sena != null ? formatPrice(sena) : "—"}
+                    </span>
+                  </div>
+                )}
+                {selectedTurno && descuentoFidelidad > 0 && (
+                  <div className="flex justify-between items-center text-success-green">
+                    <span>Descuento fidelidad ({descuentoPct}%):</span>
+                    <span className="text-label-md">
+                      −{formatPrice(descuentoFidelidad)}
+                    </span>
+                  </div>
+                )}
+                {selectedTurno && descuentoCredito > 0 && (
+                  <div className="flex justify-between items-center text-credit-violet">
+                    <span>Crédito a favor:</span>
+                    <span className="text-label-md">
+                      −{formatPrice(descuentoCredito)}
+                    </span>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
 
-          <div className="flex justify-between items-end pt-2">
-            <div className="flex flex-col">
-              <span className="text-label-sm text-on-surface-variant uppercase tracking-wider mb-1">
-                {!tipo
-                  ? "Total a pagar"
-                  : esMensual
-                    ? "Total mensualidad"
-                    : "Total a pagar (seña)"}
-              </span>
-              <span className="text-headline-lg text-primary leading-none">
-                {selectedTurno ? total : "—"}
-              </span>
-            </div>
-            <div className="flex items-center gap-1 bg-[#009EE3]/10 px-3 py-1.5 rounded-full border border-[#009EE3]/30">
-              <Handshake className="size-4 text-[#009EE3]" />
-              <span className="text-label-sm font-bold text-[#009EE3]">
-                MercadoPago
-              </span>
-            </div>
-          </div>
+              <div className="flex justify-between items-end pt-2">
+                <div className="flex flex-col">
+                  <span className="text-label-sm text-on-surface-variant uppercase tracking-wider mb-1">
+                    {!tipo
+                      ? "Total a pagar"
+                      : esMensual
+                        ? "Total mensualidad"
+                        : "Total a pagar (seña)"}
+                  </span>
+                  <span className="text-headline-lg text-primary leading-none">
+                    {selectedTurno ? total : "—"}
+                  </span>
+                </div>
+                {cubiertoConCredito ? (
+                  <div className="flex items-center gap-1 bg-credit-violet/10 px-3 py-1.5 rounded-full border border-credit-violet/30">
+                    <Wallet className="size-4 text-credit-violet" />
+                    <span className="text-label-sm font-bold text-credit-violet">
+                      Crédito a favor
+                    </span>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-1 bg-[#009EE3]/10 px-3 py-1.5 rounded-full border border-[#009EE3]/30">
+                    <Handshake className="size-4 text-[#009EE3]" />
+                    <span className="text-label-sm font-bold text-[#009EE3]">
+                      MercadoPago
+                    </span>
+                  </div>
+                )}
+              </div>
 
-          <Button
-            type="button"
-            size="lg"
-            onClick={handleConfirm}
-            disabled={!selectedTurno || submitting}
-            className="w-full mt-4"
-          >
-            {submitting ? "Redirigiendo…" : "Confirmar Reserva"}
-            <ArrowRight className="size-5" />
-          </Button>
+              <Button
+                type="button"
+                size="lg"
+                onClick={handleConfirm}
+                disabled={!selectedTurno || submitting}
+                className="w-full mt-4"
+              >
+                {submitting
+                  ? cubiertoConCredito
+                    ? "Confirmando…"
+                    : "Redirigiendo…"
+                  : "Confirmar Reserva"}
+                <ArrowRight className="size-5" />
+              </Button>
+            </>
+          )}
         </section>
+
+        <UnirseEsperaDialog
+          open={esperaOpen}
+          onOpenChange={setEsperaOpen}
+          turnoId={selectedTurno?.id}
+          fecha={selectedDate ? toISODate(selectedDate) : ""}
+          tipo={tipo}
+          actividad={selectedActividad?.nombre}
+        />
       </div>
     </div>
   );

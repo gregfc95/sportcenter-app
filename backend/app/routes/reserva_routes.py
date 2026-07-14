@@ -5,10 +5,16 @@ from flask import Blueprint, Response, jsonify, request
 from .. import db
 from ..auth import current_user_id, require_role
 from ..models.pago import PagoEstado
-from ..models.reserva import MotivoCancelacion, Reserva, ReservaTipo
+from ..models.reserva import EstadoEspera, MotivoCancelacion, Reserva, ReservaTipo
 from ..models.user import UserRole
-from ..services import PagoService, ReservaService, TurnoService
-from ..services.reserva_service import AR_TZ
+from ..services import (
+    ListaEsperaService,
+    MensualidadService,
+    PagoService,
+    ReservaService,
+    TurnoService,
+)
+from ..services.reserva_service import AR_TZ, CupoLlenoError
 
 
 reserva_bp = Blueprint("reservas", __name__, url_prefix="/api/reservas")
@@ -16,6 +22,8 @@ reserva_bp = Blueprint("reservas", __name__, url_prefix="/api/reservas")
 reserva_service = ReservaService()
 turno_service = TurnoService()
 pago_service = PagoService()
+lista_espera_service = ListaEsperaService()
+mensualidad_service = MensualidadService()
 
 
 def _estado_pago(reserva) -> str:
@@ -30,6 +38,29 @@ def _estado_pago(reserva) -> str:
     if PagoEstado.SENADO in estados:
         return "senado"
     return "pendiente"
+
+
+def _estado_reserva(reserva) -> str:
+    """Estado de la card: `en_espera` si está en la lista, si no el de pago."""
+    if reserva.estado_espera is not None:
+        return "en_espera"
+    return _estado_pago(reserva)
+
+
+def _espera_dict(reserva) -> dict | None:
+    """Datos de lista de espera para la card (None si es una reserva normal)."""
+    if reserva.estado_espera is None:
+        return None
+    return {
+        "estado": reserva.estado_espera.value,
+        "ofertado": reserva.estado_espera == EstadoEspera.OFERTADO,
+        "expira_at": (
+            reserva.oferta_expira_at.isoformat()
+            if reserva.oferta_expira_at
+            else None
+        ),
+        "posicion": lista_espera_service.posicion(reserva),
+    }
 
 
 def _reserva_sesion_dict(reserva) -> dict:
@@ -110,6 +141,25 @@ def list_mis_reservas() -> Response:
             resumenes = [pago_service.resumen_pago(r) for r in vivas]
             total_grupo = sum(r["total"] for r in resumenes)
             cobrado_grupo = sum(r["cobrado"] for r in resumenes)
+
+            # Descuento de fidelidad: solo mientras el abono está sin cobros
+            # (pendiente o en espera). Ya pago, el total sale del snapshot del
+            # pago. Cuando aplica, los totales de la card ya son los finales.
+            descuento_obj = None
+            if cobrado_grupo <= 0:
+                pct = mensualidad_service.descuento_mensualidad(reserva.user_id)
+                if pct > 0:
+                    monto_clase = mensualidad_service.monto_clase_mensualidad(
+                        actividad.precio, reserva.user_id
+                    )
+                    total_final = monto_clase * len(vivas)
+                    descuento_obj = {
+                        "pct": int(pct * 100),
+                        "total_original": float(total_grupo),
+                        "total_final": float(total_final),
+                    }
+                    total_grupo = total_final
+
             payload.append(
                 {
                     "id": vivas[0].id,
@@ -117,11 +167,14 @@ def list_mis_reservas() -> Response:
                     # trae la más temprana no pasada, por el orden asc).
                     "fecha": reserva.fecha.isoformat(),
                     "tipo": reserva.tipo.value,
-                    "estado": _estado_pago(reserva),
+                    "estado": _estado_reserva(reserva),
                     "actividad": actividad.nombre,
                     "precio": float(total_grupo),
                     "sena": 0.0,
                     "saldo": float(max(total_grupo - cobrado_grupo, 0)),
+                    "espera": _espera_dict(reserva),
+                    "renovacion": mensualidad_service.renovacion_info(reserva),
+                    "descuento": descuento_obj,
                     "mensualidad": {
                         "clases": [
                             {
@@ -154,12 +207,13 @@ def list_mis_reservas() -> Response:
                 "id": reserva.id,
                 "fecha": reserva.fecha.isoformat(),
                 "tipo": reserva.tipo.value,
-                "estado": _estado_pago(reserva),
+                "estado": _estado_reserva(reserva),
                 "asistencia": reserva.asistio,
                 "actividad": actividad.nombre,
                 "precio": float(resumen["total"]),
                 "sena": float(resumen["sena"]),
                 "saldo": float(resumen["saldo"]),
+                "espera": _espera_dict(reserva),
                 "turno": {
                     "id": turno.id,
                     "dia_semana": turno.dia_semana.value,
@@ -188,8 +242,16 @@ def list_sesiones_reservadas() -> Response:
     for turno, fecha in sesiones:
         actividad = turno.actividad
         disponibles = turno_service.lugares_disponibles(turno, fecha)
-        reservas_sesion = [r for r in turno.reservas if r.fecha == fecha]
+        reservas_sesion = [
+            r
+            for r in turno.reservas
+            if r.fecha == fecha and r.estado_espera is None
+        ]
         asistencias = sum(1 for r in reservas_sesion if r.asistio)
+        # Una sesión puede mezclar mensuales y eventuales; exponemos los tipos
+        # presentes (orden fijo) para el chip de la lista de Turnos Reservados.
+        tipos_presentes = {r.tipo.value for r in reservas_sesion}
+        tipos = [t for t in ("mensual", "eventual") if t in tipos_presentes]
         payload.append(
             {
                 "turno_id": turno.id,
@@ -201,6 +263,7 @@ def list_sesiones_reservadas() -> Response:
                 "ocupados": turno.cupo - disponibles,
                 "reservas": len(reservas_sesion),
                 "asistencias": asistencias,
+                "tipos": tipos,
             }
         )
 
@@ -246,6 +309,50 @@ def get_sesion_reservada(turno_id: int, fecha: str) -> Response:
     return jsonify(payload), 200
 
 
+@reserva_bp.route("/lista-espera", methods=["POST"])
+def unirse_lista_espera() -> Response:
+    """Anota al usuario actual en la lista de espera de un turno sin cupo.
+
+    No cobra nada: crea la(s) reserva(s) en estado de espera. Cuando se libere un
+    lugar, el cliente recibe un aviso por email y podrá pagarlo desde Mis Turnos.
+    """
+    user_id = current_user_id()
+    data = request.get_json() or {}
+
+    turno_id = data.get("turno_id")
+    if not isinstance(turno_id, int):
+        return jsonify({"error": "turno_id es requerido y debe ser un entero."}), 400
+
+    try:
+        fecha = date.fromisoformat(data.get("fecha"))
+    except (TypeError, ValueError):
+        return jsonify({"error": "fecha es requerida con formato YYYY-MM-DD."}), 400
+
+    try:
+        tipo = ReservaTipo(data.get("tipo", ReservaTipo.EVENTUAL.value))
+    except ValueError:
+        return jsonify({"error": "tipo de reserva inválido."}), 400
+
+    try:
+        reservas = reserva_service.unirse_lista_espera(
+            user_id, turno_id, fecha, tipo
+        )
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+
+    return (
+        jsonify(
+            {
+                "reserva_id": reservas[0].id,
+                "tipo": tipo.value,
+                "estado": "en_espera",
+                "fechas": [r.fecha.isoformat() for r in reservas],
+            }
+        ),
+        201,
+    )
+
+
 @reserva_bp.route("/<int:reserva_id>/cancelar", methods=["POST"])
 def cancelar_mi_reserva(reserva_id: int) -> Response:
     """Cancela (soft-delete) una reserva del usuario actual.
@@ -283,6 +390,12 @@ def cancelar_mi_reserva(reserva_id: int) -> Response:
         resolucion = PagoEstado.REEMBOLSADO
         motivo = None  # el servicio deduce REEMBOLSADO por la anticipación
 
+    # Datos previos a la baja: definen a quién promover y si penalizar.
+    turno_id = reserva.turno_id
+    fecha = reserva.fecha
+    estado_espera_prev = reserva.estado_espera
+    es_mensual = reserva.tipo == ReservaTipo.MENSUAL
+
     try:
         registro = pago_service.registrar_cancelacion(
             reserva_id, resolucion=resolucion
@@ -290,6 +403,19 @@ def cancelar_mi_reserva(reserva_id: int) -> Response:
         reserva_service.cancelar_reserva(reserva_id, motivo=motivo)
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
+
+    # Cancelar una clase de un abono penaliza siempre (la ventana de 48 h solo
+    # decide el reembolso/crédito, no la penalización). Las filas en espera no
+    # penalizan; tampoco las eventuales.
+    if es_mensual and estado_espera_prev is None:
+        mensualidad_service.registrar_penalizaciones_cancelacion([reserva])
+
+    # Se liberó un lugar: promover la lista de espera. Una reserva normal abre
+    # una vacante real (re-arma vencidos); soltar una oferta no (evita ping-pong).
+    if estado_espera_prev is None:
+        lista_espera_service.promover(turno_id, fecha, motivo="cancelacion")
+    elif estado_espera_prev == EstadoEspera.OFERTADO:
+        lista_espera_service.promover(turno_id, fecha, motivo="vencimiento")
 
     return (
         jsonify(

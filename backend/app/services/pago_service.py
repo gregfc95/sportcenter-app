@@ -1,27 +1,54 @@
+from datetime import datetime, timezone
 from decimal import Decimal
 
 from flask import current_app
 from sqlalchemy import select
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import joinedload, selectinload
 
 from .. import db
 from ..models.pago import Pago, PagoEstado, PagoMedio
-from ..models.reserva import Reserva, ReservaTipo
+from ..models.reserva import EstadoEspera, MotivoCancelacion, Reserva, ReservaTipo
 from ..models.turno import Turno
+from .credito_service import CreditoService
+from .lista_espera_service import ListaEsperaService
+from .mensualidad_service import MensualidadService
 from .mercadopago_client import get_sdk
 from .reserva_service import ReservaService
 
 
 class PagoService:
 
+    def __init__(self):
+        self.lista_espera = ListaEsperaService()
+        self.mensualidad = MensualidadService()
+
+    def _validar_espera_pagable(self, reserva: Reserva) -> None:
+        """Rechaza pagar una fila en espera que todavía no tiene oferta vigente.
+
+        Solo una oferta `ofertado` sin vencer habilita el pago; `esperando` y
+        `vencido` aún no tienen el lugar. El chequeo explícito de vencimiento
+        cubre el retardo de hasta 60 s del barrido del scheduler.
+        """
+        estado = reserva.estado_espera
+        if estado in (EstadoEspera.ESPERANDO, EstadoEspera.VENCIDO):
+            raise ValueError("Todavía no te tocó el lugar en la lista de espera.")
+        if estado == EstadoEspera.OFERTADO and (
+            reserva.oferta_expira_at is None
+            or reserva.oferta_expira_at < datetime.now(timezone.utc)
+        ):
+            raise ValueError(
+                "La oferta de tu lugar venció; seguís en la lista para la próxima vacante."
+            )
+
     # --- Checkout Pro (Mercado Pago) ---
 
     def crear_preferencia(self, reserva_id: int) -> dict:
         """Crea una preferencia de Checkout Pro para la seña de una reserva.
 
-        Devuelve los datos que necesita el frontend para redirigir al checkout
-        (init_point) sin persistir nada todavía; el alta del Pago se hace en
-        otro paso del flujo.
+        Aplica primero el crédito a favor disponible para la actividad: si cubre
+        la seña completa no se pasa por Mercado Pago (se asienta la seña al
+        instante), y si la cubre en parte la preferencia se crea por el remanente.
+        Sin crédito, el flujo es el de siempre (init_point para redirigir).
         """
         reserva = db.session.get(Reserva, reserva_id)
         if reserva is None:
@@ -29,14 +56,18 @@ class PagoService:
         if reserva.tipo == ReservaTipo.MENSUAL:
             # El abono mensual no admite seña: se paga completo por adelantado.
             raise ValueError("Un abono mensual se paga completo, sin seña.")
+        self._validar_espera_pagable(reserva)
 
         actividad = reserva.turno.actividad
         sena = actividad.precio / Decimal("2")
-        return self._crear_preferencia(
-            reserva_id,
-            title=f"Seña - {actividad.nombre}",
+        return self._checkout_con_credito(
+            user_id=reserva.user_id,
+            actividad_id=actividad.id,
             monto=sena,
+            pref_reserva_id=reserva_id,
+            title=f"Seña - {actividad.nombre}",
             success_path="/pago/exito",
+            registrar=lambda: [self.registrar_sena_si_falta(reserva_id)],
         )
 
     def crear_preferencia_saldo(self, reserva_id: int) -> dict:
@@ -50,6 +81,7 @@ class PagoService:
         reserva = db.session.get(Reserva, reserva_id)
         if reserva is None:
             raise ValueError("La reserva indicada no existe.")
+        self._validar_espera_pagable(reserva)
 
         sena = self._pago_por_estado(reserva_id, PagoEstado.SENADO)
         if sena is None:
@@ -62,11 +94,14 @@ class PagoService:
             raise ValueError("La reserva no tiene saldo pendiente.")
 
         actividad = reserva.turno.actividad
-        return self._crear_preferencia(
-            reserva_id,
-            title=f"Saldo - {actividad.nombre}",
+        return self._checkout_con_credito(
+            user_id=reserva.user_id,
+            actividad_id=actividad.id,
             monto=saldo,
+            pref_reserva_id=reserva_id,
+            title=f"Saldo - {actividad.nombre}",
             success_path="/pago/exito?accion=completar",
+            registrar=lambda: [self.completar_pago(reserva_id)],
         )
 
     def crear_preferencia_mensualidad(self, reserva_id: int) -> dict:
@@ -83,25 +118,38 @@ class PagoService:
             raise ValueError("La reserva indicada no existe.")
         if reserva.tipo != ReservaTipo.MENSUAL:
             raise ValueError("La reserva no es de un abono mensual.")
+        self._validar_espera_pagable(reserva)
 
         grupo = ReservaService().grupo_mensual(reserva)
         if any(self._pagos_cobrados(r.id) for r in grupo):
             raise ValueError("La mensualidad ya tiene un pago registrado.")
 
         actividad = reserva.turno.actividad
-        monto = actividad.precio * len(grupo)
-        pref = self._crear_preferencia(
-            grupo[0].id,
-            title=f"Mensualidad - {actividad.nombre}",
+        # El descuento de fidelidad se aplica por clase con el mismo cálculo que
+        # usa `registrar_mensualidad`, así el link cobra lo mismo que se asienta.
+        monto_clase = self.mensualidad.monto_clase_mensualidad(
+            actividad.precio, reserva.user_id
+        )
+        monto = monto_clase * len(grupo)
+        descuento = self.mensualidad.descuento_mensualidad(reserva.user_id)
+        monto_original = actividad.precio * len(grupo)
+        resultado = self._checkout_con_credito(
+            user_id=reserva.user_id,
+            actividad_id=actividad.id,
             monto=monto,
+            pref_reserva_id=grupo[0].id,
+            title=f"Mensualidad - {actividad.nombre}",
             success_path="/pago/exito?accion=mensualidad",
+            registrar=lambda: self.registrar_mensualidad(grupo[0].id),
         )
         return {
-            **pref,
+            **resultado,
             "reserva_id": grupo[0].id,
             "fechas": [r.fecha.isoformat() for r in grupo],
             "clases": len(grupo),
             "monto": float(monto),
+            "descuento_pct": int(descuento * 100),
+            "monto_original": float(monto_original),
         }
 
     def registrar_mensualidad(self, reserva_id: int) -> list[Pago]:
@@ -119,7 +167,15 @@ class PagoService:
             raise ValueError("La reserva no es de un abono mensual.")
 
         grupo = ReservaService().grupo_mensual(reserva)
-        precio = reserva.turno.actividad.precio
+        actividad = reserva.turno.actividad
+        # El monto por clase se calcula antes de levantar la suspensión: una
+        # compra que reactiva una cuenta suspendida paga sin descuento.
+        monto_clase = self.mensualidad.monto_clase_mensualidad(
+            actividad.precio, reserva.user_id
+        )
+
+        # Si venía de la lista de espera, al confirmar el pago deja de esperar.
+        self.lista_espera.confirmar_lugar(reserva)
 
         pagos = []
         nuevos = False
@@ -129,14 +185,19 @@ class PagoService:
                 pago = Pago(
                     user_id=r.user_id,
                     reserva_id=r.id,
-                    monto=precio,
+                    monto=monto_clase,
                     estado=PagoEstado.PAGADO,
                 )
                 db.session.add(pago)
+                # El crédito se reparte clase por clase en el orden del grupo:
+                # las primeras pueden quedar 100% en crédito y la siguiente a
+                # medias, según el saldo disponible.
+                self._aplicar_credito(pago, actividad.id)
                 nuevos = True
             pagos.append(pago)
         if nuevos:
             db.session.commit()
+            self.mensualidad.levantar_suspension(reserva.user_id)
         return pagos
 
     def _crear_preferencia(
@@ -180,6 +241,63 @@ class PagoService:
             "sandbox_init_point": preference.get("sandbox_init_point"),
         }
 
+    def _checkout_con_credito(
+        self,
+        *,
+        user_id: int,
+        actividad_id: int,
+        monto: Decimal,
+        pref_reserva_id: int,
+        title: str,
+        success_path: str,
+        registrar,
+    ) -> dict:
+        """Descuenta el crédito disponible del monto a cobrar en un checkout.
+
+        Si el crédito cubre el total, no se pasa por Mercado Pago: se invoca
+        `registrar` —que asienta el/los pago(s) consumiendo el crédito— y se
+        devuelve `pagado_con_credito=True`. Si lo cubre en parte, se crea la
+        preferencia por el remanente. El monto de crédito se recomputa al
+        confirmar, así este descuento es solo la vista previa del checkout.
+        """
+        descuento = min(
+            CreditoService().saldo_disponible(user_id, actividad_id), monto
+        )
+        if descuento >= monto:
+            pagos = registrar()
+            return {
+                "pagado_con_credito": True,
+                "monto_credito": float(descuento),
+                "monto_a_pagar": 0.0,
+                "pagos": [p.to_dict() for p in pagos],
+            }
+
+        pref = self._crear_preferencia(
+            pref_reserva_id,
+            title=title,
+            monto=monto - descuento,
+            success_path=success_path,
+        )
+        return {
+            "pagado_con_credito": False,
+            "monto": float(monto),
+            "monto_credito": float(descuento),
+            "monto_a_pagar": float(monto - descuento),
+            **pref,
+        }
+
+    def _aplicar_credito(self, pago: Pago, actividad_id: int) -> Decimal:
+        """Consume crédito a favor para el pago recién creado.
+
+        Si el crédito cubre el monto completo del pago, el medio pasa a
+        CREDITO_A_FAVOR (no hubo dinero de por medio). Se llama solo al crear un
+        pago cobrado, en su misma transacción, nunca en el retorno idempotente.
+        """
+        consumido = CreditoService().consumir(pago, actividad_id)
+        if consumido >= pago.monto:
+            pago.metodo = PagoMedio.CREDITO_A_FAVOR
+        return consumido
+
     # --- Creación y avance del pago ---
 
     def iniciar_pago(self, reserva_id: int) -> Pago:
@@ -193,6 +311,10 @@ class PagoService:
         precio = reserva.turno.actividad.precio
         monto = precio / Decimal("2")
 
+        # Si venía de la lista de espera, al pagar deja de esperar: se limpia su
+        # estado (y el del grupo) en la misma transacción que asienta el pago.
+        self.lista_espera.confirmar_lugar(reserva)
+
         pago = Pago(
             user_id=reserva.user_id,
             reserva_id=reserva_id,
@@ -200,7 +322,11 @@ class PagoService:
             estado=PagoEstado.SENADO,
         )
         db.session.add(pago)
+        self._aplicar_credito(pago, reserva.turno.actividad.id)
         db.session.commit()
+        # Completar un pago (seña) de una reserva nueva reactiva la cuenta si
+        # estaba suspendida (esa compra no lleva descuento).
+        self.mensualidad.levantar_suspension(reserva.user_id)
         return pago
 
     def registrar_sena_si_falta(self, reserva_id: int) -> Pago:
@@ -247,6 +373,7 @@ class PagoService:
             estado=PagoEstado.PAGADO,
         )
         db.session.add(pago)
+        self._aplicar_credito(pago, reserva.turno.actividad.id)
         db.session.commit()
         return pago
 
@@ -281,6 +408,7 @@ class PagoService:
         )
         db.session.add(pago)
         db.session.commit()
+        self.mensualidad.levantar_suspension(reserva.user_id)
         return pago
 
     def registrar_cancelacion(
@@ -295,9 +423,15 @@ class PagoService:
         (dentro de la ventana de anticipación). No interactúa con Mercado
         Pago: es solo el asiento contable.
 
-        Si la reserva no tiene pagos cobrados (estaba pendiente), no hay nada que
-        registrar y devuelve None. Idempotente: si ya existe la fila de cierre la
-        devuelve sin duplicarla.
+        La parte que se había pagado con crédito no se reembolsa ni se convierte
+        en crédito nuevo: vuelve a su crédito de origen con su vigencia original
+        (evita convertir crédito en efectivo y renovar el vencimiento sin fin).
+        Solo la parte en dinero forma la fila de cierre y, si es CREDITO, el
+        crédito nuevo.
+
+        Si la reserva no tiene pagos cobrados (estaba pendiente) o todo lo cobrado
+        era crédito, no hay nada en dinero que cerrar y devuelve None.
+        Idempotente: si ya existe la fila de cierre la devuelve sin duplicarla.
         """
         if resolucion not in (
             PagoEstado.REEMBOLSADO,
@@ -319,16 +453,52 @@ class PagoService:
             return None
 
         total = sum((p.monto for p in cobrados), Decimal("0"))
-        estado = resolucion
+
+        credito_service = CreditoService()
+        monto_cierre = total
+        if resolucion in (PagoEstado.REEMBOLSADO, PagoEstado.CREDITO):
+            credito_service.restaurar_consumos(cobrados)
+            monto_cierre = total - credito_service.total_consumido(cobrados)
+
+        if monto_cierre <= 0:
+            # Todo lo cobrado era crédito y ya volvió a su origen: no hay dinero
+            # que reembolsar ni crédito nuevo que crear.
+            db.session.commit()
+            return None
+
         registro = Pago(
             user_id=cobrados[0].user_id,
             reserva_id=reserva_id,
-            monto=total,
-            estado=estado,
+            monto=monto_cierre,
+            estado=resolucion,
         )
         db.session.add(registro)
+
+        if resolucion == PagoEstado.CREDITO:
+            reserva = db.session.get(Reserva, reserva_id)
+            credito_service.crear_desde_cancelacion(reserva, monto_cierre)
+
         db.session.commit()
         return registro
+
+    def cancelar_reserva_por_baja(self, reserva_id: int) -> None:
+        """Cancela una reserva por baja forzada del centro, reembolsando lo cobrado.
+
+        La baja es decisión del centro (eliminar la actividad, el turno o una
+        fecha puntual), no del cliente: corresponde devolver lo abonado sin
+        importar la antelación. `registrar_cancelacion` asienta el reembolso y
+        devuelve None si no había nada cobrado (reserva pendiente), en cuyo
+        caso la reserva se cancela sin reembolso.
+        """
+        registro = self.registrar_cancelacion(
+            reserva_id, resolucion=PagoEstado.REEMBOLSADO
+        )
+        motivo = (
+            MotivoCancelacion.REEMBOLSADO
+            if registro is not None
+            else MotivoCancelacion.CANCELADO
+        )
+        ReservaService().cancelar_reserva(reserva_id, motivo=motivo)
 
     # --- Resumen económico ---
 
@@ -412,6 +582,7 @@ class PagoService:
             .where(Pago.user_id == user_id, Pago.deleted_at.is_(None))
             .options(
                 joinedload(Pago.registrado_por),
+                selectinload(Pago.consumos),
                 joinedload(Pago.reserva)
                 .joinedload(Reserva.turno)
                 .joinedload(Turno.actividad),
@@ -436,6 +607,7 @@ class PagoService:
             .options(
                 joinedload(Pago.user),
                 joinedload(Pago.registrado_por),
+                selectinload(Pago.consumos),
                 joinedload(Pago.reserva)
                 .joinedload(Reserva.turno)
                 .joinedload(Turno.actividad),

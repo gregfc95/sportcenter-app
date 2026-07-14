@@ -1,4 +1,4 @@
-import { Check } from "lucide-react";
+import { Check, X } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
@@ -9,11 +9,12 @@ function ddmm(iso) {
 }
 
 /**
- * Fila de chips con las clases del abono mensual: las pasadas quedan marcadas
- * como completadas y las canceladas tachadas. Con `selectable`, entre las
- * próximas se elige la clase sobre la que actúa "Cancelar clase" (cada fecha
- * se cancela individualmente, nunca en bloque); sin `selectable` —abono
- * pendiente, que se cancela completo— los chips son solo informativos.
+ * Fila de chips con las clases del abono mensual: las asistidas (QR escaneado)
+ * quedan marcadas con check verde, las pasadas sin asistir con una X (falta) y
+ * las canceladas tachadas. Con `selectable`, entre las próximas se elige la
+ * clase sobre la que actúa "Cancelar clase" (cada fecha se cancela
+ * individualmente, nunca en bloque); sin `selectable` —abono pendiente, que se
+ * cancela completo— los chips son solo informativos.
  */
 export default function ClasesMensuales({
   clases,
@@ -40,20 +41,41 @@ export default function ClasesMensuales({
             </div>
           );
         }
-        if (clase.pasada) {
+        // Antes que `pasada`: una clase asistida hoy todavía no es "pasada"
+        // pero ya debe mostrar el check ni bien se escanea su QR.
+        if (clase.asistencia) {
           return (
             <div
               key={clase.reserva_id}
-              title="Clase pasada"
-              className="snap-center shrink-0 relative flex items-center justify-center w-16 h-14 rounded-lg border border-outline-variant bg-surface-container-low opacity-60"
+              title="Asististe"
+              className="snap-center shrink-0 relative flex items-center justify-center w-16 h-14 rounded-lg border border-success-green/30 bg-success-green/10"
             >
-              <span className="text-label-sm text-on-surface-variant">
+              <span className="text-label-sm text-success-green">
                 {ddmm(clase.fecha)}
               </span>
               <Check
                 className="size-3.5 text-success-green absolute top-1 right-1"
                 aria-hidden="true"
               />
+              <span className="sr-only">(asististe)</span>
+            </div>
+          );
+        }
+        if (clase.pasada) {
+          return (
+            <div
+              key={clase.reserva_id}
+              title="Faltaste"
+              className="snap-center shrink-0 relative flex items-center justify-center w-16 h-14 rounded-lg border border-outline-variant bg-surface-container-low opacity-60"
+            >
+              <span className="text-label-sm text-on-surface-variant">
+                {ddmm(clase.fecha)}
+              </span>
+              <X
+                className="size-3.5 text-error absolute top-1 right-1"
+                aria-hidden="true"
+              />
+              <span className="sr-only">(faltaste)</span>
             </div>
           );
         }

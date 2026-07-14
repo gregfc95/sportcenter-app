@@ -29,6 +29,9 @@ def create_app(config_object=None):
     from .routes.pago_routes import pago_bp
     from .routes.reserva_routes import reserva_bp
     from .routes.asistencia_routes import asistencia_bp
+    from .routes.credito_routes import credito_bp
+    from .routes.mensualidad_routes import mensualidad_bp
+    from .routes.notificacion_routes import notificacion_bp
     app.register_blueprint(main)
     app.register_blueprint(turno_bp)
     app.register_blueprint(actividad_bp)
@@ -36,7 +39,13 @@ def create_app(config_object=None):
     app.register_blueprint(pago_bp)
     app.register_blueprint(reserva_bp)
     app.register_blueprint(asistencia_bp)
+    app.register_blueprint(credito_bp)
+    app.register_blueprint(mensualidad_bp)
+    app.register_blueprint(notificacion_bp)
     from seed import register_commands
     register_commands(app)
+
+    from .scheduler import init_scheduler
+    init_scheduler(app)
 
     return app

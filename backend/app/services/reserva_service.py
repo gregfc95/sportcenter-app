@@ -2,13 +2,20 @@ from datetime import date, datetime, timedelta
 from uuid import uuid4
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import joinedload
 
 from .. import db
-from ..models.reserva import MotivoCancelacion, Reserva, ReservaTipo
+from ..models.reserva import (
+    EstadoEspera,
+    MotivoCancelacion,
+    Reserva,
+    ReservaTipo,
+)
 from ..models.turno import Turno, DiaSemana
+from ..models.turno_fecha_bloqueada import TurnoFechaBloqueada
+from .lista_espera_service import ListaEsperaService
 
 
 CANCELACION_VENTANA = timedelta(hours=24)
@@ -54,7 +61,18 @@ def fechas_mensuales(fecha_inicio: date) -> list[date]:
     return fechas
 
 
+class CupoLlenoError(ValueError):
+    """El turno no puede reservarse directo: sin cupo o con lista de espera.
+
+    Subclase de ValueError para que las rutas puedan distinguirla (y responder
+    409, señal de "ofrecer lista de espera") sin romper el manejo genérico.
+    """
+
+
 class ReservaService:
+
+    def __init__(self):
+        self.lista_espera = ListaEsperaService()
 
     def crear_reserva(
         self,
@@ -69,8 +87,10 @@ class ReservaService:
 
         self._validar_dia_semana(turno, fecha)
         self._validar_turno_no_pasado(turno, fecha)
+        self._validar_fecha_no_bloqueada(turno, fecha)
         self._validar_sin_conflicto_horario(user_id, fecha, turno)
         self._validar_cupo_disponible(turno, fecha)
+        self._validar_sin_demanda(turno, fecha)
 
         reserva = Reserva(
             user_id=user_id,
@@ -100,10 +120,17 @@ class ReservaService:
         self._validar_dia_semana(turno, fecha_inicio)
         self._validar_turno_no_pasado(turno, fecha_inicio)
 
-        fechas = fechas_mensuales(fecha_inicio)
+        # Las fechas dadas de baja por el centro se saltean: el abono cubre
+        # las clases que sí se dictan (y el precio se calcula por clase).
+        fechas = self.sin_fechas_bloqueadas(turno, fechas_mensuales(fecha_inicio))
+        if not fechas:
+            raise ValueError(
+                "El turno no tiene clases disponibles en lo que queda del mes."
+            )
         for fecha in fechas:
             self._validar_sin_conflicto_horario(user_id, fecha, turno)
             self._validar_cupo_disponible(turno, fecha)
+            self._validar_sin_demanda(turno, fecha)
 
         # Un grupo_id por compra: identifica al abono sin depender de inferir
         # (usuario, turno, mes), que colisiona con generaciones ya canceladas.
@@ -127,6 +154,108 @@ class ReservaService:
                 "Ya tienes una reserva para alguna de las fechas del mes."
             )
         return reservas
+
+    def unirse_lista_espera(
+        self,
+        user_id: int,
+        turno_id: int,
+        fecha: date,
+        tipo: ReservaTipo = ReservaTipo.EVENTUAL,
+    ) -> list[Reserva]:
+        """Anota al usuario en la lista de espera de un turno sin cupo.
+
+        No cobra nada: crea filas `Reserva` en estado ESPERANDO. Eventual, una
+        fila para (turno, fecha); mensual, el grupo con todas las clases del mes
+        (igual que `crear_reserva_mensual`), que se anota si al menos una de esas
+        fechas está llena o ya tiene lista de espera.
+        """
+        turno = db.session.get(Turno, turno_id)
+        if turno is None:
+            raise ValueError("El turno indicado no existe.")
+
+        self._validar_dia_semana(turno, fecha)
+        self._validar_turno_no_pasado(turno, fecha)
+
+        if tipo == ReservaTipo.MENSUAL:
+            return self._unirse_lista_espera_mensual(user_id, turno, fecha)
+        return self._unirse_lista_espera_eventual(user_id, turno, fecha)
+
+    def _unirse_lista_espera_eventual(
+        self, user_id: int, turno: Turno, fecha: date
+    ) -> list[Reserva]:
+        self._validar_fecha_no_bloqueada(turno, fecha)
+        self._validar_sin_conflicto_horario(user_id, fecha, turno)
+        if self._reservable_directo(turno, fecha):
+            raise ValueError(
+                "El turno tiene lugar disponible: reservalo directamente."
+            )
+        reserva = Reserva(
+            user_id=user_id,
+            turno_id=turno.id,
+            fecha=fecha,
+            tipo=ReservaTipo.EVENTUAL,
+            estado_espera=EstadoEspera.ESPERANDO,
+        )
+        db.session.add(reserva)
+        try:
+            db.session.commit()
+        except IntegrityError:
+            db.session.rollback()
+            raise ValueError(
+                "Ya tenés una reserva o un lugar en la lista para este turno."
+            )
+        self.lista_espera.avisar_admins_si_lleno(turno, fecha)
+        return [reserva]
+
+    def _unirse_lista_espera_mensual(
+        self, user_id: int, turno: Turno, fecha_inicio: date
+    ) -> list[Reserva]:
+        fechas = self.sin_fechas_bloqueadas(turno, fechas_mensuales(fecha_inicio))
+        if not fechas:
+            raise ValueError(
+                "El turno no tiene clases disponibles en lo que queda del mes."
+            )
+        for fecha in fechas:
+            self._validar_sin_conflicto_horario(user_id, fecha, turno)
+
+        # El abono garantiza el mes completo: si todas las clases tienen lugar
+        # no hay nada que esperar (se reserva directo). Basta una llena para
+        # que todo el grupo entre a la lista.
+        if all(self._reservable_directo(turno, f) for f in fechas):
+            raise ValueError(
+                "El turno tiene lugar disponible: reservalo directamente."
+            )
+
+        grupo_id = uuid4().hex
+        reservas = [
+            Reserva(
+                user_id=user_id,
+                turno_id=turno.id,
+                fecha=fecha,
+                tipo=ReservaTipo.MENSUAL,
+                grupo_id=grupo_id,
+                estado_espera=EstadoEspera.ESPERANDO,
+            )
+            for fecha in fechas
+        ]
+        db.session.add_all(reservas)
+        try:
+            db.session.commit()
+        except IntegrityError:
+            db.session.rollback()
+            raise ValueError(
+                "Ya tenés una reserva o un lugar en la lista para este turno."
+            )
+        # Cada fecha del abono tiene su propia cola: puede llenar cualquiera.
+        for fecha in fechas:
+            self.lista_espera.avisar_admins_si_lleno(turno, fecha)
+        return reservas
+
+    def _reservable_directo(self, turno: Turno, fecha: date) -> bool:
+        """True si la fecha admite reserva directa: hay lugar y sin demanda."""
+        return self.lista_espera.hay_lugar(turno, fecha) and not (
+            self.lista_espera.hay_demanda(turno.id, fecha)
+        )
 
     def grupo_mensual(
         self, reserva: Reserva, include_canceladas: bool = False
@@ -194,6 +323,7 @@ class ReservaService:
         stmt = (
             select(Reserva.turno_id, Reserva.fecha)
             .join(Reserva.turno)
+            .where(Reserva.estado_espera.is_(None))
             .group_by(Reserva.turno_id, Reserva.fecha, Turno.hora)
             .order_by(Reserva.fecha.asc(), Turno.hora.asc())
         )
@@ -215,7 +345,11 @@ class ReservaService:
         """
         stmt = (
             select(Reserva)
-            .where(Reserva.turno_id == turno_id, Reserva.fecha == fecha)
+            .where(
+                Reserva.turno_id == turno_id,
+                Reserva.fecha == fecha,
+                Reserva.estado_espera.is_(None),
+            )
             .options(joinedload(Reserva.user), joinedload(Reserva.pagos))
             .order_by(Reserva.created_at.asc())
         )
@@ -228,6 +362,30 @@ class ReservaService:
                 f"La fecha {fecha.isoformat()} cae en {esperado.value}, "
                 f"pero el turno es de {turno.dia_semana.value}."
             )
+
+    def _validar_fecha_no_bloqueada(self, turno: Turno, fecha: date) -> None:
+        """Impide reservar una fecha que el centro dio de baja para ese turno.
+
+        El filtro global de soft-delete descarta los bloqueos restaurados.
+        """
+        if self._fechas_bloqueadas(turno, [fecha]):
+            raise ValueError(
+                f"El turno no está disponible para el {fecha.isoformat()}."
+            )
+
+    def sin_fechas_bloqueadas(
+        self, turno: Turno, fechas: list[date]
+    ) -> list[date]:
+        """Descarta de `fechas` las que el centro dio de baja para ese turno."""
+        bloqueadas = self._fechas_bloqueadas(turno, fechas)
+        return [f for f in fechas if f not in bloqueadas]
+
+    def _fechas_bloqueadas(self, turno: Turno, fechas: list[date]) -> set[date]:
+        stmt = select(TurnoFechaBloqueada.fecha).where(
+            TurnoFechaBloqueada.turno_id == turno.id,
+            TurnoFechaBloqueada.fecha.in_(fechas),
+        )
+        return set(db.session.execute(stmt).scalars().all())
 
     def _validar_turno_no_pasado(self, turno: Turno, fecha: date) -> None:
         """Impide reservar un turno cuya hora de inicio ya pasó.
@@ -315,15 +473,37 @@ class ReservaService:
     # --- Validaciones internas ---
 
     def _validar_cupo_disponible(self, turno: Turno, fecha: date) -> None:
+        """Verifica que quede cupo firme (reservas normales + ofertadas).
+
+        Las filas en espera (`esperando`/`vencido`) no consumen cupo; las
+        ofertadas sí, porque retienen el lugar durante su ventana de pago.
+        """
         stmt = (
             select(func.count(Reserva.id))
             .where(
                 Reserva.turno_id == turno.id,
                 Reserva.fecha == fecha,
+                or_(
+                    Reserva.estado_espera.is_(None),
+                    Reserva.estado_espera == EstadoEspera.OFERTADO,
+                ),
             )
         )
         ocupados = db.session.execute(stmt).scalar()
         if ocupados >= turno.cupo:
-            raise ValueError(
+            raise CupoLlenoError(
                 f"El turno no tiene cupo disponible para el {fecha.isoformat()}."
+            )
+
+    def _validar_sin_demanda(self, turno: Turno, fecha: date) -> None:
+        """Impide reservar directo una fecha con lista de espera pendiente.
+
+        Aunque el cupo figure libre (por prioridad estricta un lugar puede
+        quedar reservado a la espera de un abono que todavía no entra completo),
+        un walk-in no puede saltear a quienes esperan. Si todos los que esperaban
+        ya vencieron, `hay_demanda` es False y el lugar vuelve a estar libre.
+        """
+        if self.lista_espera.hay_demanda(turno.id, fecha):
+            raise CupoLlenoError(
+                "Hay una lista de espera para este turno en esa fecha."
             )

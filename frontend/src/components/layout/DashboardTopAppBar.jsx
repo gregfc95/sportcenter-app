@@ -1,7 +1,7 @@
 import { Link, useNavigate } from "react-router-dom";
 import { Search, Sun, Moon, LogOut } from "lucide-react";
 
-import { useTheme } from "@/lib/ThemeContext";
+import { useTheme } from "@/lib/useTheme";
 
 function getInitials(name = "") {
   return name

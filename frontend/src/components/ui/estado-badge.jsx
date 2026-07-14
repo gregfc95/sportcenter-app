@@ -14,6 +14,10 @@ const ESTADOS = {
     label: "Señado",
     color: "text-accent bg-accent/10 border-accent/30",
   },
+  en_espera: {
+    label: "En Espera",
+    color: "text-info-blue bg-info-blue/10 border-info-blue/30",
+  },
   pendiente: {
     label: "Pendiente",
     color: "text-error bg-error/10 border-error/30",
@@ -29,6 +33,10 @@ const ESTADOS = {
   credito: {
     label: "Crédito a Favor",
     color: "text-credit-violet bg-credit-violet/10 border-credit-violet/30",
+  },
+  credito_vencido: {
+    label: "Crédito Vencido",
+    color: "text-error bg-error/10 border-error/30",
   },
   asistio: {
     label: "Asistió",

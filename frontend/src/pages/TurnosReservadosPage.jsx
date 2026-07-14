@@ -10,18 +10,23 @@ import {
 
 import { usePageTitle } from "@/lib/usePageTitle";
 import { PageHeading } from "@/components/ui/page-heading";
-import { getActividadIcon } from "@/components/actividades/actividadIcons";
+import { SegmentedControl } from "@/components/ui/segmented-control";
+import { ActividadIcon } from "@/components/actividades/ActividadIcon";
+import { TipoChip } from "@/components/ui/tipo-chip";
 import { listSesionesReservadas } from "@/components/reservas/api";
+import {
+  FILTROS_TIPO,
+  filtrarSesionesPorTipo,
+} from "@/components/reservas/filtros";
 import { formatReservaFecha, todayISO } from "@/lib/fecha";
 import { cn } from "@/lib/utils";
 
 function SesionCard({ sesion }) {
-  const { cupo, ocupados, reservas, asistencias = 0 } = sesion;
+  const { cupo, ocupados, reservas, asistencias = 0, tipos = [] } = sesion;
   const ocupacion = cupo > 0 ? Math.min(100, (ocupados / cupo) * 100) : 0;
   const lleno = cupo > 0 && ocupados >= cupo;
   const asistenciaPct =
     reservas > 0 ? Math.min(100, (asistencias / reservas) * 100) : 0;
-  const Icon = getActividadIcon(sesion.actividad);
 
   return (
     <Link
@@ -37,7 +42,11 @@ function SesionCard({ sesion }) {
       <div className="relative z-10 flex justify-between items-start gap-2">
         <div className="flex items-center gap-sm">
           <div className="w-12 h-12 rounded-lg bg-surface-container-high border border-outline-variant flex items-center justify-center shrink-0">
-            <Icon className="size-6 text-primary" aria-hidden="true" />
+            <ActividadIcon
+              actividad={sesion.actividad}
+              className="size-6 text-primary"
+              aria-hidden="true"
+            />
           </div>
           <div className="flex flex-col">
             <h3 className="text-label-md text-on-surface">{sesion.actividad}</h3>
@@ -46,12 +55,13 @@ function SesionCard({ sesion }) {
             </span>
           </div>
         </div>
-        <div className="flex items-center gap-1.5 px-2 py-1 rounded-full border border-primary/30 bg-primary/10 shrink-0">
-          <Users className="size-3 text-primary" aria-hidden="true" />
-          <span className="text-[10px] font-bold uppercase tracking-widest text-primary">
-            {sesion.reservas} {sesion.reservas === 1 ? "reserva" : "reservas"}
-          </span>
-        </div>
+        {tipos.length > 0 && (
+          <div className="flex items-center gap-1.5 shrink-0">
+            {tipos.map((tipo) => (
+              <TipoChip key={tipo} tipo={tipo} />
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Details */}
@@ -103,6 +113,7 @@ export default function TurnosReservadosPage() {
 
   const [sesiones, setSesiones] = useState([]);
   const [loaded, setLoaded] = useState(false);
+  const [filtro, setFiltro] = useState("todos");
 
   useEffect(() => {
     let active = true;
@@ -128,11 +139,11 @@ export default function TurnosReservadosPage() {
     const hoy = todayISO();
     const proximos = [];
     const pasados = [];
-    for (const sesion of sesiones) {
+    for (const sesion of filtrarSesionesPorTipo(sesiones, filtro)) {
       (sesion.fecha < hoy ? pasados : proximos).push(sesion);
     }
     return { proximos, pasados };
-  }, [sesiones]);
+  }, [sesiones, filtro]);
 
   const hasSesiones = sesiones.length > 0;
 
@@ -147,6 +158,19 @@ export default function TurnosReservadosPage() {
 
       {!loaded ? null : hasSesiones ? (
         <div className="flex flex-col gap-lg">
+          <SegmentedControl
+            options={FILTROS_TIPO}
+            value={filtro}
+            onChange={setFiltro}
+            aria-label="Filtrar por tipo de reserva"
+          />
+
+          {proximos.length === 0 && pasados.length === 0 && (
+            <p className="text-body-md text-on-surface-variant">
+              No hay turnos {filtro === "mensual" ? "mensuales" : "eventuales"}.
+            </p>
+          )}
+
           {proximos.length > 0 && (
             <section className="flex flex-col gap-md">
               <h2 className="text-headline-md text-on-surface">Próximos</h2>

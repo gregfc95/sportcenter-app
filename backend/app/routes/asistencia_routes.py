@@ -1,5 +1,3 @@
-from datetime import datetime
-
 from flask import Blueprint, Response, jsonify, request
 
 from .. import db
@@ -12,7 +10,6 @@ from ..services.asistencia_service import (
     QrYaUtilizado,
     estado_asistencia,
 )
-from ..services.reserva_service import AR_TZ
 
 
 asistencia_bp = Blueprint("asistencias", __name__, url_prefix="/api/asistencias")
@@ -105,19 +102,19 @@ def escanear() -> Response:
 
 @asistencia_bp.route("/historial", methods=["GET"])
 def list_mi_historial() -> Response:
-    """Historial de reservas del usuario para la tabla de Mi Historial.
+    """Historial de reservas resueltas del usuario para la tabla de Mi Historial.
 
-    Todas las reservas activas (pasadas incluidas), más recientes primero, con
-    el estado de asistencia calculado acá: asistio / ausente / pendiente.
+    Reservas pasadas y canceladas, más recientes primero, con el estado
+    calculado acá: cancelado / asistio / ausente. Las pendientes/futuras no van.
     """
     user_id = current_user_id()
     reservas = asistencia_service.historial_usuario(user_id)
-    hoy = datetime.now(tz=AR_TZ).date()
 
     payload = []
     for reserva in reservas:
-        # El filtro de soft-delete deja `turno`/`actividad` en None si el
-        # centro los dio de baja después; la fila histórica se muestra igual.
+        # `historial_usuario` usa include_deleted, así que un turno/actividad
+        # dado de baja después también carga y la fila conserva su nombre real;
+        # el guard cubre el caso límite de una reserva sin turno.
         turno = reserva.turno
         actividad = turno.actividad if turno else None
         payload.append(
@@ -128,7 +125,7 @@ def list_mi_historial() -> Response:
                 "dia_semana": turno.dia_semana.value if turno else None,
                 "hora": turno.hora.strftime("%H:%M") if turno else None,
                 "tipo": reserva.tipo.value,
-                "estado": estado_asistencia(reserva, hoy),
+                "estado": estado_asistencia(reserva),
             }
         )
 

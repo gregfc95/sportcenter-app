@@ -1,3 +1,4 @@
+import { Zap } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -40,7 +41,8 @@ export default function QuickAccessGrid() {
 
   return (
     <section className="flex flex-col gap-sm">
-      <h3 className="text-label-md text-on-surface uppercase tracking-wider">
+      <h3 className="flex items-center gap-xs text-label-md text-on-surface uppercase tracking-wider">
+        <Zap className="size-4 text-accent" />
         Acceso rápido
       </h3>
       {actividades.length === 0 ? (

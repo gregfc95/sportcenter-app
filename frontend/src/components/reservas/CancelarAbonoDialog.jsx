@@ -89,6 +89,8 @@ export default function CancelarAbonoDialog({
             <span>
               El abono está pendiente de pago, así que no hay nada que
               reembolsar: se libera tu lugar en todas las clases del mes.
+              Cancelar suma una penalización por cada clase; con 3 penalizaciones
+              en el mes perdés el descuento de fidelidad del 20%.
             </span>
           </div>
         </div>

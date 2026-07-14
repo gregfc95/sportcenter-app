@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import { Menu, LogIn, Sun, Moon } from "lucide-react";
 import { NAV_LINKS } from "./constants";
-import { useTheme } from "@/lib/ThemeContext";
+import { useTheme } from "@/lib/useTheme";
 
 export default function TopAppBar({ onMenuClick }) {
   const { isDark, toggle } = useTheme();

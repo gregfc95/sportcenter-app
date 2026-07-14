@@ -2,6 +2,9 @@ from .turno_service import TurnoService
 from .actividad_service import ActividadService
 from .user_service import UserService
 from .reserva_service import ReservaService
+from .lista_espera_service import ListaEsperaService
+from .mensualidad_service import MensualidadService
+from .credito_service import CreditoService
 from .pago_service import PagoService
 from .asistencia_service import AsistenciaService
 from .email_service import send_password_email
@@ -11,6 +14,9 @@ __all__ = [
     "ActividadService",
     "UserService",
     "ReservaService",
+    "ListaEsperaService",
+    "MensualidadService",
+    "CreditoService",
     "PagoService",
     "AsistenciaService",
     "send_password_email",

@@ -1,4 +1,6 @@
-import { createContext, useContext, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
+
+import { ThemeContext } from "@/lib/useTheme";
 
 const STORAGE_KEY = "theme";
 
@@ -8,8 +10,6 @@ function getInitialTheme() {
   if (stored === "light" || stored === "dark") return stored;
   return "light";
 }
-
-const ThemeContext = createContext(null);
 
 export function ThemeProvider({ children }) {
   const [theme, setTheme] = useState(getInitialTheme);
@@ -25,12 +25,4 @@ export function ThemeProvider({ children }) {
   const value = { theme, isDark: theme === "dark", toggle };
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
-}
-
-export function useTheme() {
-  const ctx = useContext(ThemeContext);
-  if (!ctx) {
-    throw new Error("useTheme must be used within a ThemeProvider");
-  }
-  return ctx;
 }
