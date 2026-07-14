@@ -150,7 +150,7 @@ class TestCrearPreferenciaSaldoGuards:
 
 
 @pytest.fixture
-def abono(make_user, make_actividad, make_turno, next_date_for):
+def abono(make_user, make_actividad, make_turno):
     """Abono mensual creado por el servicio real (una reserva por clase).
 
     El usuario no tiene penalizaciones ni suspensiones, así que le corresponde
@@ -159,8 +159,13 @@ def abono(make_user, make_actividad, make_turno, next_date_for):
     user = make_user()
     actividad = make_actividad(precio="1000.00")
     turno = make_turno(actividad, dia_semana=DiaSemana.LUNES)
-    fecha = next_date_for(DiaSemana.LUNES)
-    reservas = reserva_svc.crear_reserva_mensual(user.id, turno.id, fecha)
+    # Fecha fija con el reloj anclado: el abono debe tener varias clases del mes
+    # (para repartir crédito y validar el pago por clase). Con la fecha real, un
+    # "hoy" tarde en el mes dejaría una sola clase y el escenario se rompe.
+    with freeze_time("2026-07-01"):
+        reservas = reserva_svc.crear_reserva_mensual(
+            user.id, turno.id, date(2026, 7, 6)
+        )
     return SimpleNamespace(user=user, actividad=actividad, turno=turno, reservas=reservas)
 
 
