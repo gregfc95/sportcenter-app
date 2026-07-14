@@ -78,6 +78,22 @@ function buildMonthCells(year, month) {
   return cells;
 }
 
+// Ventana de inscripción: del 11 de un mes al 10 del siguiente. Se recalcula
+// según la fecha de hoy — a partir del día 11 de cada mes, la ventana "salta"
+// al nuevo período.
+function getVentanaInscripcion(today) {
+  const day = today.getDate();
+  let start, end;
+  if (day >= 11) {
+    start = new Date(today.getFullYear(), today.getMonth(), 11);
+    end = new Date(today.getFullYear(), today.getMonth() + 1, 10);
+  } else {
+    start = new Date(today.getFullYear(), today.getMonth() - 1, 11);
+    end = new Date(today.getFullYear(), today.getMonth(), 10);
+  }
+  return { start, end };
+}
+
 export default function NuevaReservaPage() {
   usePageTitle("Nueva Reserva");
   const navigate = useNavigate();
@@ -85,6 +101,12 @@ export default function NuevaReservaPage() {
   const actividadParam = searchParams.get("actividad");
 
   const today = useMemo(() => startOfDay(new Date()), []);
+  // Período habilitado para reservar: del 11 de este mes (o del pasado, según
+  // en qué punto del ciclo estemos) al 10 del mes siguiente.
+  const { start: ventanaInicio, end: ventanaFin } = useMemo(
+    () => getVentanaInscripcion(today),
+    [today],
+  );
 
   const [actividades, setActividades] = useState([]);
   const [actividadId, setActividadId] = useState(actividadParam ?? "");
@@ -241,16 +263,23 @@ export default function NuevaReservaPage() {
     [viewYear, viewMonth],
   );
 
-  const atCurrentMonth =
-    viewYear === today.getFullYear() && viewMonth === today.getMonth();
+  // Límites de navegación: no se puede ir antes del mes de inicio ni después
+  // del mes de fin de la ventana de inscripción vigente.
+  const atMinMonth =
+    viewYear === ventanaInicio.getFullYear() &&
+    viewMonth === ventanaInicio.getMonth();
+  const atMaxMonth =
+    viewYear === ventanaFin.getFullYear() &&
+    viewMonth === ventanaFin.getMonth();
 
   const goToPrevMonth = () => {
-    if (atCurrentMonth) return; // don't navigate into the past
+    if (atMinMonth) return; // no navegar antes del inicio de la ventana
     setViewMonth((m) => (m === 0 ? 11 : m - 1));
     setViewYear((y) => (viewMonth === 0 ? y - 1 : y));
   };
 
   const goToNextMonth = () => {
+    if (atMaxMonth) return; // no navegar después del fin de la ventana
     setViewMonth((m) => (m === 11 ? 0 : m + 1));
     setViewYear((y) => (viewMonth === 11 ? y + 1 : y));
   };
@@ -510,7 +539,7 @@ export default function NuevaReservaPage() {
                 <button
                   type="button"
                   onClick={goToPrevMonth}
-                  disabled={!configReady || atCurrentMonth}
+                  disabled={!configReady || atMinMonth}
                   aria-label="Mes anterior"
                   className="w-8 h-8 rounded-full border border-outline-variant flex items-center justify-center text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-colors disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent"
                 >
@@ -519,7 +548,7 @@ export default function NuevaReservaPage() {
                 <button
                   type="button"
                   onClick={goToNextMonth}
-                  disabled={!configReady}
+                  disabled={!configReady || atMaxMonth}
                   aria-label="Mes siguiente"
                   className="w-8 h-8 rounded-full border border-outline-variant flex items-center justify-center text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-colors disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent"
                 >
@@ -547,11 +576,21 @@ export default function NuevaReservaPage() {
                 }
                 const cellDate = new Date(viewYear, viewMonth, day);
                 const isPast = cellDate < today;
+                // Fuera del período de inscripción vigente (después del 10 del
+                // mes siguiente). No hace falta chequear el límite inferior:
+                // ventanaInicio siempre es <= today, así que cualquier día
+                // anterior a ella ya queda cubierto por `isPast`.
+                const fueraDeVentana = cellDate > ventanaFin;
                 const selected = isSelected(day);
-                if (isPast) {
+                if (isPast || fueraDeVentana) {
                   return (
                     <div
                       key={day}
+                      title={
+                        fueraDeVentana
+                          ? "Fuera del período de inscripción"
+                          : undefined
+                      }
                       className="flex items-center justify-center h-10 text-on-surface-variant opacity-30 cursor-not-allowed"
                     >
                       {day}
