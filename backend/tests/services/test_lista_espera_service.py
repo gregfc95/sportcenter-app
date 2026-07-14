@@ -130,29 +130,32 @@ class TestPromoverYOferta:
         self, make_user, make_actividad, make_turno, make_reserva, next_date_for
     ):
         # Dos fechas del mes; una llena y otra no, así el abono no entra completo.
-        dueno = make_user()
-        actividad = make_actividad()
-        turno = make_turno(actividad, dia_semana=DiaSemana.LUNES, cupo=1)
-        f1 = next_date_for(DiaSemana.LUNES)
-        f2 = f1 + timedelta(days=7)
-        ocup1 = make_reserva(dueno, turno, f1)
-        make_reserva(dueno, turno, f2)  # segunda fecha también llena
+        # Reloj anclado a comienzos de julio: si no, según la fecha real las dos
+        # fechas caerían en meses distintos y el abono no las abarcaría.
+        with freeze_time("2026-07-01"):
+            dueno = make_user()
+            actividad = make_actividad()
+            turno = make_turno(actividad, dia_semana=DiaSemana.LUNES, cupo=1)
+            f1 = next_date_for(DiaSemana.LUNES)
+            f2 = f1 + timedelta(days=7)
+            ocup1 = make_reserva(dueno, turno, f1)
+            make_reserva(dueno, turno, f2)  # segunda fecha también llena
 
-        waiter = make_user()
-        reserva_svc.unirse_lista_espera(
-            waiter.id, turno.id, f1, ReservaTipo.MENSUAL
-        )
+            waiter = make_user()
+            reserva_svc.unirse_lista_espera(
+                waiter.id, turno.id, f1, ReservaTipo.MENSUAL
+            )
 
-        # Se libera solo f1; el abono necesita f2 (sigue llena) → nadie ofertado.
-        reserva_svc.cancelar_reserva(ocup1.id)
-        lista_svc.promover(turno.id, f1, motivo="cancelacion")
+            # Se libera solo f1; el abono necesita f2 (sigue llena) → nadie ofertado.
+            reserva_svc.cancelar_reserva(ocup1.id)
+            lista_svc.promover(turno.id, f1, motivo="cancelacion")
 
-        filas = [r for r in turno.reservas if r.user_id == waiter.id]
-        assert all(r.estado_espera == EstadoEspera.ESPERANDO for r in filas)
-        # Y un walk-in no puede tomar el lugar que espera el abono.
-        otro = make_user()
-        with pytest.raises(CupoLlenoError):
-            reserva_svc.crear_reserva(otro.id, turno.id, f1)
+            filas = [r for r in turno.reservas if r.user_id == waiter.id]
+            assert all(r.estado_espera == EstadoEspera.ESPERANDO for r in filas)
+            # Y un walk-in no puede tomar el lugar que espera el abono.
+            otro = make_user()
+            with pytest.raises(CupoLlenoError):
+                reserva_svc.crear_reserva(otro.id, turno.id, f1)
 
 
 class TestVencimiento:

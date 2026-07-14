@@ -52,8 +52,12 @@ def abono_pago_julio(make_user, make_actividad, make_turno, db_session):
     user = make_user()
     actividad = make_actividad(precio="1000.00")
     turno = make_turno(actividad, dia_semana=DiaSemana.LUNES, cupo=10)
-    reservas = reserva_svc.crear_reserva_mensual(user.id, turno.id, date(2026, 7, 6))
-    pago_svc.registrar_mensualidad(reservas[0].id)
+    # Se crea con el reloj anclado a comienzos de julio: si no, según la fecha
+    # real las clases del abono quedarían en el pasado y `crear_reserva_mensual`
+    # las rechazaría.
+    with freeze_time("2026-07-01"):
+        reservas = reserva_svc.crear_reserva_mensual(user.id, turno.id, date(2026, 7, 6))
+        pago_svc.registrar_mensualidad(reservas[0].id)
     return SimpleNamespace(
         user=user, actividad=actividad, turno=turno, grupo_id=reservas[0].grupo_id
     )
@@ -81,7 +85,8 @@ class TestGenerarRenovaciones:
         user = make_user()
         actividad = make_actividad()
         turno = make_turno(actividad, dia_semana=DiaSemana.LUNES)
-        reserva_svc.crear_reserva_mensual(user.id, turno.id, date(2026, 7, 6))
+        with freeze_time("2026-07-01"):
+            reserva_svc.crear_reserva_mensual(user.id, turno.id, date(2026, 7, 6))
         # Sin pago: no es candidato.
         assert mensual_svc.generar_renovaciones(hoy=date(2026, 8, 1)) == []
 
