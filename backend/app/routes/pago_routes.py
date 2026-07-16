@@ -10,7 +10,6 @@ from ..models.user import UserRole
 from ..services import (
     CreditoService,
     ListaEsperaService,
-    MensualidadService,
     PagoService,
     ReservaService,
 )
@@ -23,7 +22,6 @@ reserva_service = ReservaService()
 pago_service = PagoService()
 credito_service = CreditoService()
 lista_espera_service = ListaEsperaService()
-mensualidad_service = MensualidadService()
 
 
 def _monto_credito(pago) -> float:
@@ -478,21 +476,17 @@ def cancelar_checkout() -> Response:
         # Tiene seña/pago: no la cancelamos por un retorno de error.
         return jsonify({"ok": True, "cancelada": False}), 200
 
-    # Datos previos a la baja para promover la lista y penalizar.
+    # Datos previos a la baja para promover la lista.
     info = [(r.turno_id, r.fecha, r.estado_espera) for r in grupo]
-    es_mensual = reserva.tipo == ReservaTipo.MENSUAL
-    no_espera = [r for r in grupo if r.estado_espera is None]
 
     for r in grupo:
         r.motivo_cancelacion = MotivoCancelacion.CANCELADO
         r.soft_delete()
     db.session.commit()
 
-    # Cancelar un abono mensual (renovación o abono nunca pagado) suma una
-    # penalización por clase; las filas en espera no penalizan.
-    if es_mensual and no_espera:
-        mensualidad_service.registrar_penalizaciones_cancelacion(no_espera)
-
+    # Abandonar el checkout de Mercado Pago de un abono nunca pagado no penaliza:
+    # sin pago no hubo compromiso. La penalización por cancelar una clase vive en
+    # el flujo de cancelación desde la app (reserva_routes.cancelar_mi_reserva).
     for turno_id, fecha, estado_prev in info:
         if estado_prev is None:
             lista_espera_service.promover(turno_id, fecha, motivo="cancelacion")

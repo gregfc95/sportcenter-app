@@ -6,6 +6,7 @@ from ..services.mensualidad_service import MensualidadService
 from ..services.notificacion_service import (
     notificar_cupo_disponible,
     notificar_lista_espera_llena,
+    notificar_recordatorio_renovacion,
 )
 
 
@@ -36,6 +37,38 @@ def notificar_cupo() -> Response:
 
     try:
         email = notificar_cupo_disponible(cliente_id, turno_id)
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 404
+    except RuntimeError:
+        return (
+            jsonify({"error": "El envío de emails no está configurado en este entorno."}),
+            503,
+        )
+
+    return jsonify({"ok": True, "email": email}), 200
+
+
+@notificacion_bp.route("/recordatorio-renovacion", methods=["POST"])
+def recordar_renovacion() -> Response:
+    """Dispara a mano el recordatorio de renovación a un cliente y turno (demo).
+
+    El aviso real lo manda el scheduler el día 10 a los abonos impagos; este
+    endpoint lo muestra en una demo apuntado a un cliente elegido, sin depender
+    de que tenga una renovación impaga de verdad.
+    """
+    require_role(UserRole.ADMIN, UserRole.EMPLOYEE)
+    data = request.get_json() or {}
+
+    cliente_id = data.get("cliente_id")
+    if not isinstance(cliente_id, int):
+        return jsonify({"error": "cliente_id es requerido y debe ser un entero."}), 400
+
+    turno_id = data.get("turno_id")
+    if not isinstance(turno_id, int):
+        return jsonify({"error": "turno_id es requerido y debe ser un entero."}), 400
+
+    try:
+        email = notificar_recordatorio_renovacion(cliente_id, turno_id)
     except ValueError as e:
         return jsonify({"error": str(e)}), 404
     except RuntimeError:

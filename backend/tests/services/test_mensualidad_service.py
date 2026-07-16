@@ -16,10 +16,11 @@ from freezegun import freeze_time
 from app.models.penalizacion import Penalizacion, PenalizacionMotivo
 from app.models.reserva import Reserva, ReservaTipo
 from app.models.turno import DiaSemana
+from app.services import cupo
 from app.services.lista_espera_service import ListaEsperaService
 from app.services.mensualidad_service import MensualidadService
 from app.services.pago_service import PagoService
-from app.services.reserva_service import ReservaService
+from app.services.reserva_service import CupoLlenoError, ReservaService
 
 mensual_svc = MensualidadService()
 pago_svc = PagoService()
@@ -338,3 +339,59 @@ def _renovacion_viva(grupo_origen):
 
     stmt = select(Reserva).where(Reserva.renovacion_de_grupo_id == grupo_origen)
     return db.session.execute(stmt).scalars().all()
+
+
+class TestHoldVirtual:
+    """El abono retiene el lugar de los meses futuros hasta que se libera."""
+
+    @pytest.fixture
+    def abono_cupo1(self, make_user, make_actividad, make_turno, db_session):
+        """Como `abono_pago_julio` pero con cupo 1: el hold llena el turno."""
+        user = make_user()
+        turno = make_turno(
+            make_actividad(precio="1000.00"), dia_semana=DiaSemana.LUNES, cupo=1
+        )
+        with freeze_time("2026-07-01"):
+            reservas = reserva_svc.crear_reserva_mensual(
+                user.id, turno.id, date(2026, 7, 6)
+            )
+            pago_svc.registrar_mensualidad(reservas[0].id)
+        return SimpleNamespace(user=user, turno=turno, grupo_id=reservas[0].grupo_id)
+
+    def test_cubre_el_borde_de_mes_antes_de_generar(self, abono_cupo1, make_user):
+        # El 1° a la madrugada la renovación todavía no corrió: el abono pago
+        # de julio sigue reteniendo el lugar de agosto.
+        otro = make_user()
+        with freeze_time("2026-08-01"), pytest.raises(CupoLlenoError):
+            reserva_svc.crear_reserva(otro.id, abono_cupo1.turno.id, date(2026, 8, 3))
+
+    def test_la_renovacion_materializada_no_duplica_el_hold(self, abono_cupo1):
+        # Al generarse las clases de agosto el tip avanza de mes: cuenta la
+        # fila real y el hold deja de sumar (1, no 2).
+        mensual_svc.generar_renovaciones(hoy=date(2026, 8, 1))
+        assert cupo.ocupados(abono_cupo1.turno, date(2026, 8, 3)) == 1
+
+    def test_renovacion_en_gracia_mantiene_el_hold(self, abono_cupo1, make_user):
+        # La renovación impaga conserva la garantía durante los días 1-10:
+        # septiembre sigue retenido.
+        mensual_svc.generar_renovaciones(hoy=date(2026, 8, 1))
+        otro = make_user()
+        with freeze_time("2026-08-05"), pytest.raises(CupoLlenoError):
+            reserva_svc.crear_reserva(otro.id, abono_cupo1.turno.id, date(2026, 9, 7))
+
+    def test_deadline_del_11_libera_el_lugar(self, abono_cupo1, make_user):
+        mensual_svc.generar_renovaciones(hoy=date(2026, 8, 1))
+        mensual_svc.procesar_vencimientos(hoy=date(2026, 8, 11))
+
+        # El tip es la renovación cancelada: el hold muere y no revive el
+        # grupo pago de julio.
+        assert (
+            cupo.suscripcion_activa(abono_cupo1.user.id, abono_cupo1.turno.id)
+            is None
+        )
+        otro = make_user()
+        with freeze_time("2026-08-11"):
+            reserva = reserva_svc.crear_reserva(
+                otro.id, abono_cupo1.turno.id, date(2026, 8, 17)
+            )
+        assert reserva.id is not None

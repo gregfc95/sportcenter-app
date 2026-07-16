@@ -1,7 +1,9 @@
 """Unit tests de los helpers puros de `TurnoService` (en memoria, sin DB).
 
-Cubre la detección de superposición de horarios (ventana de 60 min) y el conteo
-de cupo/lugares sobre listas de reservas en memoria.
+Cubre la detección de superposición de horarios (ventana de 60 min) y el piso
+de reservas vigentes para bajar el cupo. El conteo de cupo/lugares dejó de ser
+puro (consulta la DB para sumar los holds virtuales de los abonados) y se
+prueba en `tests/services/test_turno_service.py`.
 """
 
 from datetime import date, time, timedelta
@@ -47,34 +49,6 @@ class TestTurnoSuperpuesto:
         conflictivo = _turno(time(16, 15))
         existentes = [_turno(time(9, 0)), conflictivo]
         assert svc._turno_superpuesto(existentes, time(16, 0)) is conflictivo
-
-
-class TestCupo:
-    def test_cuenta_eventuales_y_mensuales_de_esa_fecha(self):
-        # Los abonados mensuales también consumen cupo en cada sesión.
-        f1, f2 = date(2026, 6, 1), date(2026, 6, 8)
-        turno = _turno(
-            cupo=10,
-            reservas=[
-                _reserva(f1),
-                _reserva(f1),
-                _reserva(f1, tipo=ReservaTipo.MENSUAL),  # también cuenta
-                _reserva(f2),                            # otra fecha
-            ],
-        )
-        assert svc.cantidad_reservas(turno, f1) == 3
-
-    def test_hay_cupo_y_lugares_disponibles(self):
-        f = date(2026, 6, 1)
-        turno = _turno(cupo=3, reservas=[_reserva(f), _reserva(f)])
-        assert svc.hay_cupo(turno, f) is True
-        assert svc.lugares_disponibles(turno, f) == 1
-
-    def test_sin_cupo(self):
-        f = date(2026, 6, 1)
-        turno = _turno(cupo=2, reservas=[_reserva(f), _reserva(f)])
-        assert svc.hay_cupo(turno, f) is False
-        assert svc.lugares_disponibles(turno, f) == 0
 
 
 class TestMaxReservasVigentes:

@@ -7,19 +7,37 @@ def register_commands(app):
     @app.cli.command("seed-db")
     def seed_db():
         """Carga los datos iniciales necesarios para que la app funcione."""
-        from datetime import date, time
+        from datetime import date, datetime, time, timezone
         from decimal import Decimal
+        from uuid import uuid4
 
         from werkzeug.security import generate_password_hash
 
-        from app.models import Actividad, Pago, Reserva, Turno, User
+        from app.models import (
+            Actividad,
+            Credito,
+            CreditoConsumo,
+            Pago,
+            Penalizacion,
+            Reserva,
+            Suspension,
+            Turno,
+            User,
+        )
         from app.models.pago import PagoEstado, PagoMedio
-        from app.models.reserva import ReservaTipo
+        from app.models.penalizacion import PenalizacionMotivo
+        from app.models.reserva import EstadoEspera, MotivoCancelacion, ReservaTipo
         from app.models.turno import DiaSemana
         from app.models.user import UserRole
 
-        # --- Limpieza (respetando las FKs: pagos -> reservas -> turnos /
+        # --- Limpieza (respetando las FKs: los créditos referencian reservas y
+        # actividades con RESTRICT, así que van primero; después
+        # penalizaciones/suspensiones y pagos -> reservas -> turnos /
         # actividades / users) ---
+        db.session.query(CreditoConsumo).delete()
+        db.session.query(Credito).delete()
+        db.session.query(Penalizacion).delete()
+        db.session.query(Suspension).delete()
         db.session.query(Pago).delete()
         db.session.query(Reserva).delete()
         db.session.query(Turno).delete()
@@ -160,6 +178,30 @@ def register_commands(app):
         db.session.commit()
         print(f"✅ {len(reservas)} reserva(s) cargada(s).")
 
+        # --- Lista de espera: una oferta vencida (demo) ---
+        # El turno de básquet tiene cupo 1: cliente3 ocupa el lugar y "cliente"
+        # quedó en la lista, se le ofreció el lugar y dejó vencer la oferta ->
+        # VENCIDO. La fecha es futura a propósito: el barrido de la lista de
+        # espera da de baja toda fila en espera cuya fecha/hora ya pasó
+        # (_purgar_espera_pasadas) y Mis Turnos solo muestra fecha >= hoy.
+        fecha_basket_futura = date(2026, 7, 18)  # sábado
+        reservas_espera = [
+            Reserva(
+                user_id=users["cliente3"].id,
+                turno_id=turno_basket.id,
+                fecha=fecha_basket_futura,
+            ),
+            Reserva(
+                user_id=users["cliente"].id,
+                turno_id=turno_basket.id,
+                fecha=fecha_basket_futura,
+                estado_espera=EstadoEspera.VENCIDO,
+            ),
+        ]
+        db.session.add_all(reservas_espera)
+        db.session.commit()
+        print("✅ Escenario de lista de espera (oferta vencida) cargado.")
+
         # --- Pagos ---
         # Precios por actividad: Futbol 1500, Voley 1000. La seña es el 50%.
         pagos_data = [
@@ -216,5 +258,49 @@ def register_commands(app):
 
         db.session.commit()
         print(f"✅ {len(pagos)} pago(s) cargado(s).")
+
+        # --- Penalización: renovación impaga del mes pasado (demo) ---
+        # "cliente" no pagó la renovación de junio (mes pasado): cada clase que
+        # pasó impaga sumó una penalización RENOVACION_IMPAGA y se canceló. Con 3
+        # penalizaciones en el mes anterior pierde el 20% de descuento de
+        # fidelidad este mes (descuento_mensualidad). El conteo mensual mira
+        # `created_at`, así que las fechamos en junio a mano.
+        turno_lunes_futbol = turnos[("Futbol", DiaSemana.LUNES, time(18, 0))]
+        grupo_origen = uuid4().hex  # abono de mayo ya pagado, origen de la renovación
+        grupo_renovacion = uuid4().hex
+        clases_impagas = [date(2026, 6, 1), date(2026, 6, 8), date(2026, 6, 15)]
+
+        renovacion_impaga = [
+            Reserva(
+                user_id=users["cliente"].id,
+                turno_id=turno_lunes_futbol.id,
+                fecha=fecha,
+                tipo=ReservaTipo.MENSUAL,
+                grupo_id=grupo_renovacion,
+                renovacion_de_grupo_id=grupo_origen,
+            )
+            for fecha in clases_impagas
+        ]
+        db.session.add_all(renovacion_impaga)
+        db.session.commit()
+
+        for reserva in renovacion_impaga:
+            penalizacion = Penalizacion(
+                user_id=users["cliente"].id,
+                reserva_id=reserva.id,
+                motivo=PenalizacionMotivo.RENOVACION_IMPAGA,
+            )
+            penalizacion.created_at = datetime.combine(
+                reserva.fecha, time(12, 0), tzinfo=timezone.utc
+            )
+            db.session.add(penalizacion)
+            # La clase impaga queda cancelada, igual que _penalizar_renovaciones_pasadas.
+            reserva.motivo_cancelacion = MotivoCancelacion.CANCELADO
+            reserva.soft_delete()
+
+        db.session.commit()
+        print(
+            f"✅ {len(renovacion_impaga)} penalización(es) de renovación impaga cargada(s)."
+        )
 
         print("🌱 Seed completado.")

@@ -1,6 +1,7 @@
 """Tests de `TurnoService` contra la base de datos de tests."""
 
 from datetime import date, time, timedelta
+from unittest.mock import MagicMock
 
 import pytest
 from freezegun import freeze_time
@@ -8,12 +9,14 @@ from sqlalchemy import select
 
 from app import db
 from app.models.pago import Pago, PagoEstado
-from app.models.reserva import MotivoCancelacion, ReservaTipo
+from app.models.reserva import EstadoEspera, MotivoCancelacion, ReservaTipo
 from app.models.turno import DiaSemana
 from app.models.turno_fecha_bloqueada import TurnoFechaBloqueada
+from app.services.reserva_service import ReservaService
 from app.services.turno_service import TurnoService
 
 svc = TurnoService()
+reserva_svc = ReservaService()
 
 
 def _pagos_por_estado(reserva_id, estado):
@@ -77,6 +80,47 @@ class TestActualizar:
     def test_turno_inexistente_devuelve_none(self, make_actividad):
         data = {"dia_semana": DiaSemana.LUNES, "hora": time(10, 0), "cupo": 5}
         assert svc.actualizar(9999, data) is None
+
+    def test_subir_cupo_promueve_y_notifica_lista_espera(
+        self, make_actividad, make_turno, make_user, make_reserva, next_date_for,
+        monkeypatch,
+    ):
+        # Turno lleno (cupo 1) con un cliente esperando: subir el cupo debe
+        # ofrecerle el lugar nuevo y avisarle, igual que una cancelación.
+        turno = make_turno(make_actividad(), dia_semana=DiaSemana.LUNES, cupo=1)
+        fecha = next_date_for(DiaSemana.LUNES)
+        make_reserva(make_user(), turno, fecha)
+        waiter = make_user()
+        espera = reserva_svc.unirse_lista_espera(waiter.id, turno.id, fecha)[0]
+        assert espera.estado_espera == EstadoEspera.ESPERANDO
+
+        aviso = MagicMock()
+        monkeypatch.setattr(
+            "app.services.lista_espera_service.send_lista_espera_email", aviso
+        )
+        data = {"dia_semana": turno.dia_semana, "hora": turno.hora, "cupo": 2}
+        svc.actualizar(turno.id, data)
+
+        assert espera.estado_espera == EstadoEspera.OFERTADO
+        assert espera.oferta_expira_at is not None
+        assert aviso.called
+
+    def test_subir_cupo_sin_demanda_no_notifica(
+        self, make_actividad, make_turno, make_user, make_reserva, next_date_for,
+        monkeypatch,
+    ):
+        turno = make_turno(make_actividad(), dia_semana=DiaSemana.LUNES, cupo=1)
+        fecha = next_date_for(DiaSemana.LUNES)
+        make_reserva(make_user(), turno, fecha)
+
+        aviso = MagicMock()
+        monkeypatch.setattr(
+            "app.services.lista_espera_service.send_lista_espera_email", aviso
+        )
+        data = {"dia_semana": turno.dia_semana, "hora": turno.hora, "cupo": 3}
+        svc.actualizar(turno.id, data)
+
+        assert not aviso.called
 
 
 class TestEliminar:
@@ -222,3 +266,35 @@ class TestEliminarFecha:
 
     def test_turno_inexistente_devuelve_none(self, db_session, next_date_for):
         assert svc.eliminar_fecha(9999, next_date_for(DiaSemana.LUNES), 1) is None
+
+
+class TestCupoConHold:
+    def test_descuenta_el_hold_solo_en_meses_futuros(
+        self, make_user, make_actividad, make_turno, make_pago
+    ):
+        abonado = make_user()
+        turno = make_turno(make_actividad(), dia_semana=DiaSemana.LUNES, cupo=2)
+        with freeze_time("2026-07-01"):
+            reservas = reserva_svc.crear_reserva_mensual(
+                abonado.id, turno.id, date(2026, 7, 6)
+            )
+        make_pago(abonado, reservas[0], "1000.00", PagoEstado.PAGADO)
+
+        # Julio (mes del abono): cuenta la fila real. Agosto: cuenta el hold.
+        assert svc.lugares_disponibles(turno, date(2026, 7, 13)) == 1
+        assert svc.lugares_disponibles(turno, date(2026, 8, 3)) == 1
+        assert svc.hay_cupo(turno, date(2026, 8, 3)) is True
+
+    def test_cancelar_una_clase_no_la_reocupa_el_hold(
+        self, make_user, make_actividad, make_turno, make_pago
+    ):
+        abonado = make_user()
+        turno = make_turno(make_actividad(), dia_semana=DiaSemana.LUNES, cupo=2)
+        with freeze_time("2026-07-01"):
+            reservas = reserva_svc.crear_reserva_mensual(
+                abonado.id, turno.id, date(2026, 7, 6)
+            )
+        make_pago(abonado, reservas[0], "1000.00", PagoEstado.PAGADO)
+
+        reserva_svc.cancelar_reserva(reservas[1].id)
+        assert svc.lugares_disponibles(turno, date(2026, 7, 13)) == 2

@@ -11,13 +11,14 @@ from datetime import date, datetime, timedelta
 from .. import db
 from ..models.turno import DiaSemana, Turno
 from ..models.user import User, UserRole
-from .email_service import send_lista_espera_email
+from .email_service import send_lista_espera_email, send_recordatorio_renovacion_email
 from .lista_espera_service import (
     AR_TZ,
     LISTA_ESPERA_TOPE_AVISO,
     OFERTA_VENTANA,
     ListaEsperaService,
 )
+from .mensualidad_service import RENOVACION_DIA_LIMITE
 
 
 def notificar_cupo_disponible(cliente_id: int, turno_id: int) -> str:
@@ -48,6 +49,36 @@ def notificar_cupo_disponible(cliente_id: int, turno_id: int) -> str:
         turno_label=f"{turno.dia_semana.value} {turno.hora.strftime('%H:%M')}",
         clases_label=_proxima_ocurrencia(turno, ahora).strftime("%d/%m"),
         expira_label=expira.strftime("%H:%M"),
+    )
+    return cliente.email
+
+
+def notificar_recordatorio_renovacion(cliente_id: int, turno_id: int) -> str:
+    """Envía a un cliente el recordatorio de renovación de un turno; devuelve su email.
+
+    Espejo manual del aviso que el scheduler manda solo el día 10, pero apuntado
+    a un cliente y turno concretos y sin depender de que tenga una renovación
+    impaga real: sirve para mostrar el email en una demo. El error de envío sube
+    al caller, igual que en `notificar_cupo_disponible`.
+    """
+    cliente = db.session.get(User, cliente_id)
+    if cliente is None or cliente.role != UserRole.CLIENT:
+        raise ValueError("El cliente indicado no existe.")
+
+    turno = db.session.get(Turno, turno_id)
+    if turno is None:
+        raise ValueError("El turno indicado no existe.")
+
+    ahora = datetime.now(tz=AR_TZ)
+    fecha_limite = ahora.date().replace(day=RENOVACION_DIA_LIMITE)
+
+    send_recordatorio_renovacion_email(
+        cliente.email,
+        nombre=cliente.first_name,
+        actividad=turno.actividad.nombre,
+        turno_label=f"{turno.dia_semana.value} {turno.hora.strftime('%H:%M')}",
+        clases_label=_proxima_ocurrencia(turno, ahora).strftime("%d/%m"),
+        fecha_limite_label=fecha_limite.strftime("%d/%m"),
     )
     return cliente.email
 

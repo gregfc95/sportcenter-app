@@ -7,11 +7,11 @@ from sqlalchemy import delete, func, or_, select
 from sqlalchemy.exc import IntegrityError
 
 from .. import db
-from ..models.pago import Pago, PagoEstado
 from ..models.penalizacion import Penalizacion, PenalizacionMotivo
 from ..models.reserva import EstadoEspera, MotivoCancelacion, Reserva, ReservaTipo
 from ..models.suspension import Suspension
 from ..models.turno import Turno
+from . import cupo
 from .email_service import send_recordatorio_renovacion_email
 from .lista_espera_service import ListaEsperaService
 from .reserva_service import (
@@ -409,16 +409,7 @@ class MensualidadService:
         return db.session.execute(stmt).first() is not None
 
     def _grupo_tiene_cobros(self, grupo_id: str) -> bool:
-        stmt = (
-            select(Pago.id)
-            .join(Reserva, Pago.reserva_id == Reserva.id)
-            .where(
-                Reserva.grupo_id == grupo_id,
-                Pago.estado.in_([PagoEstado.SENADO, PagoEstado.PAGADO]),
-            )
-            .limit(1)
-        )
-        return db.session.execute(stmt).first() is not None
+        return cupo.grupo_tiene_cobros(grupo_id)
 
     # --- Internos: penalización / suspensión / conteos ---
 

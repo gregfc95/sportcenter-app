@@ -22,12 +22,13 @@ export function notificarListaEsperaLlena({ turnoId }) {
   });
 }
 
-// Disparo manual (demo) del recordatorio de renovaciones impagas que el
-// sistema manda solo el día 10.
-export function recordarRenovacionesImpagas() {
-  return request("/api/notificaciones/recordatorio-renovaciones", {
+// Disparo manual (demo) del recordatorio de renovación que el sistema manda
+// solo el día 10, apuntado a un cliente y turno elegidos.
+export function notificarRecordatorioRenovacion({ clienteId, turnoId }) {
+  return request("/api/notificaciones/recordatorio-renovacion", {
     method: "POST",
-    fallback: "No se pudieron enviar los recordatorios.",
+    body: { cliente_id: clienteId, turno_id: turnoId },
+    fallback: "No se pudo enviar el recordatorio.",
   });
 }
 
