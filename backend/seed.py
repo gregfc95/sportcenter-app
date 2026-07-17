@@ -124,6 +124,26 @@ def register_commands(app):
                 password_hash=generate_password_hash("Cliente1234!"),
                 role=UserRole.CLIENT,
             ),
+            "penalizado": User(
+                first_name="Cliente",
+                last_name="Penalizado",
+                dni="88888888",
+                email="penalizado@gmail.com",
+                phone="1188990011",
+                birth_date=date(1992, 2, 10),
+                password_hash=generate_password_hash("Cliente1234!"),
+                role=UserRole.CLIENT,
+            ),
+            "suspendido": User(
+                first_name="Cliente",
+                last_name="Suspendido",
+                dni="77777777",
+                email="suspendido@gmail.com",
+                phone="1177889900",
+                birth_date=date(1993, 8, 30),
+                password_hash=generate_password_hash("Cliente1234!"),
+                role=UserRole.CLIENT,
+            ),
             "empleado": User(
                 first_name="Empleado",
                 last_name="Demo",
@@ -324,11 +344,11 @@ def register_commands(app):
         print(f"✅ {len(pagos)} pago(s) cargado(s).")
 
         # --- Penalización: renovación impaga del mes pasado (demo) ---
-        # "cliente" no pagó la renovación de junio (mes pasado): cada clase que
-        # pasó impaga sumó una penalización RENOVACION_IMPAGA y se canceló. Con 3
-        # penalizaciones en el mes anterior pierde el 20% de descuento de
-        # fidelidad este mes (descuento_mensualidad). El conteo mensual mira
-        # `created_at`, así que las fechamos en junio a mano.
+        # "penalizado" no pagó la renovación de junio (mes pasado): cada clase
+        # que pasó impaga sumó una penalización RENOVACION_IMPAGA y se canceló.
+        # Con 3 penalizaciones en el mes anterior pierde el 20% de descuento de
+        # fidelidad este mes (descuento_mensualidad), sin estar suspendido. El
+        # conteo mensual mira `created_at`, así que las fechamos en junio a mano.
         turno_lunes_futbol = turnos[("Futbol", DiaSemana.LUNES, time(18, 0))]
         grupo_origen = uuid4().hex  # abono de mayo ya pagado, origen de la renovación
         grupo_renovacion = uuid4().hex
@@ -336,7 +356,7 @@ def register_commands(app):
 
         renovacion_impaga = [
             Reserva(
-                user_id=users["cliente"].id,
+                user_id=users["penalizado"].id,
                 turno_id=turno_lunes_futbol.id,
                 fecha=fecha,
                 tipo=ReservaTipo.MENSUAL,
@@ -350,7 +370,7 @@ def register_commands(app):
 
         for reserva in renovacion_impaga:
             penalizacion = Penalizacion(
-                user_id=users["cliente"].id,
+                user_id=users["penalizado"].id,
                 reserva_id=reserva.id,
                 motivo=PenalizacionMotivo.RENOVACION_IMPAGA,
             )
@@ -364,7 +384,66 @@ def register_commands(app):
 
         db.session.commit()
         print(
-            f"✅ {len(renovacion_impaga)} penalización(es) de renovación impaga cargada(s)."
+            "✅ 1 cliente penalizado cargado (penalizado@gmail.com, "
+            f"{len(renovacion_impaga)} penalizaciones de junio)."
         )
+
+        # --- Suspensión vigente: renovación impaga al deadline del 11 (demo) ---
+        # "suspendido" tenía un abono pago en junio; la renovación de julio se
+        # generó el 1 y nunca se pagó. La clase del 6 pasó impaga (+1
+        # penalización) y el 11 se canceló el resto del abono y quedó la
+        # suspensión abierta (fin_at NULL). En la UI: "Estado de cuenta:
+        # Suspendida", sin descuento; se levanta con el primer pago de una
+        # reserva nueva.
+        grupo_origen_susp = uuid4().hex  # abono de junio pagado, origen de la renovación
+        grupo_renovacion_susp = uuid4().hex
+        clases_julio = [
+            date(2026, 7, 6),
+            date(2026, 7, 13),
+            date(2026, 7, 20),
+            date(2026, 7, 27),
+        ]
+
+        renovacion_susp = [
+            Reserva(
+                user_id=users["suspendido"].id,
+                turno_id=turno_lunes_futbol.id,
+                fecha=fecha,
+                tipo=ReservaTipo.MENSUAL,
+                grupo_id=grupo_renovacion_susp,
+                renovacion_de_grupo_id=grupo_origen_susp,
+            )
+            for fecha in clases_julio
+        ]
+        db.session.add_all(renovacion_susp)
+        db.session.commit()
+
+        deadline_11 = datetime.combine(
+            date(2026, 7, 11), time(3, 0), tzinfo=timezone.utc
+        )  # 00:00 AR del 11
+
+        # Solo la clase del 6 pasó impaga antes del deadline: es la única que
+        # penaliza; las futuras se cancelan sin penalización (la sanción ahí es
+        # la suspensión misma).
+        primera = renovacion_susp[0]
+        penalizacion_susp = Penalizacion(
+            user_id=users["suspendido"].id,
+            reserva_id=primera.id,
+            motivo=PenalizacionMotivo.RENOVACION_IMPAGA,
+        )
+        penalizacion_susp.created_at = deadline_11
+        db.session.add(penalizacion_susp)
+
+        for reserva in renovacion_susp:
+            reserva.motivo_cancelacion = MotivoCancelacion.CANCELADO
+            reserva.soft_delete()
+
+        suspension = Suspension(
+            user_id=users["suspendido"].id, grupo_id=grupo_renovacion_susp
+        )
+        suspension.inicio_at = deadline_11
+        db.session.add(suspension)
+        db.session.commit()
+        print("✅ 1 cliente suspendido cargado (suspendido@gmail.com).")
 
         print("🌱 Seed completado.")
