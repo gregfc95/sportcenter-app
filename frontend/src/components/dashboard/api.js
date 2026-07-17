@@ -32,6 +32,16 @@ export function notificarRecordatorioRenovacion({ clienteId, turnoId }) {
   });
 }
 
+// Disparo manual (demo) de la generación de renovaciones mensuales que el
+// scheduler corre solo el día 1, para el mes elegido (actual o siguiente).
+export function generarRenovaciones({ mes }) {
+  return request("/api/notificaciones/generar-renovaciones", {
+    method: "POST",
+    body: { mes },
+    fallback: "No se pudieron generar las clases mensuales.",
+  });
+}
+
 // Reset manual (demo) del contador de penalizaciones del mes, como el rollover
 // automático del 1°.
 export function resetearPenalizaciones() {

@@ -1,18 +1,20 @@
 from datetime import date, datetime
 
 from flask import Blueprint, Response, jsonify, request
+from sqlalchemy import select
 
 from .. import db
 from ..auth import current_user_id, require_role
 from ..models.pago import PagoEstado
 from ..models.reserva import EstadoEspera, MotivoCancelacion, Reserva, ReservaTipo
-from ..models.user import UserRole
+from ..models.user import User, UserRole
 from ..services import (
     ListaEsperaService,
     MensualidadService,
     PagoService,
     ReservaService,
     TurnoService,
+    cupo,
 )
 from ..services.reserva_service import AR_TZ, CupoLlenoError
 
@@ -63,6 +65,18 @@ def _espera_dict(reserva) -> dict | None:
     }
 
 
+def _cliente_dict(user) -> dict | None:
+    """Datos del cliente para las vistas de staff (None si el usuario no está)."""
+    if user is None:
+        return None
+    return {
+        "id": user.id,
+        "nombre": user.first_name,
+        "apellido": user.last_name,
+        "email": user.email,
+    }
+
+
 def _reserva_sesion_dict(reserva) -> dict:
     """Reserva serializada para el detalle de una sesión (vista admin/empleado).
 
@@ -79,16 +93,28 @@ def _reserva_sesion_dict(reserva) -> dict:
         "monto_pagado": float(resumen["cobrado"]),
         "precio": float(resumen["total"]),
         "saldo": float(resumen["saldo"]),
-        "cliente": (
-            {
-                "id": reserva.user.id,
-                "nombre": reserva.user.first_name,
-                "apellido": reserva.user.last_name,
-                "email": reserva.user.email,
-            }
-            if reserva.user
+        "cliente": _cliente_dict(reserva.user),
+    }
+
+
+def _espera_sesion_dict(reserva) -> dict:
+    """Entrada de la lista de espera para el detalle de una sesión.
+
+    Solo `ofertado` retiene cupo (con su vencimiento); `esperando` lleva su
+    posición real en la cola y `vencido` queda a la espera de re-armarse.
+    """
+    return {
+        "id": reserva.id,
+        "tipo": reserva.tipo.value,
+        "estado_espera": reserva.estado_espera.value,
+        "ocupa_cupo": reserva.estado_espera == EstadoEspera.OFERTADO,
+        "oferta_expira_at": (
+            reserva.oferta_expira_at.isoformat()
+            if reserva.oferta_expira_at
             else None
         ),
+        "posicion": lista_espera_service.posicion(reserva),
+        "cliente": _cliente_dict(reserva.user),
     }
 
 
@@ -248,6 +274,13 @@ def list_sesiones_reservadas() -> Response:
             if r.fecha == fecha and r.estado_espera is None
         ]
         asistencias = sum(1 for r in reservas_sesion if r.asistio)
+        # Todas las filas de espera (esperando/ofertado/vencido): la card
+        # muestra cuánta gente hay anotada, no solo la demanda elegible.
+        en_espera = sum(
+            1
+            for r in turno.reservas
+            if r.fecha == fecha and r.estado_espera is not None
+        )
         # Una sesión puede mezclar mensuales y eventuales; exponemos los tipos
         # presentes (orden fijo) para el chip de la lista de Turnos Reservados.
         tipos_presentes = {r.tipo.value for r in reservas_sesion}
@@ -263,6 +296,7 @@ def list_sesiones_reservadas() -> Response:
                 "ocupados": turno.cupo - disponibles,
                 "reservas": len(reservas_sesion),
                 "asistencias": asistencias,
+                "en_espera": en_espera,
                 "tipos": tipos,
             }
         )
@@ -291,6 +325,19 @@ def get_sesion_reservada(turno_id: int, fecha: str) -> Response:
     actividad = turno.actividad
     reservas = reserva_service.listar_por_turno_fecha(turno_id, fecha_obj)
     disponibles = turno_service.lugares_disponibles(turno, fecha_obj)
+    espera = lista_espera_service.espera_por_sesion(turno_id, fecha_obj)
+    # Los holds virtuales (abonados con lugar garantizado a futuro) también
+    # suman en `ocupados`; se listan para que el conteo cierre a la vista.
+    hold_ids = cupo.holds_para(turno, fecha_obj)
+    titulares = (
+        db.session.execute(
+            select(User)
+            .where(User.id.in_(hold_ids))
+            .order_by(User.last_name, User.first_name)
+        ).scalars().all()
+        if hold_ids
+        else []
+    )
 
     payload = {
         "turno": {
@@ -304,6 +351,8 @@ def get_sesion_reservada(turno_id: int, fecha: str) -> Response:
             "precio": float(actividad.precio),
         },
         "reservas": [_reserva_sesion_dict(reserva) for reserva in reservas],
+        "lista_espera": [_espera_sesion_dict(r) for r in espera],
+        "holds": [{"cliente": _cliente_dict(u)} for u in titulares],
     }
 
     return jsonify(payload), 200

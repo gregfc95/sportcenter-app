@@ -2,7 +2,7 @@ from datetime import date, datetime, timedelta
 from uuid import uuid4
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import joinedload
 
@@ -318,16 +318,23 @@ class ReservaService:
         """Sesiones (turno + fecha) con al menos una reserva activa, sin recortar por fecha.
 
         Una "sesión" es la instancia de un turno semanal en una fecha concreta. Para
-        la vista de administración de turnos reservados: agrupa las reservas activas
-        por (turno, fecha) —el filtro de soft-delete descarta las canceladas— y
-        devuelve cada sesión, incluidas las de días pasados (ahí "Registrar Pago"
-        queda deshabilitado), ordenadas por fecha y horario. No incluye sesiones
-        sin reservas.
+        la vista de administración de turnos reservados: agrupa las reservas firmes
+        —normales u ofertadas, el mismo criterio de ocupación que `cupo.ocupados`;
+        una oferta activa consume cupo y la sesión debe seguir visible aunque sea
+        su única ocupación— por (turno, fecha), con el filtro de soft-delete
+        descartando las canceladas, y devuelve cada sesión, incluidas las de días
+        pasados (ahí "Registrar Pago" queda deshabilitado), ordenadas por fecha y
+        horario. No incluye sesiones sin reservas.
         """
         stmt = (
             select(Reserva.turno_id, Reserva.fecha)
             .join(Reserva.turno)
-            .where(Reserva.estado_espera.is_(None))
+            .where(
+                or_(
+                    Reserva.estado_espera.is_(None),
+                    Reserva.estado_espera == EstadoEspera.OFERTADO,
+                )
+            )
             .group_by(Reserva.turno_id, Reserva.fecha, Turno.hora)
             .order_by(Reserva.fecha.asc(), Turno.hora.asc())
         )

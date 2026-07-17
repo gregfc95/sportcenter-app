@@ -1,7 +1,16 @@
 import { Link } from "react-router-dom";
-import { BellRing, CalendarClock, CreditCard, RotateCcw, UserPlus, Users } from "lucide-react";
+import {
+  BellRing,
+  CalendarClock,
+  CalendarPlus,
+  CreditCard,
+  RotateCcw,
+  UserPlus,
+  Users,
+} from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import GenerarClaseMensualDialog from "./GenerarClaseMensualDialog";
 import NotificarCupoDialog from "./NotificarCupoDialog";
 import NotificarListaLlenaDialog from "./NotificarListaLlenaDialog";
 import RecordarRenovacionesDialog from "./RecordarRenovacionesDialog";
@@ -23,6 +32,12 @@ const ACTIONS = [
     label: "Resetear Penalizaciones",
     Icon: RotateCcw,
     Dialog: ResetPenalizacionesDialog,
+  },
+  {
+    label: "Generar Clase Mensual",
+    Icon: CalendarPlus,
+    Dialog: GenerarClaseMensualDialog,
+    adminOnly: true,
   },
   { label: "Nuevo Staff", Icon: UserPlus, href: "/empleados/nuevo", adminOnly: true },
 ];

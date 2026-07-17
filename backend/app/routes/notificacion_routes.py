@@ -1,7 +1,10 @@
+from datetime import date, datetime
+
 from flask import Blueprint, Response, jsonify, request
 
 from ..auth import require_role
 from ..models.user import UserRole
+from ..services.lista_espera_service import AR_TZ
 from ..services.mensualidad_service import MensualidadService
 from ..services.notificacion_service import (
     notificar_cupo_disponible,
@@ -116,6 +119,35 @@ def recordar_renovaciones() -> Response:
 
     emails = mensualidad_service.recordar_renovaciones_impagas()
     return jsonify({"ok": True, "enviados": len(emails), "emails": emails}), 200
+
+
+@notificacion_bp.route("/generar-renovaciones", methods=["POST"])
+def generar_renovaciones() -> Response:
+    """Genera a mano las renovaciones mensuales de un mes (demo de admin).
+
+    Espejo del job del día 1: crea las clases del mes elegido para los abonos
+    pagos del mes anterior. Se pasa el día 1 del mes como `hoy` para reproducir
+    el run completo. Es idempotente (repetirlo devuelve 0) y no pisa abonos que
+    el cliente ya compró a mano. Solo admite el mes actual o el siguiente.
+    """
+    require_role(UserRole.ADMIN)
+    data = request.get_json() or {}
+
+    mes = data.get("mes")
+    if not isinstance(mes, int):
+        return jsonify({"error": "mes es requerido y debe ser un entero."}), 400
+
+    hoy = datetime.now(tz=AR_TZ).date()
+    mes_siguiente = hoy.month % 12 + 1
+    if mes not in (hoy.month, mes_siguiente):
+        return (
+            jsonify({"error": "Solo se puede generar el mes actual o el siguiente."}),
+            400,
+        )
+
+    anio = hoy.year + 1 if mes < hoy.month else hoy.year
+    creadas = mensualidad_service.generar_renovaciones(hoy=date(anio, mes, 1))
+    return jsonify({"ok": True, "creadas": len(creadas)}), 200
 
 
 @notificacion_bp.route("/reset-penalizaciones", methods=["POST"])

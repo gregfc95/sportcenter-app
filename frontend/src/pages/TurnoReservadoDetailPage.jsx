@@ -4,6 +4,7 @@ import {
   CalendarDays,
   ChevronRight,
   Clock,
+  Hourglass,
   Search,
   UserCheck,
   Users,
@@ -28,6 +29,23 @@ function formatFechaLarga(iso, diaSemana) {
     ? diaSemana.charAt(0).toUpperCase() + diaSemana.slice(1)
     : "";
   return `${dia} ${d}/${m}/${y}`.trim();
+}
+
+// Detalle de cada entrada en espera para el staff: la ofertada retiene el
+// cupo hasta su hora límite; la que espera muestra su posición real de
+// promoción (los abonos mensuales van antes que las eventuales).
+function esperaDetalle(entry) {
+  if (entry.estado_espera === "ofertado" && entry.oferta_expira_at) {
+    const hora = new Date(entry.oferta_expira_at).toLocaleTimeString("es-AR", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+    return `Retiene cupo · vence ${hora}`;
+  }
+  if (entry.estado_espera === "esperando" && entry.posicion != null) {
+    return `N.º ${entry.posicion} en la cola`;
+  }
+  return "No ocupa cupo";
 }
 
 function Field({ label, children }) {
@@ -95,7 +113,7 @@ export default function TurnoReservadoDetailPage() {
     );
   }
 
-  const { turno, reservas } = data;
+  const { turno, reservas, lista_espera: listaEspera = [], holds = [] } = data;
   const Icon = getActividadIcon(turno.actividad);
   // El cobro en mostrador puede registrarse el mismo día aunque la hora ya haya
   // pasado (el saldo se paga al asistir). Solo se bloquea cuando el día entero
@@ -210,6 +228,17 @@ export default function TurnoReservadoDetailPage() {
                   />
                 </div>
               </div>
+            </Field>
+
+            <Field label="Lista de espera">
+              <span className="text-body-md text-on-surface font-medium flex items-center gap-2">
+                <Hourglass
+                  className="size-4 text-on-surface-variant"
+                  aria-hidden="true"
+                />
+                {listaEspera.length}{" "}
+                {listaEspera.length === 1 ? "persona" : "personas"}
+              </span>
             </Field>
           </div>
         </div>
@@ -363,6 +392,113 @@ export default function TurnoReservadoDetailPage() {
                 )}
               </tbody>
             </table>
+          </div>
+        )}
+      </section>
+
+      {/* Lista de espera y lugares garantizados: junto con las reservas de
+          arriba explican el total de "ocupados" (las ofertas activas y los
+          abonos con lugar garantizado consumen cupo sin ser reservas firmes). */}
+      <section className="bg-surface-container border border-outline-variant rounded-xl overflow-hidden">
+        <div className="p-md md:p-lg border-b border-outline-variant/40 flex items-center gap-3">
+          <h2 className="text-headline-md text-on-surface">Lista de espera</h2>
+          {listaEspera.length > 0 && (
+            <span className="px-3 py-1 rounded bg-surface-container-high text-on-surface-variant text-label-sm">
+              {listaEspera.length}{" "}
+              {listaEspera.length === 1 ? "persona" : "personas"}
+            </span>
+          )}
+        </div>
+
+        {listaEspera.length === 0 ? (
+          <div className="p-md md:p-lg flex flex-col items-center justify-center py-xl text-on-surface-variant">
+            <Hourglass className="size-12 mb-3 opacity-70" />
+            <p className="text-headline-md">No hay Clientes en Lista de Espera</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-surface-container-high border-b border-outline-variant">
+                  <th className="py-md px-md text-label-sm text-on-surface-variant uppercase tracking-wider">
+                    Nombre
+                  </th>
+                  <th className="py-md px-md text-label-sm text-on-surface-variant uppercase tracking-wider">
+                    Tipo
+                  </th>
+                  <th className="py-md px-md text-label-sm text-on-surface-variant uppercase tracking-wider text-center">
+                    Estado
+                  </th>
+                  <th className="py-md px-md text-label-sm text-on-surface-variant uppercase tracking-wider">
+                    Detalle
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-outline-variant/30">
+                {listaEspera.map((entry) => (
+                  <tr
+                    key={entry.id}
+                    className="hover:bg-surface-container-high/40 transition-colors"
+                  >
+                    <td className="py-sm px-md">
+                      <div className="flex flex-col">
+                        <span className="text-body-md text-on-surface">
+                          {entry.cliente?.nombre ?? "—"}
+                        </span>
+                        {entry.cliente?.email && (
+                          <span className="text-xs text-on-surface-variant">
+                            {entry.cliente.email}
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="py-sm px-md">
+                      <TipoChip tipo={entry.tipo} />
+                    </td>
+                    <td className="py-sm px-md text-center">
+                      <EstadoBadge
+                        estado={
+                          entry.estado_espera === "vencido"
+                            ? "oferta_vencida"
+                            : entry.estado_espera
+                        }
+                      />
+                    </td>
+                    <td className="py-sm px-md text-body-md text-on-surface-variant">
+                      {esperaDetalle(entry)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {holds.length > 0 && (
+          <div className="p-md md:p-lg border-t border-outline-variant/40 flex flex-col gap-sm">
+            <h3 className="text-label-sm text-on-surface-variant uppercase tracking-wider">
+              Lugares garantizados
+            </h3>
+            {holds.map((hold) => (
+              <div
+                key={hold.cliente?.id}
+                className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3"
+              >
+                <div className="flex flex-col">
+                  <span className="text-body-md text-on-surface">
+                    {hold.cliente?.nombre ?? "—"}
+                  </span>
+                  {hold.cliente?.email && (
+                    <span className="text-xs text-on-surface-variant">
+                      {hold.cliente.email}
+                    </span>
+                  )}
+                </div>
+                <span className="text-body-md text-on-surface-variant">
+                  Abono — lugar garantizado
+                </span>
+              </div>
+            ))}
           </div>
         )}
       </section>

@@ -7,7 +7,7 @@ def register_commands(app):
     @app.cli.command("seed-db")
     def seed_db():
         """Carga los datos iniciales necesarios para que la app funcione."""
-        from datetime import date, datetime, time, timezone
+        from datetime import date, datetime, time, timedelta, timezone
         from decimal import Decimal
         from uuid import uuid4
 
@@ -73,6 +73,9 @@ def register_commands(app):
             ("Futbol", DiaSemana.VIERNES, time(20, 0), 10),
             ("Voley", DiaSemana.LUNES, time(9, 0), 12),
             ("Basket", DiaSemana.SABADO, time(16, 0), 1),
+            # Cupo 1 a propósito: con una sola reserva queda lleno y la UI pasa
+            # a ofrecer la lista de espera (demo del aviso de lista llena).
+            ("Futbol", DiaSemana.MIERCOLES, time(10, 0), 1),
         ]
 
         turnos = {}
@@ -92,7 +95,7 @@ def register_commands(app):
         # --- Usuarios ---
         users = {
             "cliente": User(
-                first_name="Cliente",
+                first_name="Cliente1",
                 last_name="Demo",
                 dni="11111111",
                 email="cliente@gmail.com",
@@ -102,7 +105,7 @@ def register_commands(app):
                 role=UserRole.CLIENT,
             ),
             "cliente2": User(
-                first_name="Cliente",
+                first_name="Cliente2",
                 last_name="Dos",
                 dni="44444444",
                 email="cliente2@gmail.com",
@@ -112,7 +115,7 @@ def register_commands(app):
                 role=UserRole.CLIENT,
             ),
             "cliente3": User(
-                first_name="Cliente",
+                first_name="Cliente3",
                 last_name="Tres",
                 dni="55555555",
                 email="cliente3@gmail.com",
@@ -142,6 +145,34 @@ def register_commands(app):
                 role=UserRole.ADMIN,
             ),
         }
+
+        # Clientes extra para la demo del aviso de lista llena: hacen falta 9
+        # personas en espera más un décimo que se anota a mano desde la UI.
+        apellidos_extra = [
+            "Cuatro",
+            "Cinco",
+            "Seis",
+            "Siete",
+            "Ocho",
+            "Nueve",
+            "Diez",
+            "Once",
+            "Doce",
+            "Trece",
+            "Catorce",
+            "Quince",
+        ]
+        for i, apellido in enumerate(apellidos_extra, start=4):
+            users[f"cliente{i}"] = User(
+                first_name=f"Cliente{i}",
+                last_name=apellido,
+                dni=str(60000000 + i),
+                email=f"cliente{i}@gmail.com",
+                phone=f"11{60000000 + i}",
+                birth_date=date(1996, 4, 18),
+                password_hash=generate_password_hash("Cliente1234!"),
+                role=UserRole.CLIENT,
+            )
 
         db.session.add_all(users.values())
         db.session.commit()
@@ -201,6 +232,39 @@ def register_commands(app):
         db.session.add_all(reservas_espera)
         db.session.commit()
         print("✅ Escenario de lista de espera (oferta vencida) cargado.")
+
+        # --- Lista de espera casi llena (demo del aviso a admins) ---
+        # El aviso de "lista llena" dispara cuando la cola llega exactamente a
+        # 10 ESPERANDO al anotarse alguien (avisar_admins_si_lleno), así que se
+        # dejan 9: el décimo se anota a mano desde la UI y gatilla el email.
+        # cliente4 ocupa el único cupo para que el turno figure lleno. La fecha
+        # es el próximo miércoles, siempre futura, para que el barrido no
+        # purgue las filas en espera (_purgar_espera_pasadas).
+        turno_espera = turnos[("Futbol", DiaSemana.MIERCOLES, time(10, 0))]
+        hoy = date.today()
+        fecha_espera = hoy + timedelta(days=(2 - hoy.weekday()) % 7 or 7)
+        en_espera = [
+            Reserva(
+                user_id=users[f"cliente{i}"].id,
+                turno_id=turno_espera.id,
+                fecha=fecha_espera,
+                estado_espera=EstadoEspera.ESPERANDO,
+            )
+            for i in range(5, 14)
+        ]
+        db.session.add(
+            Reserva(
+                user_id=users["cliente4"].id,
+                turno_id=turno_espera.id,
+                fecha=fecha_espera,
+            )
+        )
+        db.session.add_all(en_espera)
+        db.session.commit()
+        print(
+            f"✅ Lista de espera Fútbol miércoles 10:00 ({fecha_espera}): "
+            f"{len(en_espera)} en espera, cupo lleno."
+        )
 
         # --- Pagos ---
         # Precios por actividad: Futbol 1500, Voley 1000. La seña es el 50%.

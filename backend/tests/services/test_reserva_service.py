@@ -286,6 +286,48 @@ class TestListarPorUsuario:
         assert svc.listar_por_usuario(user.id) == []
 
 
+class TestListarSesionesReservadas:
+    def test_incluye_solo_ofertado_y_excluye_esperando_y_vencido(
+        self, monkeypatch, make_user, make_actividad, make_turno, make_reserva, next_date_for
+    ):
+        from datetime import datetime, timezone
+
+        from app.services.lista_espera_service import ListaEsperaService
+
+        monkeypatch.setattr(
+            "app.services.lista_espera_service.send_lista_espera_email",
+            lambda *a, **k: None,
+        )
+        lista_svc = ListaEsperaService()
+        turno = make_turno(make_actividad(), dia_semana=DiaSemana.LUNES, cupo=1)
+        fecha = next_date_for(DiaSemana.LUNES)
+        ocupante = make_reserva(make_user(), turno, fecha)
+        primero, segundo = make_user(), make_user()
+        svc.unirse_lista_espera(primero.id, turno.id, fecha)
+        svc.unirse_lista_espera(segundo.id, turno.id, fecha)
+
+        # Con la única firme cancelada y la oferta activa, la sesión sigue
+        # visible: la oferta consume cupo (mismo criterio que `cupo.ocupados`).
+        svc.cancelar_reserva(ocupante.id)
+        lista_svc.promover(turno.id, fecha, motivo="cancelacion")
+        assert (turno.id, fecha) in [
+            (t.id, f) for t, f in svc.listar_sesiones_reservadas()
+        ]
+
+        # Al vencer la oferta pasa al segundo (la sesión sigue ofertada); cuando
+        # también vence la suya y no queda nadie ofertado, la sesión desaparece.
+        with freeze_time(datetime.now(timezone.utc) + timedelta(hours=2)):
+            lista_svc.expirar_ofertas()
+        assert (turno.id, fecha) in [
+            (t.id, f) for t, f in svc.listar_sesiones_reservadas()
+        ]
+        with freeze_time(datetime.now(timezone.utc) + timedelta(hours=4)):
+            lista_svc.expirar_ofertas()
+        assert (turno.id, fecha) not in [
+            (t.id, f) for t, f in svc.listar_sesiones_reservadas()
+        ]
+
+
 class TestFechasBloqueadas:
     """Reservas contra fechas dadas de baja por el centro (`turno_fechas_bloqueadas`)."""
 

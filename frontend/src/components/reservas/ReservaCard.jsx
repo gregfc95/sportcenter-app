@@ -15,6 +15,7 @@ import PagarEsperaBloqueado from "@/components/reservas/PagarEsperaBloqueado";
 import ClasesMensuales from "@/components/reservas/ClasesMensuales";
 import VerQrDialog from "@/components/reservas/VerQrDialog";
 import {
+  esperaBadgeEstado,
   esperaDetalle,
   esperaOfertaActiva,
   formatRenovacionLimite,
@@ -150,7 +151,7 @@ function ReservaMensualCard({ reserva, onCancelled, onPagado }) {
     <ReservaCardShell
       actividad={reserva.actividad}
       subtitle={`Todos los ${reserva.turno.dia_semana} · ${reserva.turno.hora}`}
-      estado={reserva.estado}
+      estado={enEspera ? esperaBadgeEstado(reserva.espera) : reserva.estado}
       qrAction={
         pagado && claseSeleccionada ? (
           <VerQrDialog
@@ -240,7 +241,9 @@ function ReservaMensualCard({ reserva, onCancelled, onPagado }) {
       </div>
       {enEspera && (
         <div className="flex items-center gap-3 text-info-blue">
-          <Clock className="size-4 shrink-0" aria-hidden="true" />
+          {reserva.espera?.estado !== "vencido" && (
+            <Clock className="size-4 shrink-0" aria-hidden="true" />
+          )}
           <span>{esperaDetalle(reserva.espera)}</span>
         </div>
       )}
@@ -300,7 +303,7 @@ function ReservaEventualCard({ reserva, onCancelled, onPagado }) {
     <ReservaCardShell
       actividad={reserva.actividad}
       subtitle={`Reserva #${reserva.id}`}
-      estado={reserva.estado}
+      estado={enEspera ? esperaBadgeEstado(reserva.espera) : reserva.estado}
       qrAction={
         reserva.estado === "pagado" ? (
           <VerQrDialog
@@ -375,7 +378,9 @@ function ReservaEventualCard({ reserva, onCancelled, onPagado }) {
       )}
       {enEspera && (
         <div className="flex items-center gap-3 text-info-blue">
-          <Clock className="size-4 shrink-0" aria-hidden="true" />
+          {reserva.espera?.estado !== "vencido" && (
+            <Clock className="size-4 shrink-0" aria-hidden="true" />
+          )}
           <span>{esperaDetalle(reserva.espera)}</span>
         </div>
       )}

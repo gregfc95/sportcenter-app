@@ -58,27 +58,13 @@ def ocupados(turno: Turno, fecha: date) -> int:
     fecha puntual), y al materializarse la renovación el tip avanza de mes,
     así el hold nunca se suma dos veces con la fila real.
     """
-    firmes = set(
-        db.session.execute(
-            select(Reserva.user_id).where(
-                Reserva.turno_id == turno.id,
-                Reserva.fecha == fecha,
-                or_(
-                    Reserva.estado_espera.is_(None),
-                    Reserva.estado_espera == EstadoEspera.OFERTADO,
-                ),
-            )
-        ).scalars()
-    )
-    mes_fecha = _mes(fecha)
-    # El titular con una fila firme en la sesión (ej. una eventual previa a
-    # esta regla) no suma dos veces.
-    virtuales = sum(
-        1
-        for user_id, mes_tip in _titulares_hold(turno.id).items()
-        if mes_tip < mes_fecha and user_id not in firmes
-    )
-    return len(firmes) + virtuales
+    firmes = _firmes(turno.id, fecha)
+    return len(firmes) + len(_holds(turno.id, fecha, firmes))
+
+
+def holds_para(turno: Turno, fecha: date) -> list[int]:
+    """User ids de los holds virtuales que `ocupados` cuenta para la sesión."""
+    return _holds(turno.id, fecha, _firmes(turno.id, fecha))
 
 
 def grupo_tiene_cobros(grupo_id: str) -> bool:
@@ -93,6 +79,35 @@ def grupo_tiene_cobros(grupo_id: str) -> bool:
         .limit(1)
     )
     return db.session.execute(stmt).first() is not None
+
+
+def _firmes(turno_id: int, fecha: date) -> set[int]:
+    return set(
+        db.session.execute(
+            select(Reserva.user_id).where(
+                Reserva.turno_id == turno_id,
+                Reserva.fecha == fecha,
+                or_(
+                    Reserva.estado_espera.is_(None),
+                    Reserva.estado_espera == EstadoEspera.OFERTADO,
+                ),
+            )
+        ).scalars()
+    )
+
+
+def _holds(turno_id: int, fecha: date, firmes: set[int]) -> list[int]:
+    """Titulares cuyo hold pesa en la sesión, en orden estable.
+
+    El titular con una fila firme en la sesión (ej. una eventual previa a
+    esta regla) no suma dos veces.
+    """
+    mes_fecha = _mes(fecha)
+    return sorted(
+        user_id
+        for user_id, mes_tip in _titulares_hold(turno_id).items()
+        if mes_tip < mes_fecha and user_id not in firmes
+    )
 
 
 # Qué cuenta como clase de un abono confirmado: las filas que solo existieron

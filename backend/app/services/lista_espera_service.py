@@ -156,6 +156,38 @@ class ListaEsperaService:
                 return i
         return None
 
+    def espera_por_sesion(self, turno_id: int, fecha) -> list[Reserva]:
+        """Filas en lista de espera de la sesión, ordenadas para mostrar.
+
+        Primero las OFERTADO (retienen cupo, por vencimiento más próximo),
+        después las ESPERANDO con el mismo criterio que la promoción (mensual
+        antes que eventual, FIFO) y al final las VENCIDO.
+        """
+        stmt = (
+            select(Reserva)
+            .where(
+                Reserva.turno_id == turno_id,
+                Reserva.fecha == fecha,
+                Reserva.estado_espera.isnot(None),
+            )
+            .options(joinedload(Reserva.user))
+        )
+        filas = db.session.execute(stmt).scalars().all()
+        orden_estado = {
+            EstadoEspera.OFERTADO: 0,
+            EstadoEspera.ESPERANDO: 1,
+            EstadoEspera.VENCIDO: 2,
+        }
+        return sorted(
+            filas,
+            key=lambda r: (
+                orden_estado[r.estado_espera],
+                r.oferta_expira_at or datetime.max.replace(tzinfo=timezone.utc),
+                r.tipo != ReservaTipo.MENSUAL,
+                r.created_at,
+            ),
+        )
+
     def cantidad_en_espera(self, turno_id: int, fecha) -> int:
         """Cuántos esperan (ESPERANDO) esa (turno, fecha).
 

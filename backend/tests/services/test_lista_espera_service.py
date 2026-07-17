@@ -255,6 +255,44 @@ class TestAvisoAdmins:
         assert len(capturar_admin) == 1
 
 
+class TestEsperaPorSesion:
+    def test_orden_ofertado_esperando_vencido(self, lleno, make_user):
+        # Secuencia completa: el mensual recibe la oferta primero (prioridad
+        # estricta) y la deja vencer; el lugar pasa al primer eventual y los
+        # otros dos siguen esperando en orden de llegada.
+        mensual, primero, segundo = make_user(), make_user(), make_user()
+        reserva_svc.unirse_lista_espera(primero.id, lleno.turno.id, lleno.fecha)
+        reserva_svc.unirse_lista_espera(segundo.id, lleno.turno.id, lleno.fecha)
+        reserva_svc.unirse_lista_espera(
+            mensual.id, lleno.turno.id, lleno.fecha, ReservaTipo.MENSUAL
+        )
+        _liberar(lleno)
+        with freeze_time(datetime.now(timezone.utc) + timedelta(hours=2)):
+            lista_svc.expirar_ofertas()
+
+        filas = lista_svc.espera_por_sesion(lleno.turno.id, lleno.fecha)
+
+        assert [(f.user_id, f.estado_espera) for f in filas] == [
+            (primero.id, EstadoEspera.OFERTADO),
+            (segundo.id, EstadoEspera.ESPERANDO),
+            (mensual.id, EstadoEspera.VENCIDO),
+        ]
+
+    def test_posicion_mensual_coincide_con_posicion(self, lleno, make_user):
+        eventual, mensual = make_user(), make_user()
+        reserva_svc.unirse_lista_espera(eventual.id, lleno.turno.id, lleno.fecha)
+        grupo = reserva_svc.unirse_lista_espera(
+            mensual.id, lleno.turno.id, lleno.fecha, ReservaTipo.MENSUAL
+        )
+
+        filas = lista_svc.espera_por_sesion(lleno.turno.id, lleno.fecha)
+
+        fila_mensual = [f for f in filas if f.user_id == mensual.id][0]
+        assert fila_mensual.grupo_id == grupo[0].grupo_id
+        assert lista_svc.posicion(fila_mensual) == 1
+        assert filas[0].user_id == mensual.id
+
+
 class TestHoldEnLaCola:
     def test_un_lugar_retenido_por_hold_no_se_oferta(
         self, make_user, make_actividad, make_turno, make_pago

@@ -13,6 +13,7 @@ import SalirEsperaDialog from "@/components/reservas/SalirEsperaDialog";
 import PagarEsperaBloqueado from "@/components/reservas/PagarEsperaBloqueado";
 import VerQrDialog from "@/components/reservas/VerQrDialog";
 import {
+  esperaBadgeEstado,
   esperaDetalle,
   esperaOfertaActiva,
   formatRenovacionLimite,
@@ -148,12 +149,14 @@ export default function BookingCardMensual({
             </div>
           </div>
         </div>
-        <EstadoBadge estado={status} />
+        <EstadoBadge estado={enEspera ? esperaBadgeEstado(espera) : status} />
       </div>
 
       {enEspera && (
         <div className="pl-xs flex items-center gap-xs text-label-sm text-info-blue">
-          <Clock className="size-4 shrink-0" strokeWidth={2} />
+          {espera?.estado !== "vencido" && (
+            <Clock className="size-4 shrink-0" strokeWidth={2} />
+          )}
           <span>{esperaDetalle(espera)}</span>
         </div>
       )}
