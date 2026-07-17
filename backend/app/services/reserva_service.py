@@ -2,7 +2,7 @@ from datetime import date, datetime, timedelta
 from uuid import uuid4
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import joinedload
 
@@ -15,6 +15,7 @@ from ..models.reserva import (
 )
 from ..models.turno import Turno, DiaSemana
 from ..models.turno_fecha_bloqueada import TurnoFechaBloqueada
+from . import cupo
 from .lista_espera_service import ListaEsperaService
 
 
@@ -85,6 +86,7 @@ class ReservaService:
         if turno is None:
             raise ValueError("El turno indicado no existe.")
 
+        self._validar_sin_suscripcion_activa(user_id, turno_id)
         self._validar_dia_semana(turno, fecha)
         self._validar_turno_no_pasado(turno, fecha)
         self._validar_fecha_no_bloqueada(turno, fecha)
@@ -115,6 +117,7 @@ class ReservaService:
         if turno is None:
             raise ValueError("El turno indicado no existe.")
 
+        self._validar_sin_suscripcion_activa(user_id, turno_id)
         # Las fechas siguientes son la misma semana +7d: comparten día de
         # semana, y al ser posteriores nunca están en el pasado.
         self._validar_dia_semana(turno, fecha_inicio)
@@ -173,6 +176,7 @@ class ReservaService:
         if turno is None:
             raise ValueError("El turno indicado no existe.")
 
+        self._validar_sin_suscripcion_activa(user_id, turno_id)
         self._validar_dia_semana(turno, fecha)
         self._validar_turno_no_pasado(turno, fecha)
 
@@ -314,16 +318,23 @@ class ReservaService:
         """Sesiones (turno + fecha) con al menos una reserva activa, sin recortar por fecha.
 
         Una "sesión" es la instancia de un turno semanal en una fecha concreta. Para
-        la vista de administración de turnos reservados: agrupa las reservas activas
-        por (turno, fecha) —el filtro de soft-delete descarta las canceladas— y
-        devuelve cada sesión, incluidas las de días pasados (ahí "Registrar Pago"
-        queda deshabilitado), ordenadas por fecha y horario. No incluye sesiones
-        sin reservas.
+        la vista de administración de turnos reservados: agrupa las reservas firmes
+        —normales u ofertadas, el mismo criterio de ocupación que `cupo.ocupados`;
+        una oferta activa consume cupo y la sesión debe seguir visible aunque sea
+        su única ocupación— por (turno, fecha), con el filtro de soft-delete
+        descartando las canceladas, y devuelve cada sesión, incluidas las de días
+        pasados (ahí "Registrar Pago" queda deshabilitado), ordenadas por fecha y
+        horario. No incluye sesiones sin reservas.
         """
         stmt = (
             select(Reserva.turno_id, Reserva.fecha)
             .join(Reserva.turno)
-            .where(Reserva.estado_espera.is_(None))
+            .where(
+                or_(
+                    Reserva.estado_espera.is_(None),
+                    Reserva.estado_espera == EstadoEspera.OFERTADO,
+                )
+            )
             .group_by(Reserva.turno_id, Reserva.fecha, Turno.hora)
             .order_by(Reserva.fecha.asc(), Turno.hora.asc())
         )
@@ -472,25 +483,25 @@ class ReservaService:
 
     # --- Validaciones internas ---
 
+    def _validar_sin_suscripcion_activa(self, user_id: int, turno_id: int) -> None:
+        """Impide toda reserva nueva sobre un turno donde el cliente ya está abonado.
+
+        El abono vigente ya le garantiza el lugar en todos los meses (hold
+        virtual), así que otra eventual, otro abono o anotarse en la lista no
+        tienen sentido. Es un ValueError plano (400), no CupoLlenoError: el
+        frontend trata el 409 como invitación a la lista de espera.
+        """
+        if cupo.suscripcion_activa(user_id, turno_id) is not None:
+            raise ValueError("Ya posees una suscripción activa para este turno")
+
     def _validar_cupo_disponible(self, turno: Turno, fecha: date) -> None:
         """Verifica que quede cupo firme (reservas normales + ofertadas).
 
         Las filas en espera (`esperando`/`vencido`) no consumen cupo; las
-        ofertadas sí, porque retienen el lugar durante su ventana de pago.
+        ofertadas sí, porque retienen el lugar durante su ventana de pago. Los
+        holds virtuales de los abonados también cuentan (ver `cupo.ocupados`).
         """
-        stmt = (
-            select(func.count(Reserva.id))
-            .where(
-                Reserva.turno_id == turno.id,
-                Reserva.fecha == fecha,
-                or_(
-                    Reserva.estado_espera.is_(None),
-                    Reserva.estado_espera == EstadoEspera.OFERTADO,
-                ),
-            )
-        )
-        ocupados = db.session.execute(stmt).scalar()
-        if ocupados >= turno.cupo:
+        if cupo.ocupados(turno, fecha) >= turno.cupo:
             raise CupoLlenoError(
                 f"El turno no tiene cupo disponible para el {fecha.isoformat()}."
             )

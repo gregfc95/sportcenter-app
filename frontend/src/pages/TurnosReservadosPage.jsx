@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import {
   CalendarX2,
   CalendarDays,
+  Hourglass,
   Users,
   UserCheck,
   ChevronRight,
@@ -22,7 +23,14 @@ import { formatReservaFecha, todayISO } from "@/lib/fecha";
 import { cn } from "@/lib/utils";
 
 function SesionCard({ sesion }) {
-  const { cupo, ocupados, reservas, asistencias = 0, tipos = [] } = sesion;
+  const {
+    cupo,
+    ocupados,
+    reservas,
+    asistencias = 0,
+    en_espera: enEspera = 0,
+    tipos = [],
+  } = sesion;
   const ocupacion = cupo > 0 ? Math.min(100, (ocupados / cupo) * 100) : 0;
   const lleno = cupo > 0 && ocupados >= cupo;
   const asistenciaPct =
@@ -94,6 +102,12 @@ function SesionCard({ sesion }) {
             />
           </div>
         </div>
+        {enEspera > 0 && (
+          <div className="flex items-center gap-3">
+            <Hourglass className="size-4 shrink-0" aria-hidden="true" />
+            <span>En espera: {enEspera}</span>
+          </div>
+        )}
       </div>
 
       {/* Footer: ver detalle */}

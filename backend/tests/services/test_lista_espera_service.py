@@ -5,12 +5,14 @@ la ventana de oferta, el vencimiento y la confirmación al pagar. El envío de
 email se anula: la oferta debe persistir sin depender del transporte.
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from types import SimpleNamespace
 
 import pytest
 from freezegun import freeze_time
 
+from app import db
+from app.models.pago import PagoEstado
 from app.models.reserva import EstadoEspera, ReservaTipo
 from app.models.turno import DiaSemana
 from app.models.user import UserRole
@@ -251,3 +253,70 @@ class TestAvisoAdmins:
         make_user(role=UserRole.ADMIN)
         self._anotar(LISTA_ESPERA_TOPE_AVISO + 1, lleno, make_user)
         assert len(capturar_admin) == 1
+
+
+class TestEsperaPorSesion:
+    def test_orden_ofertado_esperando_vencido(self, lleno, make_user):
+        # Secuencia completa: el mensual recibe la oferta primero (prioridad
+        # estricta) y la deja vencer; el lugar pasa al primer eventual y los
+        # otros dos siguen esperando en orden de llegada.
+        mensual, primero, segundo = make_user(), make_user(), make_user()
+        reserva_svc.unirse_lista_espera(primero.id, lleno.turno.id, lleno.fecha)
+        reserva_svc.unirse_lista_espera(segundo.id, lleno.turno.id, lleno.fecha)
+        reserva_svc.unirse_lista_espera(
+            mensual.id, lleno.turno.id, lleno.fecha, ReservaTipo.MENSUAL
+        )
+        _liberar(lleno)
+        with freeze_time(datetime.now(timezone.utc) + timedelta(hours=2)):
+            lista_svc.expirar_ofertas()
+
+        filas = lista_svc.espera_por_sesion(lleno.turno.id, lleno.fecha)
+
+        assert [(f.user_id, f.estado_espera) for f in filas] == [
+            (primero.id, EstadoEspera.OFERTADO),
+            (segundo.id, EstadoEspera.ESPERANDO),
+            (mensual.id, EstadoEspera.VENCIDO),
+        ]
+
+    def test_posicion_mensual_coincide_con_posicion(self, lleno, make_user):
+        eventual, mensual = make_user(), make_user()
+        reserva_svc.unirse_lista_espera(eventual.id, lleno.turno.id, lleno.fecha)
+        grupo = reserva_svc.unirse_lista_espera(
+            mensual.id, lleno.turno.id, lleno.fecha, ReservaTipo.MENSUAL
+        )
+
+        filas = lista_svc.espera_por_sesion(lleno.turno.id, lleno.fecha)
+
+        fila_mensual = [f for f in filas if f.user_id == mensual.id][0]
+        assert fila_mensual.grupo_id == grupo[0].grupo_id
+        assert lista_svc.posicion(fila_mensual) == 1
+        assert filas[0].user_id == mensual.id
+
+
+class TestHoldEnLaCola:
+    def test_un_lugar_retenido_por_hold_no_se_oferta(
+        self, make_user, make_actividad, make_turno, make_pago
+    ):
+        # El hold del abonado llena la fecha futura: el walk-in no reserva
+        # directo (se anota en la lista) y la promoción no le oferta ese lugar,
+        # que está reservado para la renovación del abono.
+        abonado, esperando = make_user(), make_user()
+        turno = make_turno(
+            make_actividad(precio="1000.00"), dia_semana=DiaSemana.LUNES, cupo=1
+        )
+        with freeze_time("2026-07-01"):
+            reservas = reserva_svc.crear_reserva_mensual(
+                abonado.id, turno.id, date(2026, 7, 6)
+            )
+        make_pago(abonado, reservas[0], "1000.00", PagoEstado.PAGADO)
+
+        fecha_futura = date(2026, 8, 3)
+        assert lista_svc.hay_lugar(turno, fecha_futura) is False
+
+        with freeze_time("2026-07-02"):
+            fila = reserva_svc.unirse_lista_espera(
+                esperando.id, turno.id, fecha_futura
+            )[0]
+        lista_svc.promover(turno.id, fecha_futura, motivo="cancelacion")
+        db.session.refresh(fila)
+        assert fila.estado_espera == EstadoEspera.ESPERANDO

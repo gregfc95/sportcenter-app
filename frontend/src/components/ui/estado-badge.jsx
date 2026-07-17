@@ -18,6 +18,20 @@ const ESTADOS = {
     label: "En Espera",
     color: "text-info-blue bg-info-blue/10 border-info-blue/30",
   },
+  oferta_vencida: {
+    label: "Oferta Vencida",
+    color: "text-error bg-error/10 border-error/30",
+  },
+  // Estados internos de la lista de espera (detalle de sesión del staff):
+  // solo `ofertado` retiene cupo, por eso comparte tono con "señado".
+  ofertado: {
+    label: "Ofertado",
+    color: "text-accent bg-accent/10 border-accent/30",
+  },
+  esperando: {
+    label: "Esperando",
+    color: "text-info-blue bg-info-blue/10 border-info-blue/30",
+  },
   pendiente: {
     label: "Pendiente",
     color: "text-error bg-error/10 border-error/30",

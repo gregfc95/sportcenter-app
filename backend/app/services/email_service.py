@@ -1,4 +1,6 @@
 import logging
+import threading
+import time
 
 import mailtrap as mt
 from flask import current_app
@@ -11,6 +13,30 @@ from .email_templates import (
 )
 
 logger = logging.getLogger(__name__)
+
+# El plan gratuito de Mailtrap admite un envío cada 10 segundos: se espacian
+# los emails a 11 s para que los flujos que mandan varios seguidos (subir el
+# cupo, cancelar un abono con varias fechas, el aviso por admin) no pierdan
+# avisos por rate limit. El costo es que quien promueve N lugares espera
+# ~11×(N-1) s dentro de su request. El lock cubre también los jobs del
+# scheduler, que envían desde otro hilo.
+_ESPACIADO_ENVIO = 11.0
+_envio_lock = threading.Lock()
+_proximo_envio = 0.0
+
+
+def _send_espaciado(cfg, mail) -> None:
+    global _proximo_envio
+    with _envio_lock:
+        espera = _proximo_envio - time.monotonic()
+        if espera > 0:
+            time.sleep(espera)
+        # El sello va en finally: un envío fallido también cuenta para el rate
+        # limit de Mailtrap, así el siguiente igual respeta la ventana.
+        try:
+            _client(cfg).send(mail)
+        finally:
+            _proximo_envio = time.monotonic() + _ESPACIADO_ENVIO
 
 
 def _client(cfg):
@@ -47,7 +73,7 @@ def send_password_email(email: str, password: str) -> None:
         category="Password Delivery",
     )
 
-    _client(cfg).send(mail)
+    _send_espaciado(cfg, mail)
     logger.info("send_password_email -> %s (sent)", email)
 
 
@@ -87,7 +113,7 @@ def send_lista_espera_email(
         category="Lista de Espera",
     )
 
-    _client(cfg).send(mail)
+    _send_espaciado(cfg, mail)
     logger.info("send_lista_espera_email -> %s (sent)", email)
 
 
@@ -126,7 +152,7 @@ def send_lista_espera_admin_email(
         category="Lista de Espera Admin",
     )
 
-    _client(cfg).send(mail)
+    _send_espaciado(cfg, mail)
     logger.info("send_lista_espera_admin_email -> %s (sent)", email)
 
 
@@ -166,5 +192,5 @@ def send_recordatorio_renovacion_email(
         category="Recordatorio Renovación",
     )
 
-    _client(cfg).send(mail)
+    _send_espaciado(cfg, mail)
     logger.info("send_recordatorio_renovacion_email -> %s (sent)", email)

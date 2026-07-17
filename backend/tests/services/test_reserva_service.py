@@ -1,14 +1,21 @@
 """Tests de `ReservaService` contra la base de datos de tests."""
 
 from datetime import date, time, timedelta
+from types import SimpleNamespace
 
 import pytest
+from freezegun import freeze_time
 
 from app import db
+from app.models.pago import PagoEstado
 from app.models.reserva import MotivoCancelacion, ReservaTipo
 from app.models.turno import DiaSemana
 from app.models.turno_fecha_bloqueada import TurnoFechaBloqueada
-from app.services.reserva_service import ReservaService, fechas_mensuales
+from app.services.reserva_service import (
+    CupoLlenoError,
+    ReservaService,
+    fechas_mensuales,
+)
 
 svc = ReservaService()
 
@@ -279,6 +286,48 @@ class TestListarPorUsuario:
         assert svc.listar_por_usuario(user.id) == []
 
 
+class TestListarSesionesReservadas:
+    def test_incluye_solo_ofertado_y_excluye_esperando_y_vencido(
+        self, monkeypatch, make_user, make_actividad, make_turno, make_reserva, next_date_for
+    ):
+        from datetime import datetime, timezone
+
+        from app.services.lista_espera_service import ListaEsperaService
+
+        monkeypatch.setattr(
+            "app.services.lista_espera_service.send_lista_espera_email",
+            lambda *a, **k: None,
+        )
+        lista_svc = ListaEsperaService()
+        turno = make_turno(make_actividad(), dia_semana=DiaSemana.LUNES, cupo=1)
+        fecha = next_date_for(DiaSemana.LUNES)
+        ocupante = make_reserva(make_user(), turno, fecha)
+        primero, segundo = make_user(), make_user()
+        svc.unirse_lista_espera(primero.id, turno.id, fecha)
+        svc.unirse_lista_espera(segundo.id, turno.id, fecha)
+
+        # Con la única firme cancelada y la oferta activa, la sesión sigue
+        # visible: la oferta consume cupo (mismo criterio que `cupo.ocupados`).
+        svc.cancelar_reserva(ocupante.id)
+        lista_svc.promover(turno.id, fecha, motivo="cancelacion")
+        assert (turno.id, fecha) in [
+            (t.id, f) for t, f in svc.listar_sesiones_reservadas()
+        ]
+
+        # Al vencer la oferta pasa al segundo (la sesión sigue ofertada); cuando
+        # también vence la suya y no queda nadie ofertado, la sesión desaparece.
+        with freeze_time(datetime.now(timezone.utc) + timedelta(hours=2)):
+            lista_svc.expirar_ofertas()
+        assert (turno.id, fecha) in [
+            (t.id, f) for t, f in svc.listar_sesiones_reservadas()
+        ]
+        with freeze_time(datetime.now(timezone.utc) + timedelta(hours=4)):
+            lista_svc.expirar_ofertas()
+        assert (turno.id, fecha) not in [
+            (t.id, f) for t, f in svc.listar_sesiones_reservadas()
+        ]
+
+
 class TestFechasBloqueadas:
     """Reservas contra fechas dadas de baja por el centro (`turno_fechas_bloqueadas`)."""
 
@@ -339,3 +388,87 @@ class TestFechasBloqueadas:
 
         with pytest.raises(ValueError, match="clases disponibles"):
             svc.crear_reserva_mensual(user.id, turno.id, fecha)
+
+
+class TestSuscripcionActiva:
+    """El abono vigente garantiza el lugar (hold virtual) y bloquea duplicados."""
+
+    @pytest.fixture
+    def abono(self, make_user, make_actividad, make_turno, make_pago):
+        """Abono de julio 2026 pagado, en un turno de lunes con cupo 1."""
+        user = make_user()
+        actividad = make_actividad()
+        turno = make_turno(actividad, dia_semana=DiaSemana.LUNES, cupo=1)
+        with freeze_time("2026-07-01"):
+            reservas = svc.crear_reserva_mensual(user.id, turno.id, date(2026, 7, 6))
+        make_pago(user, reservas[0], "1000.00", PagoEstado.PAGADO)
+        return SimpleNamespace(
+            user=user, actividad=actividad, turno=turno, reservas=reservas
+        )
+
+    def test_bloquea_otra_eventual_en_el_mismo_turno(self, abono):
+        with freeze_time("2026-07-02"), pytest.raises(
+            ValueError, match="Ya posees una suscripción activa para este turno"
+        ):
+            svc.crear_reserva(abono.user.id, abono.turno.id, date(2026, 8, 3))
+
+    def test_bloquea_otro_abono_en_el_mismo_turno(self, abono):
+        with freeze_time("2026-07-02"), pytest.raises(
+            ValueError, match="suscripción activa"
+        ):
+            svc.crear_reserva_mensual(abono.user.id, abono.turno.id, date(2026, 8, 3))
+
+    def test_bloquea_la_lista_de_espera_del_mismo_turno(self, abono):
+        with freeze_time("2026-07-02"), pytest.raises(
+            ValueError, match="suscripción activa"
+        ):
+            svc.unirse_lista_espera(abono.user.id, abono.turno.id, date(2026, 8, 3))
+
+    def test_permite_otro_turno_de_la_misma_actividad(self, abono, make_turno):
+        otro_turno = make_turno(abono.actividad, dia_semana=DiaSemana.MARTES, cupo=1)
+        with freeze_time("2026-07-02"):
+            reserva = svc.crear_reserva(abono.user.id, otro_turno.id, date(2026, 7, 7))
+        assert reserva.id is not None
+
+    def test_abono_impago_no_bloquea(self, make_user, make_actividad, make_turno):
+        # Sin cobros no hay compromiso (checkout de MP pendiente/abandonado):
+        # ni hold ni bloqueo de duplicado.
+        user = make_user()
+        turno = make_turno(make_actividad(), dia_semana=DiaSemana.LUNES, cupo=1)
+        with freeze_time("2026-07-01"):
+            svc.crear_reserva_mensual(user.id, turno.id, date(2026, 7, 6))
+            reserva = svc.crear_reserva(user.id, turno.id, date(2026, 8, 3))
+        assert reserva.id is not None
+
+    def test_cancelar_todo_el_abono_libera_el_hold(self, abono):
+        with freeze_time("2026-07-02"):
+            for r in abono.reservas:
+                svc.cancelar_reserva(r.id)
+            reserva = svc.crear_reserva(abono.user.id, abono.turno.id, date(2026, 8, 3))
+        assert reserva.id is not None
+
+    def test_hold_bloquea_el_cupo_de_meses_futuros(self, abono, make_user):
+        otro = make_user()
+        with freeze_time("2026-07-02"), pytest.raises(CupoLlenoError):
+            svc.crear_reserva(otro.id, abono.turno.id, date(2026, 8, 3))
+
+    def test_con_cupo_suficiente_el_hold_no_bloquea(
+        self, make_user, make_actividad, make_turno, make_pago
+    ):
+        abonado, otro = make_user(), make_user()
+        turno = make_turno(make_actividad(), dia_semana=DiaSemana.LUNES, cupo=2)
+        with freeze_time("2026-07-01"):
+            reservas = svc.crear_reserva_mensual(abonado.id, turno.id, date(2026, 7, 6))
+            make_pago(abonado, reservas[0], "1000.00", PagoEstado.PAGADO)
+            reserva = svc.crear_reserva(otro.id, turno.id, date(2026, 8, 3))
+        assert reserva.id is not None
+
+    def test_cancelar_una_clase_libera_esa_fecha(self, abono, make_user):
+        # Dentro del mes del abono mandan las filas concretas: cancelar una
+        # clase libera esa fecha puntual y el hold no la vuelve a ocupar.
+        otro = make_user()
+        clase = abono.reservas[1]
+        with freeze_time("2026-07-02"):
+            svc.cancelar_reserva(clase.id)
+            reserva = svc.crear_reserva(otro.id, abono.turno.id, clase.fecha)
+        assert reserva.id is not None

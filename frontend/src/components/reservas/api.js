@@ -268,7 +268,7 @@ export function registrarPagoManual(reservaId) {
  * Sesiones con reservas (turno + fecha) para la vista de Turnos Reservados.
  * Sólo admin/empleado.
  *
- * @returns {Promise<Array<{ turno_id: number, fecha: string, actividad: string, dia_semana: string, hora: string, cupo: number, ocupados: number, reservas: number, asistencias: number, tipos: string[] }>>}
+ * @returns {Promise<Array<{ turno_id: number, fecha: string, actividad: string, dia_semana: string, hora: string, cupo: number, ocupados: number, reservas: number, asistencias: number, en_espera: number, tipos: string[] }>>}
  */
 export function listSesionesReservadas() {
   return request("/api/reservas/sesiones", {
@@ -277,12 +277,14 @@ export function listSesionesReservadas() {
 }
 
 /**
- * Detalle de una sesión: el turno y la lista de reservas con su cliente y estado
- * de pago. Sólo admin/empleado.
+ * Detalle de una sesión: el turno, la lista de reservas con su cliente y estado
+ * de pago, la lista de espera (las entradas `ofertado` retienen cupo) y los
+ * holds de abonados con lugar garantizado. Junto a las reservas explican el
+ * total de `ocupados`. Sólo admin/empleado.
  *
  * @param {number|string} turnoId
  * @param {string} fecha - YYYY-MM-DD
- * @returns {Promise<{ turno: { id: number, actividad: string, dia_semana: string, hora: string, fecha: string, cupo: number, ocupados: number, precio: number }, reservas: Array<{ id: number, tipo: string, estado: string, monto_pagado: number, cliente: { id: number, nombre: string, apellido: string, email: string }|null }> }>}
+ * @returns {Promise<{ turno: { id: number, actividad: string, dia_semana: string, hora: string, fecha: string, cupo: number, ocupados: number, precio: number }, reservas: Array<{ id: number, tipo: string, estado: string, monto_pagado: number, cliente: { id: number, nombre: string, apellido: string, email: string }|null }>, lista_espera: Array<{ id: number, tipo: string, estado_espera: string, ocupa_cupo: boolean, oferta_expira_at: string|null, posicion: number|null, cliente: { id: number, nombre: string, apellido: string, email: string }|null }>, holds: Array<{ cliente: { id: number, nombre: string, apellido: string, email: string }|null }> }>}
  */
 export function getSesionReservada(turnoId, fecha) {
   return request(`/api/reservas/sesiones/${turnoId}/${fecha}`, {

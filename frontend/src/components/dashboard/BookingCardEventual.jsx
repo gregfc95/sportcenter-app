@@ -10,7 +10,11 @@ import CancelarReservaDialog from "@/components/reservas/CancelarReservaDialog";
 import SalirEsperaDialog from "@/components/reservas/SalirEsperaDialog";
 import PagarEsperaBloqueado from "@/components/reservas/PagarEsperaBloqueado";
 import VerQrDialog from "@/components/reservas/VerQrDialog";
-import { esperaDetalle, esperaOfertaActiva } from "@/components/reservas/listaEspera";
+import {
+  esperaBadgeEstado,
+  esperaDetalle,
+  esperaOfertaActiva,
+} from "@/components/reservas/listaEspera";
 import { STATUS_META } from "./statusMeta";
 import { cn } from "@/lib/utils";
 
@@ -36,6 +40,7 @@ export default function BookingCardEventual({
   const showCapacity = Boolean(capacity);
   const enEspera = status === "en_espera";
   const ofertaActiva = esperaOfertaActiva(espera);
+  const badgeEstado = enEspera ? esperaBadgeEstado(espera) : status;
 
   const cancelButton = enEspera ? (
     <SalirEsperaDialog
@@ -164,13 +169,15 @@ export default function BookingCardEventual({
             )}
             {enEspera && (
               <span className="flex items-center gap-xs text-label-sm text-info-blue">
-                <Clock className="size-4" strokeWidth={2} />
+                {espera?.estado !== "vencido" && (
+                  <Clock className="size-4" strokeWidth={2} />
+                )}
                 {esperaDetalle(espera)}
               </span>
             )}
           </div>
 
-          <EstadoBadge estado={status} className="md:hidden" />
+          <EstadoBadge estado={badgeEstado} className="md:hidden" />
         </div>
 
         {showCapacity && (
@@ -181,7 +188,7 @@ export default function BookingCardEventual({
         )}
       </div>
 
-      <EstadoBadge estado={status} className="hidden md:inline-flex" />
+      <EstadoBadge estado={badgeEstado} className="hidden md:inline-flex" />
 
       <div className="flex items-center justify-between pt-sm border-t border-outline-variant pl-xs md:pt-0 md:border-t-0 md:border-l md:border-outline-variant md:pl-md md:justify-end md:shrink-0">
         {showCapacity && (

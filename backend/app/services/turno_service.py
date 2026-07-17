@@ -7,6 +7,8 @@ from .. import db
 from ..models.reserva import EstadoEspera
 from ..models.turno import Turno
 from ..models.turno_fecha_bloqueada import TurnoFechaBloqueada
+from . import cupo
+from .lista_espera_service import ListaEsperaService
 from .pago_service import PagoService
 from .reserva_service import AR_TZ, WEEKDAY_TO_DIA_SEMANA
 
@@ -17,19 +19,15 @@ SUPERPOSICION_MIN_MINUTOS = 60
 class TurnoService:
     def __init__(self):
         self.pago_service = PagoService()
+        self.lista_espera = ListaEsperaService()
 
     # --- Lógica de negocio de reservas y cupo ---
 
     def cantidad_reservas(self, turno: Turno, fecha: date) -> int:
-        # Eventuales y mensuales consumen cupo por igual en cada sesión. Las
-        # filas en espera (esperando/vencido) no ocupan cupo; las ofertadas sí,
-        # porque retienen el lugar mientras dura su ventana de pago.
-        return sum(
-            1
-            for r in turno.reservas
-            if r.fecha == fecha
-            and r.estado_espera in (None, EstadoEspera.OFERTADO)
-        )
+        # Eventuales y mensuales consumen cupo por igual en cada sesión, y los
+        # abonados con suscripción activa retienen su lugar en los meses
+        # futuros aunque las clases aún no existan (ver `cupo.ocupados`).
+        return cupo.ocupados(turno, fecha)
 
     def hay_cupo(self, turno: Turno, fecha: date) -> bool:
         return self.cantidad_reservas(turno, fecha) < turno.cupo
@@ -156,6 +154,7 @@ class TurnoService:
                 f"Este Turno posee una cantidad de {max_reservas} Reservas."
             )
 
+        cupo_anterior = turno.cupo
         turno.dia_semana = nuevo_dia
         turno.hora = nueva_hora
         turno.cupo = nuevo_cupo
@@ -165,6 +164,21 @@ class TurnoService:
         except IntegrityError:
             db.session.rollback()
             raise ValueError("Ya existe un turno con esos datos.")
+
+        # Subir el cupo abre lugares firmes en las sesiones futuras que tenían
+        # cola: se ofrecen igual que una cancelación (motivo="cancelacion"
+        # re-arma los vencidos). promover es por fecha, así que se recorre cada
+        # sesión futura con demanda en espera.
+        if nuevo_cupo > cupo_anterior:
+            hoy = datetime.now(tz=AR_TZ).date()
+            fechas = {
+                r.fecha
+                for r in turno.reservas
+                if r.fecha >= hoy and r.estado_espera == EstadoEspera.ESPERANDO
+            }
+            for fecha in sorted(fechas):
+                self.lista_espera.promover(turno.id, fecha, motivo="cancelacion")
+
         return turno
 
     def _max_reservas_vigentes(self, turno: Turno) -> int:

@@ -21,10 +21,21 @@ ventanas se anclan ahí.
   (`uuid4().hex` por compra). Se paga **100% por adelantado, sin seña**: un
   `Pago` PAGADO por clase.
 - **Cupo por sesión** (turno + fecha). Cuenta las reservas con
-  `estado_espera IS NULL` (normales) **o** `ofertado` (ver lista de espera). Las
-  filas `esperando`/`vencido` no ocupan cupo.
-  Archivos: `reserva_service._validar_cupo_disponible`,
-  `turno_service.cantidad_reservas`.
+  `estado_espera IS NULL` (normales) **o** `ofertado` (ver lista de espera),
+  más los **holds virtuales** de los abonados (ver "Lugar garantizado a
+  futuro"). Las filas `esperando`/`vencido` no ocupan cupo.
+  **Única fuente de conteo: `services/cupo.py` (`ocupados`)**; delegan en él
+  `reserva_service._validar_cupo_disponible`, `turno_service.cantidad_reservas`
+  y `lista_espera_service._cupo_libre`.
+- **Un abono activo bloquea duplicados en su turno**: con una suscripción
+  mensual vigente en el turno X, cualquier reserva nueva del mismo cliente en X
+  (eventual, otro abono o anotarse en la lista de espera, cualquier fecha) se
+  rechaza con `"Ya posees una suscripción activa para este turno"` (ValueError
+  → HTTP **400**, no 409: el 409 es la señal de "ofrecer lista de espera").
+  Otros turnos de la misma actividad siguen permitidos. Efecto aceptado: el
+  abonado que canceló una clase suelta no puede re-reservar esa fecha mientras
+  el abono siga vivo (el lugar liberado va a la cola).
+  Archivo: `reserva_service._validar_sin_suscripcion_activa`.
 - **Cancelación por el cliente** (`reserva_routes.cancelar_mi_reserva`, no toca
   Mercado Pago):
   - Eventual: con >24 h (`CANCELACION_VENTANA`) es reembolsable; dentro de la
@@ -83,6 +94,32 @@ Archivo principal: `lista_espera_service.py`.
 Archivo principal: `mensualidad_service.py`. Constantes: `RENOVACION_DIA_LIMITE = 11`,
 `DESCUENTO_FIDELIDAD = 0.20`, `PENALIZACIONES_MAX = 3`.
 
+### Lugar garantizado a futuro (hold virtual)
+
+El abonado tiene su asiento bloqueado en el turno para **todos los meses
+futuros**, sin pre-materializar reservas: el conteo de cupo suma un *hold* por
+cada suscripción activa. Archivo: `services/cupo.py` (`suscripcion_activa`,
+`ocupados`).
+
+- **Suscripción activa** = el *tip* de la cadena de abonos del cliente en el
+  turno (el grupo mensual más reciente por `(fecha, created_at)`, mirando
+  también los cancelados) conserva alguna clase activa **y** tiene cobros
+  (seña/pago) **o** es una renovación pendiente (garantía durante la gracia
+  del 1 al 10). Un abono nunca pagado (checkout de MP abandonado) no genera
+  hold. Las filas que solo existieron en lista de espera no cuentan.
+- El hold pesa solo en **meses posteriores al mes del tip**: dentro de su mes
+  mandan las filas concretas (cancelar una clase libera esa fecha puntual), y
+  al materializarse la renovación el tip avanza de mes, sin double-count. Una
+  vacante futura retenida por un hold tampoco existe para la lista de espera
+  (no se oferta ni habilita walk-ins).
+- El hold **muere** cuando el tip queda sin clases activas: la suspensión del
+  deadline del 11 (cancela la renovación) o la cancelación de todas las clases
+  del abono vigente. No revive el grupo pago anterior (consistente con
+  `_ya_renovado`: una renovación declinada no se regenera).
+- Edge aceptado: `turno_service._max_reservas_vigentes` (el piso para bajar el
+  cupo) no cuenta holds; bajar el cupo puede producir sobrecupo transitorio al
+  materializar la renovación (que ya ignora cupo por la garantía).
+
 ### Renovación garantizada
 
 - Quien pagó un abono en el mes M tiene el lugar **garantizado** en M+1. El día 1
@@ -100,15 +137,16 @@ Archivo principal: `mensualidad_service.py`. Constantes: `RENOVACION_DIA_LIMITE 
 
 ### Penalizaciones (`penalizaciones`, ledger inmutable)
 
-- **+1 por cada clase mensual cancelada por el cliente**, pague o no, dentro o
-  fuera de la ventana de 48 h. Incluye: cancelar una clase de un abono pagado,
-  declinar/abandonar un abono impago, y **el auto-cancelado tras un fallo de
-  pago en Mercado Pago**.
+- **+1 por cada clase mensual que el cliente cancela desde la app** (una clase
+  de un abono ya pagado), dentro o fuera de la ventana de 48 h (la ventana solo
+  decide reembolso/crédito, no la penalización).
 - **+1 por cada clase de renovación que pasa impaga** (días 1–10): se penaliza y
   se cancela esa clase (el pago tardío cubre solo las que quedan).
 - **No penaliza**: salir de la lista de espera, bajas del centro, expulsiones por
-  suspensión, y la cancelación del 11 de las clases **futuras** de la renovación
-  (la suspensión es la sanción ahí; solo penalizan las fechas pasadas impagas).
+  suspensión, la cancelación del 11 de las clases **futuras** de la renovación
+  (la suspensión es la sanción ahí; solo penalizan las fechas pasadas impagas),
+  ni **abandonar o cancelar el checkout de Mercado Pago** de un abono que nunca
+  se pagó (se da de baja el abono sin penalización: no hubo compromiso de pago).
 - Conteo **por mes calendario (AR)**; "se resetea el 1" es una consulta por mes,
   no un job. Motivos: `cancelacion_clase`, `renovacion_impaga`. Restricción única
   `(reserva_id, motivo)` → idempotente ante re-runs.

@@ -2,13 +2,14 @@ import logging
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, select
 from sqlalchemy.orm import joinedload
 
 from .. import db
 from ..models.reserva import EstadoEspera, MotivoCancelacion, Reserva, ReservaTipo
 from ..models.turno import Turno
 from ..models.user import User, UserRole
+from . import cupo
 from .email_service import send_lista_espera_admin_email, send_lista_espera_email
 
 logger = logging.getLogger(__name__)
@@ -155,6 +156,38 @@ class ListaEsperaService:
                 return i
         return None
 
+    def espera_por_sesion(self, turno_id: int, fecha) -> list[Reserva]:
+        """Filas en lista de espera de la sesión, ordenadas para mostrar.
+
+        Primero las OFERTADO (retienen cupo, por vencimiento más próximo),
+        después las ESPERANDO con el mismo criterio que la promoción (mensual
+        antes que eventual, FIFO) y al final las VENCIDO.
+        """
+        stmt = (
+            select(Reserva)
+            .where(
+                Reserva.turno_id == turno_id,
+                Reserva.fecha == fecha,
+                Reserva.estado_espera.isnot(None),
+            )
+            .options(joinedload(Reserva.user))
+        )
+        filas = db.session.execute(stmt).scalars().all()
+        orden_estado = {
+            EstadoEspera.OFERTADO: 0,
+            EstadoEspera.ESPERANDO: 1,
+            EstadoEspera.VENCIDO: 2,
+        }
+        return sorted(
+            filas,
+            key=lambda r: (
+                orden_estado[r.estado_espera],
+                r.oferta_expira_at or datetime.max.replace(tzinfo=timezone.utc),
+                r.tipo != ReservaTipo.MENSUAL,
+                r.created_at,
+            ),
+        )
+
     def cantidad_en_espera(self, turno_id: int, fecha) -> int:
         """Cuántos esperan (ESPERANDO) esa (turno, fecha).
 
@@ -214,17 +247,12 @@ class ListaEsperaService:
     # --- Internos ---
 
     def _cupo_libre(self, turno: Turno, fecha) -> int:
-        """Lugares libres contando solo reservas firmes (normales y ofertadas)."""
-        stmt = select(func.count(Reserva.id)).where(
-            Reserva.turno_id == turno.id,
-            Reserva.fecha == fecha,
-            or_(
-                Reserva.estado_espera.is_(None),
-                Reserva.estado_espera == EstadoEspera.OFERTADO,
-            ),
-        )
-        ocupados = db.session.execute(stmt).scalar()
-        return turno.cupo - ocupados
+        """Lugares libres: reservas firmes más holds virtuales de abonados.
+
+        Una vacante de un mes futuro retenida por un hold no existe para la
+        cola: no se oferta ni habilita reservas directas.
+        """
+        return turno.cupo - cupo.ocupados(turno, fecha)
 
     def _cola(self, turno_id: int, fecha) -> list[Reserva]:
         """Unidades en espera para esa fecha, mensual primero y luego FIFO.

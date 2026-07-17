@@ -1,11 +1,15 @@
+from datetime import date, datetime
+
 from flask import Blueprint, Response, jsonify, request
 
 from ..auth import require_role
 from ..models.user import UserRole
+from ..services.lista_espera_service import AR_TZ
 from ..services.mensualidad_service import MensualidadService
 from ..services.notificacion_service import (
     notificar_cupo_disponible,
     notificar_lista_espera_llena,
+    notificar_recordatorio_renovacion,
 )
 
 
@@ -36,6 +40,38 @@ def notificar_cupo() -> Response:
 
     try:
         email = notificar_cupo_disponible(cliente_id, turno_id)
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 404
+    except RuntimeError:
+        return (
+            jsonify({"error": "El envío de emails no está configurado en este entorno."}),
+            503,
+        )
+
+    return jsonify({"ok": True, "email": email}), 200
+
+
+@notificacion_bp.route("/recordatorio-renovacion", methods=["POST"])
+def recordar_renovacion() -> Response:
+    """Dispara a mano el recordatorio de renovación a un cliente y turno (demo).
+
+    El aviso real lo manda el scheduler el día 10 a los abonos impagos; este
+    endpoint lo muestra en una demo apuntado a un cliente elegido, sin depender
+    de que tenga una renovación impaga de verdad.
+    """
+    require_role(UserRole.ADMIN, UserRole.EMPLOYEE)
+    data = request.get_json() or {}
+
+    cliente_id = data.get("cliente_id")
+    if not isinstance(cliente_id, int):
+        return jsonify({"error": "cliente_id es requerido y debe ser un entero."}), 400
+
+    turno_id = data.get("turno_id")
+    if not isinstance(turno_id, int):
+        return jsonify({"error": "turno_id es requerido y debe ser un entero."}), 400
+
+    try:
+        email = notificar_recordatorio_renovacion(cliente_id, turno_id)
     except ValueError as e:
         return jsonify({"error": str(e)}), 404
     except RuntimeError:
@@ -83,6 +119,35 @@ def recordar_renovaciones() -> Response:
 
     emails = mensualidad_service.recordar_renovaciones_impagas()
     return jsonify({"ok": True, "enviados": len(emails), "emails": emails}), 200
+
+
+@notificacion_bp.route("/generar-renovaciones", methods=["POST"])
+def generar_renovaciones() -> Response:
+    """Genera a mano las renovaciones mensuales de un mes (demo de admin).
+
+    Espejo del job del día 1: crea las clases del mes elegido para los abonos
+    pagos del mes anterior. Se pasa el día 1 del mes como `hoy` para reproducir
+    el run completo. Es idempotente (repetirlo devuelve 0) y no pisa abonos que
+    el cliente ya compró a mano. Solo admite el mes actual o el siguiente.
+    """
+    require_role(UserRole.ADMIN)
+    data = request.get_json() or {}
+
+    mes = data.get("mes")
+    if not isinstance(mes, int):
+        return jsonify({"error": "mes es requerido y debe ser un entero."}), 400
+
+    hoy = datetime.now(tz=AR_TZ).date()
+    mes_siguiente = hoy.month % 12 + 1
+    if mes not in (hoy.month, mes_siguiente):
+        return (
+            jsonify({"error": "Solo se puede generar el mes actual o el siguiente."}),
+            400,
+        )
+
+    anio = hoy.year + 1 if mes < hoy.month else hoy.year
+    creadas = mensualidad_service.generar_renovaciones(hoy=date(anio, mes, 1))
+    return jsonify({"ok": True, "creadas": len(creadas)}), 200
 
 
 @notificacion_bp.route("/reset-penalizaciones", methods=["POST"])
