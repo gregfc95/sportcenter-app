@@ -105,6 +105,33 @@ class TestActualizar:
         assert espera.oferta_expira_at is not None
         assert aviso.called
 
+    def test_subir_cupo_notifica_a_todos_los_promovidos(
+        self, make_actividad, make_turno, make_user, make_reserva, next_date_for,
+        monkeypatch,
+    ):
+        # Dos esperando y dos lugares nuevos: cada promovido recibe su aviso
+        # (regresión: el rate limit de Mailtrap dejaba al segundo ofertado sin
+        # email; el envío espaciado lo cubre).
+        turno = make_turno(make_actividad(), dia_semana=DiaSemana.LUNES, cupo=1)
+        fecha = next_date_for(DiaSemana.LUNES)
+        make_reserva(make_user(), turno, fecha)
+        esperas = [
+            reserva_svc.unirse_lista_espera(make_user().id, turno.id, fecha)[0]
+            for _ in range(2)
+        ]
+
+        aviso = MagicMock()
+        monkeypatch.setattr(
+            "app.services.lista_espera_service.send_lista_espera_email", aviso
+        )
+        data = {"dia_semana": turno.dia_semana, "hora": turno.hora, "cupo": 3}
+        svc.actualizar(turno.id, data)
+
+        assert all(e.estado_espera == EstadoEspera.OFERTADO for e in esperas)
+        assert aviso.call_count == 2
+        destinatarios = {c.args[0] for c in aviso.call_args_list}
+        assert len(destinatarios) == 2
+
     def test_subir_cupo_sin_demanda_no_notifica(
         self, make_actividad, make_turno, make_user, make_reserva, next_date_for,
         monkeypatch,
